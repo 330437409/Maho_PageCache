@@ -27,7 +27,6 @@ class Maho_PageCache_Block_Adminhtml_Dashboard_Tab_Summary extends Maho_PageCach
             ? $this->__('n/a')
             : number_format((float) $summary['avg_duration_ms'], 1) . ' ms';
 
-        // @phpstan-ignore argument.type
         $this->setCollection($this->makeCollection([
             ['metric' => $this->__('Hit rate'), 'value' => number_format((float) $summary['hit_rate'], 1) . '%'],
             ['metric' => $this->__('PHP duration'), 'value' => $duration],

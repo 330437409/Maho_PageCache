@@ -22,7 +22,6 @@ class Maho_PageCache_Block_Adminhtml_Dashboard_Tab_Recent extends Maho_PageCache
     #[\Override]
     protected function _prepareCollection()
     {
-        // @phpstan-ignore argument.type
         $this->setCollection($this->makeCollection(
             Mage::getSingleton('page_cache/stat')->getRecentEvents($this->getDays()),
         ));

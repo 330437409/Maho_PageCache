@@ -36,9 +36,9 @@ abstract class Maho_PageCache_Block_Adminhtml_Dashboard_Tab_Abstract extends Mag
     /**
      * @param list<array<string, mixed>> $rows
      */
-    protected function makeCollection(array $rows): \Maho\Data\Collection
+    protected function makeCollection(array $rows): Maho_PageCache_Model_Collection
     {
-        $collection = new \Maho\Data\Collection();
+        $collection = new Maho_PageCache_Model_Collection();
         foreach ($rows as $row) {
             $collection->addItem(new \Maho\DataObject($row));
         }
