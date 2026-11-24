@@ -1,6 +1,6 @@
 # 功能规格：stock pending 年龄告警和监控
 
-> 状态：实现完成，待跨库 CI 和发版 0.5.4
+> 状态：已交付@v0.5.4
 > 关联 ADR：ADR-0017
 > 分支：`feat/page-cache-phase2`
 
@@ -51,4 +51,4 @@ Stock pending warning: oldest item is 2h 5m old. Run ./maho index:reindex catalo
 - 测试：`StockPendingTest`、`ObserverTest`。
 - 测试结果：195 passed（542 assertions）。
 - 实机：写入 2 小时前的 pending 行后，status 输出 `Stock pending: 1, oldest 2h 0m` 和 reindex 提示。
-- 交叉验证待补：SQLite 已通过；PostgreSQL、MySQL 待模块 CI。
+- 交叉验证：模块 CI run 45361986046 在 SQLite、MySQL、PostgreSQL 三个任务上全部通过（2026-11-24）。

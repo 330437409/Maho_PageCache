@@ -21,5 +21,6 @@
 | 0016 | 页面缓存使用原生 tag-aware cache 和 DB URL 索引 | 已接受，0.5.2 内部重构 |
 | 0017 | proxy context 模式和 P1 缓存加固 | 已接受，0.5.3 |
 | 0018 | P1 缓存性能和清理索引 | 已接受，0.5.3 |
+| 0019 | session cookie 命中策略保持保守 | 已接受，FR-20 暂停 |
 
 新增 ADR 时复制 `_template.md`，顺序编号。已被取代的 ADR 不删除，状态改为“已被 ADR-NNNN 取代”。

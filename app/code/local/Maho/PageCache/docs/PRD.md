@@ -1,6 +1,6 @@
 # 产品需求文档（PRD）：Maho 页面缓存
 
-> 状态：0.5.3 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付；0.5.1 cache integrity 修复、0.5.2 tag 索引重构和 0.5.3 P1 加固与性能优化已交付
+> 状态：0.5.4 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付；0.5.1 cache integrity 修复、0.5.2 tag 索引重构、0.5.3 P1 加固与性能优化和 0.5.4 stock pending 监控已交付
 > 模块：`Maho_PageCache`
 > 代码路径：`app/code/local/Maho/PageCache`
 > 关联 spec：`docs/specs/page-cache.md`
@@ -85,6 +85,7 @@ Maho 目前有 Symfony Cache 对象缓存（file/redis），但没有内置的 H
 | FR-17 | 静态文件导出：把匿名默认页的 local HTML 额外写成 path-based `.html`/`.gz`，由 Web 服务器直接返回；公共路径映射；允许参数变体继续走 PHP；严格 session cookie bypass；默认关闭，必须 deny 缓存目录 | P3 | 已交付@v0.3.0 |
 | FR-18 | 定时预热：purge 后 requeue、cron 分批预热、sitemap/URL、并发、限速、basic auth、重试和失败汇总 | P3 | 已交付@v0.4.0 |
 | FR-19 | 多节点：purge 广播、Redis 共享版本、静态文件共享存储 | P3 | 计划 |
+| FR-20 | session cookie 安全命中：默认关闭的 opt-in，仅 local 模式对购物车为空、未登录、无消息且渲染不写 session 的匿名请求做短 TTL 缓存；proxy/revalidating 保持 bypass；需 ADR-0019 安全评审 | P2 | 暂停（等待 session 只读 API） |
 
 > 状态取值：计划 / 开发中 / 已交付@vX.Y.Z / 暂停。第一期和第二期已交付 0.2.0；第三期静态导出和统计面板已交付 0.3.0；定时预热已交付 0.4.0；服务器端动态块占位符已交付 0.5.0；其余只登记。静态文件导出、统计面板和定时预热分别见 ADR-0012、ADR-0013、ADR-0014。第三期拆解见 `.tmp/brainstorm-phase3-2026-11-23.md`。
 
@@ -247,6 +248,15 @@ Maho 目前有 Symfony Cache 对象缓存（file/redis），但没有内置的 H
 - A 节点失效后 B 节点不再命中旧版本。
 - 静态文件通过共享存储或节点级预热保持一致。
 - 全局版本严格递增，purge 广播可验证。
+
+#### AC-17 session cookie 安全命中（FR-20）
+
+- 默认关闭；只有显式 opt-in 且模式为 `local` 时才可能命中。
+- proxy 和 revalidating 对任何 Maho session cookie 继续 bypass。
+- 购物车非空、已登录、有未读消息、渲染写 session 或返回 `Set-Cookie` 时 bypass。
+- HTML key 包含 session id 或等价会话分区值，跨 session 不共享。
+- 命中响应不含 PII，form key/SID 和动态块继续使用占位符。
+- kill switch、短 TTL、命中计数和测试齐备；任一条件无法确认时继续 bypass。
 
 ## 7. 风险与待定
 

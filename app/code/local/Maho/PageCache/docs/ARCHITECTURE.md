@@ -1,6 +1,6 @@
 # 架构文档：Maho 页面缓存
 
-> 状态：0.5.3 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付；0.5.1 cache integrity 修复、0.5.2 tag 索引重构和 0.5.3 P1 加固与性能优化已交付
+> 状态：0.5.4 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付；0.5.1 cache integrity 修复、0.5.2 tag 索引重构、0.5.3 P1 加固与性能优化和 0.5.4 stock pending 监控已交付
 > 模块：`Maho_PageCache`
 > 关联 PRD：`docs/PRD.md`
 > 关联 spec：`docs/specs/page-cache.md`
@@ -101,7 +101,7 @@ tests/Backend/Unit/PageCache/*
 9. 不是 AJAX 请求。
 10. context 可以安全确定（store、货币、客户组、税均为默认或可独立缓存）。
 
-这里不读取 `customer/session`、`checkout/session` 或 `core/session`，因为读取本身会启动 session。登录、购物车、消息等状态用 session cookie 是否存在来判断。这是保守策略：有 session cookie 就不缓存。
+这里不读取 `customer/session`、`checkout/session` 或 `core/session`，因为读取本身会启动 session。登录、购物车、消息等状态用 session cookie 是否存在来判断。这是保守策略：有 session cookie 就不缓存。ADR-0019 锁定默认行为；只有 FR-20 的 opt-in local 模式才允许重新评估。
 
 ### 3.2 revalidating 304
 
@@ -445,7 +445,7 @@ CLI：
 
 ## 9. 安全
 
-- 默认只缓存匿名 GET；任何 session cookie、登录、购物车、checkout、admin、preview、维护模式都 bypass。
+- 默认只缓存匿名 GET；任何 session cookie、登录、购物车、checkout、admin、preview、维护模式都 bypass。FR-20 是默认关闭的后续产品方向，见 ADR-0019。
 - 不缓存包含 `Set-Cookie` 的响应。
 - 不缓存非 200 响应。
 - local HTML 只保存匿名默认 context；session cookie 请求 bypass。

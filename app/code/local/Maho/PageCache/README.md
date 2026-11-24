@@ -4,7 +4,7 @@ Maho 的 HTTP 页面缓存集成层。第一期支持 `proxy` 和 `revalidating`
 
 ## 状态
 
-0.5.3 已交付，累计包含第一期的 HTTP 集成层、proxy/revalidating 两种模式、session skip、tag 失效、purge 队列、配置和 CLI，第二期的 `local` 模式、Ajax/ESI 动态块和 `page-cache:warm`，第三期的静态文件导出、统计面板、定时预热和服务器端动态块占位符，以及 0.5.1 的 cache integrity 修复、0.5.2 的 tag 索引重构和 0.5.3 的 P1 加固与性能优化。0.5.4 的 stock pending 监控开发中。
+0.5.4 已交付，累计包含第一期的 HTTP 集成层、proxy/revalidating 两种模式、session skip、tag 失效、purge 队列、配置和 CLI，第二期的 `local` 模式、Ajax/ESI 动态块和 `page-cache:warm`，第三期的静态文件导出、统计面板、定时预热和服务器端动态块占位符，以及 0.5.1 的 cache integrity 修复、0.5.2 的 tag 索引重构、0.5.3 的 P1 加固与性能优化和 0.5.4 的 stock pending 监控。
 
 - 第一期：HTTP 集成层，`proxy` + `revalidating`。0.2.0 已交付。
 - 第二期：`local` 模式、整页 HTML 缓存、Ajax/ESI 动态块、缓存预热。0.2.0 已交付。
@@ -28,6 +28,8 @@ Maho 的 HTTP 页面缓存集成层。第一期支持 `proxy` 和 `revalidating`
 - `docs/specs/page-cache-p1-performance.md`：0.5.3 P1 缓存性能规格。
 - `docs/specs/page-cache-p1-remaining.md`：0.5.3 P1 剩余正确性项规格。
 - `docs/specs/page-cache-stock-pending-monitor.md`：0.5.4 stock pending 监控规格。
+- `docs/adr/0019-session-cookie-policy.md`：session cookie 命中策略，FR-20 暂停。
+- `docs/specs/page-cache-fr20-session-spike.md`：FR-20 session 命中只读安全 spike。
 - `.claude/rules/`：模块级防漂移规则。
 
 ## 设计来源

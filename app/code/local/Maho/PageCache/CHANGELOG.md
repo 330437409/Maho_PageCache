@@ -2,7 +2,7 @@
 
 All notable changes to `Maho_PageCache` are recorded here.
 
-## Unreleased
+## 0.5.4 (2026-11-24)
 
 ### Added
 
