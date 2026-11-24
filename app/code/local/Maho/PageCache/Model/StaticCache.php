@@ -200,7 +200,10 @@ class Maho_PageCache_Model_StaticCache
             }
         }
 
-        $deletedIds = array_values(array_filter($deletedIds));
+        $deletedIds = array_values(array_filter(
+            $deletedIds,
+            static fn(int $staticId): bool => $staticId > 0,
+        ));
         if ($deletedIds !== []) {
             try {
                 $this->write()->delete(
