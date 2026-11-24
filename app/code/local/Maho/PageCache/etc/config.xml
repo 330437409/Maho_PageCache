@@ -2,7 +2,7 @@
 <config>
     <modules>
         <Maho_PageCache>
-            <version>0.4.0</version>
+            <version>0.5.0</version>
         </Maho_PageCache>
     </modules>
     <global>
@@ -76,6 +76,8 @@ catalog_product_view]]></session_skip_routes>
             <dynamic>
                 <injection>ajax</injection>
                 <ttl>0</ttl>
+                <server_side>0</server_side>
+                <server_types></server_types>
             </dynamic>
             <warmup>
                 <enabled>0</enabled>

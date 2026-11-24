@@ -2,6 +2,15 @@
 
 All notable changes to `Maho_PageCache` are recorded here.
 
+## Unreleased
+
+### Added
+
+- Server-side dynamic block placeholders for local mode hits: opted-in leaf blocks are rebuilt without generating the full layout.
+- Block definition storage, signed `PC_DYNAMIC_SERVER` markers, signed context/store validation and anonymous fallback.
+- `page_cache/dynamic/server_side` and `page_cache/dynamic/server_types` configuration.
+- Static export strips server block markers and keeps the anonymous fallback.
+
 ## 0.4.0 (2026-11-24)
 
 ### Added

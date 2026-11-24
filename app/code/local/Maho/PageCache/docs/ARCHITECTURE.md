@@ -1,6 +1,6 @@
 # 架构文档：Maho 页面缓存
 
-> 状态：0.4.0 已交付，第一期和第二期完成；第三期静态导出、统计面板和定时预热已交付，其余只登记
+> 状态：0.4.0 已交付，第一期和第二期完成；第三期静态导出、统计面板和定时预热已交付；服务器端动态块占位符 0.5.0 开发中
 > 模块：`Maho_PageCache`
 > 关联 PRD：`docs/PRD.md`
 > 关联 spec：`docs/specs/page-cache.md`
@@ -51,7 +51,7 @@ app/code/local/Maho/PageCache/
 ├── Service/
 │   ├── Request.php                 # bypass 判定和可缓存路由
 │   ├── Response.php                # 头、ETag、tag 收集
-│   ├── Dynamic.php                 # 动态块 token、占位符、前端替换
+│   ├── Dynamic.php                 # 动态块 token、占位符、服务器端重建和前端替换
 │   ├── Invalidator.php             # 实体/规则/配置失效
 │   ├── Purge.php                   # 队列处理和事件
 │   └── Warm.php                    # sitemap/URL 预热、队列消费和退避
@@ -185,7 +185,7 @@ block 在 layout 里显式设置 `page_cache_dynamic=1`。渲染时：
 
 1. `core_block_abstract_to_html_after` 只处理标记过的 block。
 2. `proxy`/`revalidating` 的可缓存请求把 block HTML 换成签名注释占位符，不把用户数据写进缓存。注释在 `<ul>`、`<tbody>` 等父级里也是合法节点，不会破坏外层结构。
-3. `local` 模式不替换动态 block，而是缓存无 session 时的匿名渲染；local 命中只面向无 session cookie 的请求，所以缓存里没有用户数据。
+3. `local` 模式缓存无 session 时的匿名渲染；local 命中只面向无 session cookie 的请求。显式 opt-in 的 leaf block 在 local 命中时按下一节做服务器端重建，其余动态块保留匿名渲染。
 4. form key/SID 在所有模式都替换为占位符。local 模式的前端脚本只在用户聚焦或提交 POST 表单时请求 form key，避免被动浏览建立 session；proxy 模式在页面加载时请求动态块和 form key。
 5. 动态请求（`X-Maho-Page-Cache: dynamic` 或 `_page_cache_dynamic` 参数）启动 session，正常生成 layout，只捕获当前页面标记过且被请求的 block。
 6. Ajax 响应返回 `{blocks, form_key, sid}`；ESI 响应返回单个 block 的 HTML。
@@ -193,6 +193,16 @@ block 在 layout 里显式设置 `page_cache_dynamic=1`。渲染时：
 8. block 显式标记 `page_cache_dynamic_cacheable=1` 且 `page_cache/dynamic/ttl>0` 时，动态响应按 block 集合写入 `PC_DYNAMIC_<hash>`；key 包含 block 列表、URL、context、customer group、store 和版本。命中时在 layout 前直接返回，form key/SID 仍从当前 session 生成。
 
 占位符 token 是 base64url JSON 加 HMAC，绑定 block、页面 URL、store、context 和过期时间。注释里用 hex 编码 token 和 block name，避免 HTML 注释中的 `--` 和属性转义。缓存页面里的 form key/SID 换成 `{{PAGE_CACHE_FORM_KEY}}` / `{{PAGE_CACHE_SID}}`，由注入的脚本用动态请求结果替换。
+
+local 服务器端占位符：
+
+- 打开 `page_cache/dynamic/server_side`，并在 `page_cache/dynamic/server_types` 列出允许的 block type。
+- block 同时设置 `page_cache_dynamic=1` 和 `page_cache_dynamic_server=1`。
+- 保存时把匿名 HTML 包在带 v2 token 的 `PC_DYNAMIC_SERVER` 注释中，entry 增加 `dynamic_blocks` 定义（type、name、template、标量 data）。
+- local 命中时只对标记段调用 `Mage::app()->getLayout()->createBlock()` 和 `toHtml()`，不生成完整 layout，也不触发整页 layout 生成事件。
+- token 校验 URL、store、context 和 exp；失败、定义缺失或 block 抛异常时保留匿名 fallback。
+- 重建期间出现 `Set-Cookie` 或 session 启动时丢弃 live HTML 并移除该头，保持被动浏览不建立 session。
+- static 写入前剥离标记，只保留匿名 fallback。
 
 ### 3.7 静态文件导出
 
@@ -292,7 +302,7 @@ catalog rule：
 | `PC_VERSION_GLOBAL` | int | 无 |
 | `PC_VERSION_URL_<urlhash>` | int | TTL + 1 小时 |
 | `PC_ETAG_<urlhash>` | `{etag, last_modified}` | TTL + 1 小时 |
-| `PC_HTML_<hash>` | `{html, headers, tags, version, global_version, context, etag, last_modified, created_at}` | TTL |
+| `PC_HTML_<hash>` | `{html, headers, tags, version, global_version, context, etag, last_modified, created_at, dynamic_blocks}` | TTL |
 | `PC_HTML_INDEX_<urlhash>` | context hash 列表，仅用于观察和后续清理 | TTL + 1 小时 |
 | `PC_DYNAMIC_<hash>` | `{blocks: {name: html}}`，仅显式标记 `page_cache_dynamic_cacheable` 的 block | `page_cache/dynamic/ttl` |
 | 静态文件 | `var/page-cache/static/{store}/{path}` + `.gz`，匿名默认页 | `page_cache_static_cleanup` |
@@ -386,6 +396,8 @@ ETag = W/"<version>"
 | `page_cache/general/html_max_size` | local HTML 条目上限，字节 | 2097152 |
 | `page_cache/dynamic/injection` | 动态块注入方式 `ajax` 或 `esi` | `ajax` |
 | `page_cache/dynamic/ttl` | 显式标记可缓存的动态块响应秒数，0 不缓存 | 0 |
+| `page_cache/dynamic/server_side` | local 命中服务器端重建开关 | 0 |
+| `page_cache/dynamic/server_types` | 允许重建的 block type，逗号分隔 | 空 |
 | `page_cache/warmup/enabled` | 调度预热开关 | 0 |
 | `page_cache/warmup/concurrency` | 预热默认并发 | 4 |
 | `page_cache/warmup/batch_size` | 单次 cron 最大 URL 数 | 50 |
@@ -486,6 +498,7 @@ CLI：
 - `If-None-Match` 返回 304 且不生成 layout。
 - local 命中设置 `FLAG_NO_DISPATCH` 并直接输出 HTML。
 - 动态块 token 校验、占位符替换、Ajax/ESI 响应。
+- local 服务器端占位符的保存、命中替换、token 校验、fallback、session 保护和 static 剥离。
 - 预热 sitemap 解析、去重、limit、skip 和失败汇总。
 - 预热队列入队、去重、上限、claim、重试、锁和 basic auth。
 - 静态路径映射、原子写、gzip、TTL 清理、失效删除和目录 deny。

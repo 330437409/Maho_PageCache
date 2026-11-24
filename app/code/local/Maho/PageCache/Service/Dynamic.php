@@ -17,6 +17,7 @@ class Maho_PageCache_Service_Dynamic
     public const PARAM_ESI = '_page_cache_dynamic';
     public const TOKEN_TTL = 3600;
     public const PLACEHOLDER_PREFIX = 'page-cache-dynamic:';
+    public const SERVER_PLACEHOLDER = 'PC_DYNAMIC_SERVER:';
 
     public function isRequest(): bool
     {
@@ -109,6 +110,265 @@ class Maho_PageCache_Service_Dynamic
         );
         $signature = hash_hmac('sha256', $encoded, Mage::getEncryptionKeyAsHex(), true);
         return $encoded . '.' . $this->base64UrlEncode($signature);
+    }
+
+    /**
+     * @return array{html: string, id: string, definition: array<string, mixed>}|null
+     */
+    public function createServerMarker(
+        Mage_Core_Block_Abstract $block,
+        string $html,
+        Maho_PageCache_Model_Context $context,
+        int $ttl,
+    ): ?array {
+        $helper = $this->helper();
+        if (!$helper->getDynamicServerSide() || !$block->getData('page_cache_dynamic_server')) {
+            return null;
+        }
+
+        $type = (string) $block->getType();
+        $name = (string) $block->getNameInLayout();
+        $template = (string) $block->getTemplate();
+        if ($type === '' || $name === '' || !in_array($type, $helper->getDynamicServerTypes(), true)) {
+            return null;
+        }
+
+        $id = substr(hash('sha256', $name . '|' . $type . '|' . $template), 0, 16);
+        $token = $this->createServerToken($id, $context, time() + max(60, $ttl) + 300);
+        $html = '<!--' . self::SERVER_PLACEHOLDER . $token . '-->'
+            . $html
+            . '<!--/' . self::SERVER_PLACEHOLDER . $id . '-->';
+
+        return [
+            'html' => $html,
+            'id' => $id,
+            'definition' => [
+                'id' => $id,
+                'type' => $type,
+                'name' => $name,
+                'template' => $template,
+                'data' => $this->scalarData($block->getData()),
+            ],
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $entry
+     */
+    public function renderServerBlocks(
+        string $html,
+        array $entry,
+        Maho_PageCache_Model_Context $context,
+    ): string {
+        $blocks = $entry['dynamic_blocks'] ?? [];
+        if (!Mage::helper('page_cache')->getDynamicServerSide()
+            || !is_array($blocks)
+            || $blocks === []
+            || !str_contains($html, self::SERVER_PLACEHOLDER)
+        ) {
+            return $html;
+        }
+
+        $rendered = 0;
+        $failed = 0;
+        $result = preg_replace_callback(
+            $this->serverPattern(),
+            function (array $matches) use ($blocks, $context, &$rendered, &$failed): string {
+                $anonymous = $matches[2];
+                $id = $matches[3];
+                $payload = $this->verifyServerToken($matches[1]);
+                if ($payload === null
+                    || (string) ($payload['server'] ?? '') !== $id
+                    || (string) ($payload['url'] ?? '') !== $context->getUrl()
+                    || (int) ($payload['store'] ?? 0) !== $context->getStoreId()
+                    || (string) ($payload['context'] ?? '') !== $context->getHash()
+                    || !isset($blocks[$id])
+                    || !is_array($blocks[$id])
+                ) {
+                    $failed++;
+                    return $anonymous;
+                }
+
+                try {
+                    $definition = $blocks[$id];
+                    $block = Mage::app()->getLayout()->createBlock(
+                        (string) ($definition['type'] ?? ''),
+                        (string) ($definition['name'] ?? ''),
+                        is_array($definition['data'] ?? null) ? $definition['data'] : [],
+                    );
+                    if (!$block instanceof Mage_Core_Block_Abstract) {
+                        $failed++;
+                        return $anonymous;
+                    }
+                    $template = (string) ($definition['template'] ?? '');
+                    if ($template !== '') {
+                        $block->setTemplate($template);
+                    }
+                    $live = (string) $block->toHtml();
+                    if ($live === '') {
+                        $failed++;
+                        return $anonymous;
+                    }
+                    $rendered++;
+                    return $live;
+                } catch (\Throwable $e) {
+                    Mage::logException($e);
+                    $failed++;
+                    return $anonymous;
+                }
+            },
+            $html,
+        );
+
+        if (!is_string($result)) {
+            return $html;
+        }
+
+        if ($this->hasSetCookie()) {
+            $this->clearSetCookie();
+            Mage::log(
+                'Page cache server-side dynamic block started a session; falling back to anonymous HTML.',
+                Mage::LOG_WARNING,
+            );
+            return $html;
+        }
+
+        if ($this->helper()->isDebugHeaders()) {
+            Mage::app()->getResponse()->setHeader(
+                'X-Maho-Cache-Dynamic',
+                sprintf('server; rendered=%d; failed=%d', $rendered, $failed),
+                true,
+            );
+        }
+
+        return $result;
+    }
+
+    public function stripServerBlockMarkers(string $html): string
+    {
+        if (!str_contains($html, self::SERVER_PLACEHOLDER)) {
+            return $html;
+        }
+
+        $stripped = preg_replace($this->serverPattern(), '$2', $html);
+        return is_string($stripped) ? $stripped : $html;
+    }
+
+    private function serverPattern(): string
+    {
+        $prefix = preg_quote(self::SERVER_PLACEHOLDER, '#');
+        return '#<!--' . $prefix . '([A-Za-z0-9._-]+)-->(.*?)<!--/' . $prefix . '([a-f0-9]{16})-->#s';
+    }
+
+    private function createServerToken(string $id, Maho_PageCache_Model_Context $context, int $expires): string
+    {
+        $payload = [
+            'v' => 2,
+            'server' => $id,
+            'url' => $context->getUrl(),
+            'store' => $context->getStoreId(),
+            'context' => $context->getHash(),
+            'exp' => $expires,
+        ];
+        $encoded = $this->base64UrlEncode(
+            (string) json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+        );
+        $signature = hash_hmac('sha256', $encoded, Mage::getEncryptionKeyAsHex(), true);
+        return $encoded . '.' . $this->base64UrlEncode($signature);
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function verifyServerToken(string $value): ?array
+    {
+        $parts = explode('.', $value);
+        if (count($parts) !== 2) {
+            return null;
+        }
+
+        [$encoded, $signature] = $parts;
+        $expected = $this->base64UrlEncode(
+            hash_hmac('sha256', $encoded, Mage::getEncryptionKeyAsHex(), true),
+        );
+        if (!hash_equals($expected, $signature)) {
+            return null;
+        }
+
+        $json = $this->base64UrlDecode($encoded);
+        if ($json === null) {
+            return null;
+        }
+
+        try {
+            $payload = json_decode($json, true, 16, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return null;
+        }
+        if (!is_array($payload)
+            || (int) ($payload['v'] ?? 0) !== 2
+            || !is_string($payload['server'] ?? null)
+            || (int) ($payload['exp'] ?? 0) <= time()
+        ) {
+            return null;
+        }
+
+        return $payload;
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     * @return array<string, mixed>
+     */
+    private function scalarData(array $data): array
+    {
+        $exclude = [
+            'layout',
+            'type',
+            'name_in_layout',
+            'template',
+            'page_cache_dynamic',
+            'page_cache_dynamic_server',
+            'page_cache_dynamic_cacheable',
+        ];
+        $result = [];
+        foreach ($data as $key => $value) {
+            if (!is_string($key) || in_array($key, $exclude, true)) {
+                continue;
+            }
+            if (is_scalar($value) || $value === null) {
+                $result[$key] = $value;
+                continue;
+            }
+            if (is_array($value) && $this->isScalarArray($value)) {
+                $result[$key] = $value;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param array<mixed> $value
+     */
+    private function isScalarArray(array $value): bool
+    {
+        return array_all($value, static fn(mixed $item): bool => is_scalar($item) || $item === null);
+    }
+
+    private function hasSetCookie(): bool
+    {
+        foreach (Mage::app()->getResponse()->getHeaders() as $header) {
+            if (strcasecmp((string) $header['name'], 'Set-Cookie') === 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private function clearSetCookie(): void
+    {
+        Mage::app()->getResponse()->clearHeader('Set-Cookie');
     }
 
     public function sanitizeHtml(string $html): string

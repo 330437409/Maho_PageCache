@@ -1,15 +1,15 @@
 # Maho_PageCache
 
-Maho 的 HTTP 页面缓存集成层。第一期支持 `proxy` 和 `revalidating` 两种模式，第二期增加 `local` 模式，把整页 HTML 存进 Maho 的 Symfony Cache，第三期增加静态文件导出和统计面板。
+Maho 的 HTTP 页面缓存集成层。第一期支持 `proxy` 和 `revalidating` 两种模式，第二期增加 `local` 模式，把整页 HTML 存进 Maho 的 Symfony Cache，第三期增加静态文件导出、统计面板、定时预热和服务器端动态块占位符。
 
 ## 状态
 
-0.4.0 已交付，累计包含第一期的 HTTP 集成层、proxy/revalidating 两种模式、session skip、tag 失效、purge 队列、配置和 CLI，第二期的 `local` 模式、Ajax/ESI 动态块和 `page-cache:warm`，以及第三期的静态文件导出、统计面板和定时预热。
+0.4.0 已交付，累计包含第一期的 HTTP 集成层、proxy/revalidating 两种模式、session skip、tag 失效、purge 队列、配置和 CLI，第二期的 `local` 模式、Ajax/ESI 动态块和 `page-cache:warm`，以及第三期的静态文件导出、统计面板和定时预热。0.5.0 开发中：local 命中的服务器端动态块占位符。
 
 - 第一期：HTTP 集成层，`proxy` + `revalidating`。0.2.0 已交付。
 - 第二期：`local` 模式、整页 HTML 缓存、Ajax/ESI 动态块、缓存预热。0.2.0 已交付。
-- local 模式只缓存无 session cookie 的匿名页面；被动浏览不会建立 session。动态块打孔用于 proxy/revalidating 模式，local 模式缓存匿名渲染，form key 在用户提交表单时才获取。
-- 第三期：静态文件导出、统计面板、定时预热、服务器端占位符、代理模型、多节点 purge。静态导出和统计面板 0.3.0 已交付；定时预热 0.4.0 已交付；其余只登记。
+- local 模式只缓存无 session cookie 的匿名页面；被动浏览不会建立 session。动态块打孔用于 proxy/revalidating 模式；local 模式缓存匿名渲染，显式 opt-in 的 leaf block 可以在命中时服务器端重建。form key 在用户提交表单时才获取。
+- 第三期：静态文件导出、统计面板、定时预热、服务器端占位符、代理模型、多节点 purge。静态导出和统计面板 0.3.0 已交付；定时预热 0.4.0 已交付；服务器端动态块占位符 0.5.0 开发中；代理模型和多节点只登记。
 
 ## 文档
 
@@ -22,6 +22,7 @@ Maho 的 HTTP 页面缓存集成层。第一期支持 `proxy` 和 `revalidating`
 - `docs/specs/page-cache-static-export.md`：第三期静态文件导出规格（0.3.0 已交付）。
 - `docs/specs/page-cache-stats-dashboard.md`：第三期统计面板规格（0.3.0 已交付）。
 - `docs/specs/page-cache-scheduled-warmup.md`：第三期定时预热规格（0.4.0 已交付）。
+- `docs/specs/page-cache-server-placeholders.md`：第三期服务器端动态块占位符规格（0.5.0 开发中）。
 - `.claude/rules/`：模块级防漂移规则。
 
 ## 设计来源
@@ -52,7 +53,7 @@ Maho 的 HTTP 页面缓存集成层。第一期支持 `proxy` 和 `revalidating`
 System > Configuration > Page Cache
 ```
 
-主要字段：开关、模式（`proxy`、`revalidating`、`local`）、TTL、local HTML 大小上限、可缓存路由、允许的 query 参数、路径段数上限、分层导航标记和深度、是否遵守 no-cache、调试头、session skip 路由、动态块注入方式、动态块 TTL、预热开关/批次/并发/间隔/重试/队列上限/basic auth、静态文件导出、统计开关和保留期。
+主要字段：开关、模式（`proxy`、`revalidating`、`local`）、TTL、local HTML 大小上限、可缓存路由、允许的 query 参数、路径段数上限、分层导航标记和深度、是否遵守 no-cache、调试头、session skip 路由、动态块注入方式、动态块 TTL、服务器端动态块开关和类型白名单、预热开关/批次/并发/间隔/重试/队列上限/basic auth、静态文件导出、统计开关和保留期。
 
 ## 静态文件导出
 
@@ -83,6 +84,16 @@ var/page-cache/static/{store_code}/{public_path}.gz
 - `page_cache_stats_rollup` 每小时聚合，`page_cache_stats_cleanup` 每天清理。
 - 静态文件、反向代理和 CDN 命中不经过 PHP，不计入面板。
 
+## 服务器端动态块
+
+local 命中时，显式标记的 leaf block 可以在服务器端重建，不需要生成完整 layout。
+
+- 配置 `System > Configuration > Page Cache > Dynamic Blocks` 的 `Render Server-side Blocks on Local Hits`，并在 `Server-side Block Types` 填写允许的 block type。
+- block 同时设置 `page_cache_dynamic=1` 和 `page_cache_dynamic_server=1`。
+- 保存时保留匿名 HTML 作为 fallback，命中时用 live HTML 替换标记段。
+- proxy/revalidating 继续 Ajax/ESI；static 文件只保留匿名 fallback。
+- 重建失败、token 无效或启动 session 时回退匿名 HTML，不返回 500。
+
 ## 定时预热
 
 默认关闭。开启 `System > Configuration > Page Cache > Warmup` 后，tag 失效会把受影响 URL 写入 `page_cache_warmup_queue`，`page_cache_warmup` cron 每分钟按批次消费。
@@ -112,7 +123,7 @@ var/page-cache/static/{store_code}/{public_path}.gz
 vendor/bin/pest tests/Backend/Unit/PageCache
 ```
 
-当前 153 个测试通过。
+当前 163 个测试通过。
 
 ## 许可证
 

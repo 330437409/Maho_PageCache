@@ -91,6 +91,7 @@ class Maho_PageCache_Model_HtmlCache
         int $ttl,
         array $headers,
         array $versions,
+        array $dynamicBlocks = [],
     ): ?array {
         if ($this->isTooLarge($html)) {
             return null;
@@ -116,6 +117,7 @@ class Maho_PageCache_Model_HtmlCache
                 $versions['url'],
             ),
             'last_modified' => time(),
+            'dynamic_blocks' => $dynamicBlocks,
         ];
 
         $key = $this->key();
