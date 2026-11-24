@@ -56,4 +56,4 @@
 - 代码：`etc/adminhtml.xml`、`controllers/Adminhtml/PageCacheController.php`、`Block/Adminhtml/Dashboard.php`、`template/maho/pagecache/dashboard.phtml`。
 - 测试：`AdminMenuTest`；手工验证一级菜单、content header、Warm Now POST 和空队列提示。
 - 测试结果：199 passed（568 assertions）。
-- 交叉验证：模块 CI run 45376447529 在 SQLite、MySQL、PostgreSQL 三个任务上全部通过（2026-11-24）。
+- 交叉验证：模块 CI run 45384111168 在 SQLite、MySQL、PostgreSQL 三个任务上全部通过（2026-11-24）。

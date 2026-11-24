@@ -18,6 +18,7 @@ class Maho_PageCache_Block_Adminhtml_Dashboard_Tabs extends Mage_Adminhtml_Block
         parent::_construct();
         $this->setId('page_cache_tabs');
         $this->setDestElementId('page_cache_tab_content');
+        $this->setTemplate('widget/tabshoriz.phtml');
     }
 
     #[\Override]

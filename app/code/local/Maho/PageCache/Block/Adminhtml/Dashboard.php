@@ -22,9 +22,15 @@ class Maho_PageCache_Block_Adminhtml_Dashboard extends Mage_Adminhtml_Block_Widg
             $this->addButton('configuration', [
                 'label' => Mage::helper('page_cache')->__('Configuration'),
                 'onclick' => 'setLocation(\'' . $this->getConfigUrl() . '\')',
-                'class' => 'd-btn',
+                'class' => 'scalable',
             ]);
         }
+    }
+
+    #[\Override]
+    public function getHeaderCssClass()
+    {
+        return 'icon-head head-page-cache';
     }
 
     public function getTabsHtml(): string
