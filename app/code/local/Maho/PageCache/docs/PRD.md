@@ -170,7 +170,8 @@ Maho 目前有 Symfony Cache 对象缓存（file/redis），但没有内置的 H
 #### AC-08 Bypass 与调试
 
 - 非 GET、admin、非白名单路由、未知 query 参数、路径段数超过上限、分层导航深度超过上限、有 session cookie、预览、维护模式均 bypass。
-- 非默认 store/货币/客户组/税上下文按配置 bypass 或生成独立 context。
+- 非默认 store/货币/客户组/税上下文按配置 bypass 或生成独立 context；`context_mode=default` 时，带 `___store` cookie 的 store 切换请求 bypass。
+- 移动主题、A-B、geo-IP 模块通过 `page_cache_context_variant` 标记变体；proxy 模式 bypass，local 模式进入 context key。
 - bypass 响应不被写入 URL 索引，也不产生 purge 条目。
 - `X-Maho-Cache-Bypass` 原因码稳定、可搜索，不包含 PII。
 
@@ -231,6 +232,9 @@ Maho 目前有 Symfony Cache 对象缓存（file/redis），但没有内置的 H
 - 缓存页保存 block 定义，命中时只渲染白名单动态块，不生成完整 layout。
 - token/context/store 校验通过，不返回用户数据。
 - 动态块渲染不触发整页 layout 事件。
+- 动态请求只允许 GET 和 `cacheable_routes` 中的路由；其他路由按正常 bypass 处理。
+- 动态请求按客户端限流，超限返回 429 和 `rate_limit` bypass。
+- token 过期时间不短于页面 TTL，URL 使用 store base URL 的 scheme/host。
 
 #### AC-15 代理模型（FR-15）
 

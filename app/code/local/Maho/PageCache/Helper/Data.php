@@ -20,11 +20,14 @@ class Maho_PageCache_Helper_Data extends Mage_Core_Helper_Abstract
     public const XML_PATH_ALLOWED_PARAMS = 'page_cache/general/allowed_params';
     public const XML_PATH_RESPECT_NO_CACHE = 'page_cache/general/respect_no_cache';
     public const XML_PATH_DEBUG_HEADERS = 'page_cache/general/debug_headers';
+    public const XML_PATH_PROXY_CONTEXT_MODE = 'page_cache/proxy/context_mode';
     public const XML_PATH_HTML_MAX_SIZE = 'page_cache/general/html_max_size';
     public const XML_PATH_DYNAMIC_INJECTION = 'page_cache/dynamic/injection';
     public const XML_PATH_DYNAMIC_TTL = 'page_cache/dynamic/ttl';
     public const XML_PATH_DYNAMIC_SERVER_SIDE = 'page_cache/dynamic/server_side';
     public const XML_PATH_DYNAMIC_SERVER_TYPES = 'page_cache/dynamic/server_types';
+    public const XML_PATH_DYNAMIC_RATE_LIMIT = 'page_cache/dynamic/rate_limit';
+    public const XML_PATH_DYNAMIC_RATE_LIMIT_WINDOW = 'page_cache/dynamic/rate_limit_window';
     public const XML_PATH_WARMUP_ENABLED = 'page_cache/warmup/enabled';
     public const XML_PATH_WARMUP_CONCURRENCY = 'page_cache/warmup/concurrency';
     public const XML_PATH_WARMUP_BATCH_SIZE = 'page_cache/warmup/batch_size';
@@ -46,6 +49,8 @@ class Maho_PageCache_Helper_Data extends Mage_Core_Helper_Abstract
     public const MODE_PROXY = 'proxy';
     public const MODE_REVALIDATING = 'revalidating';
     public const MODE_LOCAL = 'local';
+    public const PROXY_CONTEXT_COOKIE = 'cookie';
+    public const PROXY_CONTEXT_DEFAULT = 'default';
 
     public function isEnabled(): bool
     {
@@ -104,6 +109,12 @@ class Maho_PageCache_Helper_Data extends Mage_Core_Helper_Abstract
         return Mage::getStoreConfigFlag(self::XML_PATH_DEBUG_HEADERS);
     }
 
+    public function getProxyContextMode(): string
+    {
+        $mode = (string) Mage::getStoreConfig(self::XML_PATH_PROXY_CONTEXT_MODE);
+        return $mode === self::PROXY_CONTEXT_DEFAULT ? self::PROXY_CONTEXT_DEFAULT : self::PROXY_CONTEXT_COOKIE;
+    }
+
     public function getHtmlMaxSize(): int
     {
         $size = (int) Mage::getStoreConfig(self::XML_PATH_HTML_MAX_SIZE);
@@ -123,6 +134,17 @@ class Maho_PageCache_Helper_Data extends Mage_Core_Helper_Abstract
     public function getDynamicServerSide(): bool
     {
         return Mage::getStoreConfigFlag(self::XML_PATH_DYNAMIC_SERVER_SIDE);
+    }
+
+    public function getDynamicRateLimit(): int
+    {
+        return max(0, (int) Mage::getStoreConfig(self::XML_PATH_DYNAMIC_RATE_LIMIT));
+    }
+
+    public function getDynamicRateLimitWindow(): int
+    {
+        $window = (int) Mage::getStoreConfig(self::XML_PATH_DYNAMIC_RATE_LIMIT_WINDOW);
+        return $window > 0 ? $window : 60;
     }
 
     /**

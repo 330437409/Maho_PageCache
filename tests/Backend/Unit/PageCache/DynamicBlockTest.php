@@ -43,7 +43,10 @@ beforeEach(function () {
     Mage::app()->getStore()->setConfig('page_cache/general/mode', 'local');
     Mage::app()->getStore()->setConfig('page_cache/dynamic/injection', 'ajax');
     Mage::app()->getStore()->setConfig('page_cache/dynamic/ttl', '0');
+    Mage::app()->getStore()->setConfig('page_cache/dynamic/rate_limit', '0');
+    Mage::app()->getStore()->setConfig('page_cache/dynamic/rate_limit_window', '60');
     Mage::app()->getCache()->cleanType('page_cache');
+    Mage::helper('core')->rateLimiter('page_cache_dynamic', 1, 60)->clear();
 
     $response = Mage::app()->getResponse();
     $response->clearHeaders();
@@ -60,6 +63,7 @@ beforeEach(function () {
     Mage::unregister('page_cache_local_lock_name');
     Mage::unregister('page_cache_local_versions');
     Mage::unregister('page_cache_tags');
+    Mage::unregister('page_cache_bypass_reason');
 
     Mage::app()->getRequest()->getSymfonyRequest()->headers->remove('X-Maho-Page-Cache');
     Mage::app()->getRequest()->getSymfonyRequest()->headers->remove('X-Maho-Page-Cache-Blocks');
@@ -67,6 +71,8 @@ beforeEach(function () {
 });
 
 afterEach(function () {
+    Mage::app()->getStore()->setConfig('page_cache/dynamic/rate_limit', '0');
+    Mage::helper('core')->rateLimiter('page_cache_dynamic', 1, 60)->clear();
     Mage::app()->getRequest()->getSymfonyRequest()->headers->remove('X-Maho-Page-Cache');
     Mage::app()->getRequest()->getSymfonyRequest()->headers->remove('X-Maho-Page-Cache-Blocks');
     Mage::app()->getRequest()->getSymfonyRequest()->query->remove('_page_cache_dynamic');
@@ -230,7 +236,13 @@ it('captures a requested marked block on a dynamic request', function () {
 });
 
 it('does not skip session for a dynamic request', function () {
+    Mage::app()->getStore()->setConfig('page_cache/general/cacheable_routes', 'catalog_product_view');
     Mage::app()->getRequest()->getSymfonyRequest()->headers->set('X-Maho-Page-Cache', 'dynamic');
+    Mage::app()->getRequest()->setRoutingInfo([
+        'requested_route' => 'catalog',
+        'requested_controller' => 'product',
+        'requested_action' => 'view',
+    ]);
     $controller = new class (Mage::app()->getRequest(), Mage::app()->getResponse()) extends Mage_Core_Controller_Varien_Action {};
 
     (new Maho_PageCache_Model_Observer())->skipSession(
@@ -239,6 +251,52 @@ it('does not skip session for a dynamic request', function () {
 
     expect(Mage::registry('page_cache_dynamic_request'))->toBeTrue()
         ->and($controller->getFlag('', Mage_Core_Controller_Varien_Action::FLAG_NO_START_SESSION))->toBeFalse()
+        ->and(Mage::registry('page_cache_request_cacheable'))->toBeNull();
+});
+
+it('rate limits dynamic requests', function () {
+    Mage::app()->getStore()->setConfig('page_cache/general/cacheable_routes', 'catalog_product_view');
+    Mage::app()->getStore()->setConfig('page_cache/dynamic/rate_limit', '1');
+    Mage::app()->getRequest()->getSymfonyRequest()->headers->set('X-Maho-Page-Cache', 'dynamic');
+    Mage::app()->getRequest()->setRoutingInfo([
+        'requested_route' => 'catalog',
+        'requested_controller' => 'product',
+        'requested_action' => 'view',
+    ]);
+    $observer = new Maho_PageCache_Model_Observer();
+    $controller = new class (Mage::app()->getRequest(), Mage::app()->getResponse()) extends Mage_Core_Controller_Varien_Action {};
+
+    $observer->skipSession(new Maho\Event\Observer(['controller_action' => $controller]));
+    expect(Mage::registry('page_cache_dynamic_request'))->toBeTrue();
+
+    Mage::unregister('page_cache_dynamic_request');
+    Mage::unregister('page_cache_dynamic_blocks');
+    Mage::unregister('page_cache_bypass_reason');
+    Mage::app()->getResponse()->setHttpResponseCode(200);
+    $observer->skipSession(new Maho\Event\Observer(['controller_action' => $controller]));
+
+    expect(Mage::registry('page_cache_dynamic_request'))->toBeNull()
+        ->and(Mage::registry('page_cache_bypass_reason'))->toBe('rate_limit')
+        ->and(Mage::app()->getResponse()->getHttpResponseCode())->toBe(429)
+        ->and($controller->getFlag('', Mage_Core_Controller_Varien_Action::FLAG_NO_DISPATCH))->toBeTrue();
+});
+
+it('rejects a dynamic request on a non-cacheable route', function () {
+    Mage::app()->getStore()->setConfig('page_cache/general/cacheable_routes', 'catalog_product_view');
+    Mage::app()->getRequest()->getSymfonyRequest()->headers->set('X-Maho-Page-Cache', 'dynamic');
+    Mage::app()->getRequest()->setRoutingInfo([
+        'requested_route' => 'checkout',
+        'requested_controller' => 'cart',
+        'requested_action' => 'add',
+    ]);
+    $controller = new class (Mage::app()->getRequest(), Mage::app()->getResponse()) extends Mage_Core_Controller_Varien_Action {};
+
+    (new Maho_PageCache_Model_Observer())->skipSession(
+        new Maho\Event\Observer(['controller_action' => $controller]),
+    );
+
+    expect(Mage::registry('page_cache_dynamic_request'))->toBeNull()
+        ->and(Mage::registry('page_cache_bypass_reason'))->toBe('route')
         ->and(Mage::registry('page_cache_request_cacheable'))->toBeNull();
 });
 

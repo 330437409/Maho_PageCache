@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Declarative schema for page cache statistics, warmup queue and URL index.
+ * Declarative schema for page cache statistics, queues, URL index and static file index.
  *
  * SPDX-FileCopyrightText: 2026 Maho <https://mahocommerce.com>
  * SPDX-License-Identifier: OSL-3.0
@@ -129,6 +129,38 @@ return function (SchemaEditor $schema): void {
             )
             ->addIndex(Index::editor()->setUnquotedColumnNames('tag'))
             ->setComment('Page Cache URL Tag Index')
+            ->create(),
+    );
+
+    $schema->addTable(
+        Table::editor()
+            ->setUnquotedName('page_cache_static_file')
+            ->addColumn(Schema::column('static_id', Types::INTEGER, unsigned: true, autoincrement: true))
+            ->addColumn(Schema::column('path_hash', Types::STRING, length: 64))
+            ->addColumn(Schema::column('path', Types::STRING, length: 2048))
+            ->addColumn(Schema::column('expires_at', Types::DATETIME_IMMUTABLE))
+            ->addColumn(Schema::column('created_at', Types::DATETIME_IMMUTABLE))
+            ->addColumn(Schema::column('updated_at', Types::DATETIME_IMMUTABLE))
+            ->addPrimaryKeyConstraint(
+                PrimaryKeyConstraint::editor()->setUnquotedColumnNames('static_id')->create(),
+            )
+            ->addIndex(
+                Index::editor()->setType(IndexType::UNIQUE)->setUnquotedColumnNames('path_hash'),
+            )
+            ->addIndex(Index::editor()->setUnquotedColumnNames('expires_at'))
+            ->setComment('Page Cache Static File Index')
+            ->create(),
+    );
+
+    $schema->addTable(
+        Table::editor()
+            ->setUnquotedName('page_cache_stock_pending')
+            ->addColumn(Schema::column('product_id', Types::INTEGER, unsigned: true))
+            ->addColumn(Schema::column('created_at', Types::DATETIME_IMMUTABLE))
+            ->addPrimaryKeyConstraint(
+                PrimaryKeyConstraint::editor()->setUnquotedColumnNames('product_id')->create(),
+            )
+            ->setComment('Page Cache Pending Stock Invalidation')
             ->create(),
     );
 };

@@ -81,6 +81,18 @@ it('keeps the store code for urls but strips it for static paths', function () {
         ->and($context->getUrlHash())->not->toBe($plain->getUrlHash());
 });
 
+it('builds the canonical url from the store base scheme and host', function () {
+    $context = new Maho_PageCache_Model_Context(pageCacheContextData([
+        'scheme' => 'https',
+        'host' => 'proxy.example',
+    ]));
+    $base = parse_url((string) Mage::app()->getStore(1)->getBaseUrl(Mage_Core_Model_Store::URL_TYPE_LINK));
+
+    expect($context->getCanonicalUrl())->toBe(
+        $base['scheme'] . '://' . $base['host'] . (isset($base['port']) ? ':' . $base['port'] : '') . '/category.html',
+    );
+});
+
 it('does not include the query string in the page url', function () {
     $context = new Maho_PageCache_Model_Context(pageCacheContextData([
         'params' => [],

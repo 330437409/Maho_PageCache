@@ -219,6 +219,42 @@ class Maho_PageCache_Model_Stat
     }
 
     /**
+     * @return array<string, int>
+     */
+    public function getTodayCounts(): array
+    {
+        $counts = array_fill_keys([
+            self::EVENT_HIT,
+            self::EVENT_MISS,
+            self::EVENT_BYPASS,
+            self::EVENT_REVALIDATED,
+        ], 0);
+
+        try {
+            $this->flush();
+            $read = $this->read();
+            $select = $read->select()
+                ->from($this->table('page_cache/stat'), [
+                    'event_type',
+                    'event_count' => new Maho\Db\Expr('COUNT(*)'),
+                ])
+                ->where('created_at >= ?', gmdate('Y-m-d 00:00:00'))
+                ->where('event_type IN (?)', array_keys($counts))
+                ->group('event_type');
+            foreach ($read->fetchAll($select) as $row) {
+                $eventType = (string) $row['event_type'];
+                if (array_key_exists($eventType, $counts)) {
+                    $counts[$eventType] = (int) $row['event_count'];
+                }
+            }
+        } catch (\Throwable $e) {
+            Mage::logException($e);
+        }
+
+        return $counts;
+    }
+
+    /**
      * @return array{hit: int, miss: int, bypass: int, revalidated: int, dynamic: int, purge: int, flush: int, warmup: int, hit_rate: float, avg_duration_ms: float|null}
      */
     public function getSummary(int $days, int $storeId = 0): array

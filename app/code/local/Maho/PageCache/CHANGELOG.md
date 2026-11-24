@@ -2,6 +2,33 @@
 
 All notable changes to `Maho_PageCache` are recorded here.
 
+## Unreleased
+
+### Added
+
+- `page_cache/proxy/context_mode` with `cookie` (default) and `default` for URL-only proxies.
+- `page_cache_static_file` table that tracks static exports and their expiry for indexed cleanup.
+- `page_cache_stock_pending` table that carries stock invalidations across asynchronous index runs.
+- `page_cache/dynamic/rate_limit` and `rate_limit_window` settings; dynamic requests over the limit answer 429.
+- `page_cache_context_variant` registry hook for mobile theme, A/B and geo-IP modules; local mode partitions the cache and proxy mode bypasses.
+
+### Changed
+
+- Dynamic tokens use the store base URL scheme and host, and expire no earlier than the page TTL plus 300 seconds.
+- Local HTML entries larger than 4 KB are stored gzip-compressed and decompressed on a local hit.
+- PHP-side counters read from the statistics table instead of a cache load and save on every hit; statistics must be enabled, and `page-cache:status` reports counters as unavailable otherwise.
+- Purge queue entries live for 24 hours and the queue index for 25 hours, so the index cannot expire before its entries.
+- Static cleanup deletes files from the static file index and falls back to a directory scan only when the index is empty.
+- The static export contract now requires `___store` cookies to return to PHP, and the nginx and Caddy examples include that rule.
+
+### Fixed
+
+- Dynamic block requests are limited to cacheable routes; a request to any other route bypasses instead of skipping the normal cacheability policy.
+- Catalog rule pages are invalidated again after the rule index is applied, so a page cannot re-cache with the previous price.
+- Product imports invalidate the affected products when the import finishes.
+- Stock item changes invalidate the affected products again after the stock index is processed.
+- A proxy that cannot honor `Vary: Cookie` can set `page_cache/proxy/context_mode=default`; store cookie switches then bypass instead of sharing a URL cache object.
+
 ## 0.5.2 (2026-11-24)
 
 ### Added
@@ -15,6 +42,15 @@ All notable changes to `Maho_PageCache` are recorded here.
 - No user-visible behavior change.
 
 ## 0.5.1 (2026-11-24)
+
+### Changed
+
+- Dynamic tokens use the store base URL scheme and host, and expire no earlier than the page TTL plus 300 seconds.
+- Local HTML entries larger than 4 KB are stored gzip-compressed and decompressed on a local hit.
+- PHP-side counters read from the statistics table instead of a cache load and save on every hit; statistics must be enabled, and `page-cache:status` reports counters as unavailable otherwise.
+- Purge queue entries live for 24 hours and the queue index for 25 hours, so the index cannot expire before its entries.
+- Static cleanup deletes files from the static file index and falls back to a directory scan only when the index is empty.
+- The static export contract now requires `___store` cookies to return to PHP, and the nginx and Caddy examples include that rule.
 
 ### Fixed
 
@@ -78,6 +114,15 @@ All notable changes to `Maho_PageCache` are recorded here.
 - Configuration section saves invalidate every page, including saves made through `config:set` and the configuration service.
 - Full invalidations keep a monotonic global version and enqueue a full proxy purge in proxy mode.
 - Dynamic block placeholders are HTML comments instead of `<div>` elements.
+
+### Changed
+
+- Dynamic tokens use the store base URL scheme and host, and expire no earlier than the page TTL plus 300 seconds.
+- Local HTML entries larger than 4 KB are stored gzip-compressed and decompressed on a local hit.
+- PHP-side counters read from the statistics table instead of a cache load and save on every hit; statistics must be enabled, and `page-cache:status` reports counters as unavailable otherwise.
+- Purge queue entries live for 24 hours and the queue index for 25 hours, so the index cannot expire before its entries.
+- Static cleanup deletes files from the static file index and falls back to a directory scan only when the index is empty.
+- The static export contract now requires `___store` cookies to return to PHP, and the nginx and Caddy examples include that rule.
 
 ### Fixed
 

@@ -82,11 +82,6 @@ class Maho_PageCache_Model_Key
         return 'PC_PURGE_' . $id;
     }
 
-    public function getStatKey(string $date, string $result): string
-    {
-        return 'PC_STAT_' . $date . '_' . $result;
-    }
-
     public function getWarmupLastRunKey(): string
     {
         return 'PC_WARMUP_LAST_RUN';

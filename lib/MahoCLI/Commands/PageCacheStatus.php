@@ -35,6 +35,18 @@ class PageCacheStatus extends BaseMahoCommand
         $version = Mage::getModel('page_cache/version');
         $queue = Mage::getModel('page_cache/purgeQueue');
         $counters = Mage::getModel('page_cache/counter')->getToday();
+        $stockPending = 0;
+        try {
+            $read = Mage::getSingleton('core/resource')->getConnection('core_read');
+            $stockPending = (int) $read->fetchOne(
+                $read->select()->from(
+                    Mage::getSingleton('core/resource')->getTableName('page_cache/stock_pending'),
+                    ['COUNT(*)'],
+                ),
+            );
+        } catch (\Throwable $e) {
+            Mage::logException($e);
+        }
 
         $output->writeln('<info>Page Cache</info>');
         $output->writeln('Enabled: ' . ($helper->isEnabled() ? 'yes' : 'no'));
@@ -42,6 +54,7 @@ class PageCacheStatus extends BaseMahoCommand
         $output->writeln('TTL: ' . $helper->getTtl());
         $output->writeln('Global version: ' . $version->getGlobal());
         $output->writeln('Purge queue: ' . $queue->count());
+        $output->writeln('Stock pending: ' . $stockPending);
         $warmQueue = Mage::getModel('page_cache/warmQueue');
         $lastRun = Mage::getService('page_cache/warm')->getLastRun();
         $output->writeln(sprintf(
@@ -58,13 +71,17 @@ class PageCacheStatus extends BaseMahoCommand
             $lastRun['remaining'],
             gmdate('Y-m-d H:i:s', $lastRun['at']),
         ));
-        $output->writeln(sprintf(
-            'PHP counters (today): hit=%d miss=%d bypass=%d revalidated=%d',
-            $counters['hit'] ?? 0,
-            $counters['miss'] ?? 0,
-            $counters['bypass'] ?? 0,
-            $counters['revalidated'] ?? 0,
-        ));
+        if (Mage::getSingleton('page_cache/stat')->isEnabled()) {
+            $output->writeln(sprintf(
+                'PHP counters (today): hit=%d miss=%d bypass=%d revalidated=%d',
+                $counters['hit'] ?? 0,
+                $counters['miss'] ?? 0,
+                $counters['bypass'] ?? 0,
+                $counters['revalidated'] ?? 0,
+            ));
+        } else {
+            $output->writeln('PHP counters: unavailable (statistics disabled)');
+        }
 
         return Command::SUCCESS;
     }

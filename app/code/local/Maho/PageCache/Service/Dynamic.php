@@ -62,7 +62,7 @@ class Maho_PageCache_Service_Dynamic
         foreach ($tokens as $token) {
             $payload = $this->verifyToken($token);
             if ($payload === null
-                || (string) ($payload['url'] ?? '') !== $context->getUrl()
+                || (string) ($payload['url'] ?? '') !== $context->getCanonicalUrl()
                 || (int) ($payload['store'] ?? 0) !== $context->getStoreId()
                 || (string) ($payload['context'] ?? '') !== $context->getHash()
             ) {
@@ -78,16 +78,20 @@ class Maho_PageCache_Service_Dynamic
         return array_values(array_unique($blocks));
     }
 
-    public function getPlaceholder(string $block, Maho_PageCache_Model_Context $context): string
-    {
-        $token = $this->createToken($block, $context);
+    public function getPlaceholder(
+        string $block,
+        Maho_PageCache_Model_Context $context,
+        ?int $ttl = null,
+    ): string {
+        $expires = time() + max(self::TOKEN_TTL, max(0, (int) $ttl) + 300);
+        $token = $this->createToken($block, $context, $expires);
 
         if ($this->helper()->getDynamicInjection() === 'esi'
             && $context->getMode() !== Maho_PageCache_Helper_Data::MODE_LOCAL
         ) {
             $params = $context->getParams();
             $params[self::PARAM_ESI] = $token;
-            $url = $context->getUrl() . '?' . http_build_query($params, '', '&', PHP_QUERY_RFC3986);
+            $url = $context->getCanonicalUrl() . '?' . http_build_query($params, '', '&', PHP_QUERY_RFC3986);
             return '<esi:include src="' . $this->escape($url) . '" />';
         }
 
@@ -100,7 +104,7 @@ class Maho_PageCache_Service_Dynamic
         $payload = [
             'v' => 1,
             'block' => $block,
-            'url' => $context->getUrl(),
+            'url' => $context->getCanonicalUrl(),
             'store' => $context->getStoreId(),
             'context' => $context->getHash(),
             'exp' => $expires ?? time() + self::TOKEN_TTL,
@@ -179,7 +183,7 @@ class Maho_PageCache_Service_Dynamic
                 $payload = $this->verifyServerToken($matches[1]);
                 if ($payload === null
                     || (string) ($payload['server'] ?? '') !== $id
-                    || (string) ($payload['url'] ?? '') !== $context->getUrl()
+                    || (string) ($payload['url'] ?? '') !== $context->getCanonicalUrl()
                     || (int) ($payload['store'] ?? 0) !== $context->getStoreId()
                     || (string) ($payload['context'] ?? '') !== $context->getHash()
                     || !isset($blocks[$id])
@@ -265,7 +269,7 @@ class Maho_PageCache_Service_Dynamic
         $payload = [
             'v' => 2,
             'server' => $id,
-            'url' => $context->getUrl(),
+            'url' => $context->getCanonicalUrl(),
             'store' => $context->getStoreId(),
             'context' => $context->getHash(),
             'exp' => $expires,

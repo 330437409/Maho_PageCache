@@ -39,7 +39,7 @@ app/code/local/Maho/PageCache/
 │   ├── UrlIndex.php                # 持久化 tag 到 URL 的索引
 │   ├── PurgeQueue.php              # purge 队列
 │   ├── WarmQueue.php               # 预热队列，入队、去重、重试和上限
-│   ├── Counter.php                 # PHP 侧 hit/miss/bypass 计数
+│   ├── Counter.php                 # PHP 侧计数，写统计表
 │   ├── Backend/
 │   │   ├── Abstract.php            # 模式接口
 │   │   ├── Proxy.php               # proxy 模式
@@ -178,6 +178,7 @@ tag 失效时：
 5. 未命中时用 core named lock `page_cache_html_<hash>` 保护回源。等待的请求在锁释放后重新读缓存；等待超时则正常渲染但不保存，返回 `lock_timeout` bypass。
 6. 渲染完成后，`controller_front_send_response_before` 检查版本没有变化，写入元数据、HTML、原生实体 tag 和 URL 索引；版本在渲染期间变化时不保存，返回 `version_changed` bypass。
 7. HTML 超过 `page_cache/general/html_max_size` 时不缓存，返回 `html_too_large` bypass。
+8. 大于 4 KB 的 HTML 在缓存中 gzip 存储；`html_encoding` 标记编码，命中时解压后再输出。
 
 `local` 响应是 `private`，浏览器每次回源重新验证，命中发生在 Maho 内部。
 
@@ -189,7 +190,7 @@ block 在 layout 里显式设置 `page_cache_dynamic=1`。渲染时：
 2. `proxy`/`revalidating` 的可缓存请求把 block HTML 换成签名注释占位符，不把用户数据写进缓存。注释在 `<ul>`、`<tbody>` 等父级里也是合法节点，不会破坏外层结构。
 3. `local` 模式缓存无 session 时的匿名渲染；local 命中只面向无 session cookie 的请求。显式 opt-in 的 leaf block 在 local 命中时按下一节做服务器端重建，其余动态块保留匿名渲染。
 4. form key/SID 在所有模式都替换为占位符。local 模式的前端脚本只在用户聚焦或提交 POST 表单时请求 form key，避免被动浏览建立 session；proxy 模式在页面加载时请求动态块和 form key。
-5. 动态请求（`X-Maho-Page-Cache: dynamic` 或 `_page_cache_dynamic` 参数）启动 session，正常生成 layout，只捕获当前页面标记过且被请求的 block。
+5. 动态请求（`X-Maho-Page-Cache: dynamic` 或 `_page_cache_dynamic` 参数）只允许 GET 和 `cacheable_routes` 中的路由；其他路由记录 bypass 原因，不进入动态路径。允许的动态请求启动 session，正常生成 layout，只捕获当前页面标记过且被请求的 block。每个客户端在 `page_cache/dynamic/rate_limit` 窗口内超限时返回 429、`Retry-After` 和 `rate_limit` bypass。
 6. Ajax 响应返回 `{blocks, form_key, sid}`；ESI 响应返回单个 block 的 HTML。
 7. 动态响应 `Cache-Control: private, no-store`、`X-Maho-Cache: DYNAMIC`，代理不得缓存。
 8. block 显式标记 `page_cache_dynamic_cacheable=1` 且 `page_cache/dynamic/ttl>0` 时，动态响应按 block 集合写入 `PC_DYNAMIC_<hash>`；key 包含 block 列表、URL、context、customer group、store 和版本。命中时在 layout 前直接返回，form key/SID 仍从当前 session 生成。
@@ -215,7 +216,8 @@ local 服务器端占位符：
 - 写入顺序：local 元数据/HTML 保存，静态文件写入，最终版本检查；版本变化会同时删除 local 和静态。
 - 静态写入失败只记录日志，不影响页面响应。
 - tag 失效删除对应静态文件；全量失效清空静态目录；后台刷新 `page_cache` 类型也清空。
-- `page_cache_static_cleanup` cron 每 5 分钟删除超过 `ttl + 300` 的文件。
+- 静态文件写入时在 `page_cache_static_file` 记录相对路径和 `expires_at`；删除时同步删除记录。
+- `page_cache_static_cleanup` cron 先按索引删除到期文件；索引为空时回退到一次目录扫描，清理升级前遗留的文件。
 - Web 服务器直出时 PHP 不启动；带 `maho_session` 或 query 参数的请求必须回 PHP。
 - 静态缓存目录必须 deny 直接访问；第一版只支持单节点。
 
@@ -261,14 +263,16 @@ local 服务器端占位符：
 - 通用 observer 监听 `model_save_commit_after` 和 `model_delete_commit_after`。
 - 读取 `getCacheIdTags()`；product 使用 `getCacheIdTagsWithCategories()` 追加分类 tag。
 - 用原生实体 tag 清理相关页面，并从 URL 索引删除对应 URL。
-- stock item 保存时，只有 `is_in_stock` 变化或库存状态自动变化才失效，qty-only 更新不清理页面；可配置子商品同时失效父商品。
+- stock item 保存时，只有 `is_in_stock` 变化或库存状态自动变化才失效，qty-only 更新不清理页面；可配置子商品同时失效父商品。保存后把 product ID 写入 `page_cache_stock_pending`，`end_process_event_cataloginventory_stock_item_save`、`end_index_events_cataloginventory_stock_item_save`、`after_reindex_process_cataloginventory_stock` 或 `end_index_events_catalog_product_mass_action` 时再次失效并清空 pending，覆盖同步和异步索引。
 - `catalog_product_attribute_update_after` 批量属性更新按 product tag 失效；超过 30 个商品时回退全量失效，避免管理请求过慢。
+- `catalog_product_import_finish_before` 读取导入 adapter 的 affected product IDs，导入结束后统一失效；超过 30 个商品时回退全量失效。
 
 catalog rule：
 
 - 监听 catalog rule 的保存/删除。
 - 用 `getMatchingProductIds()` 得到产品 ID，转换为 `catalog_product_<id>`。
 - 同时失效这些产品所属分类的 tag。
+- `catalogrule_after_apply` 在索引刷新后读取 `product` 或 `affected_product`，再次失效受影响产品，避免页面在索引前回填旧价格。
 - 计算失败或结果为空时回退全量失效。
 
 其他规则和配置：
@@ -303,22 +307,26 @@ catalog rule：
 | `PC_VERSION_GLOBAL` | int | 无 |
 | `PC_VERSION_URL_<urlhash>` | int | TTL + 1 小时 |
 | `PC_ETAG_<urlhash>` | `{etag, last_modified}` | TTL + 1 小时 |
-| `PC_HTML_<hash>` | `{html, headers, tags, version, global_version, context, etag, last_modified, created_at, dynamic_blocks}` | TTL |
+| `PC_HTML_<hash>` | `{html, html_encoding, headers, tags, version, global_version, context, etag, last_modified, created_at, dynamic_blocks}` | TTL |
 | `PC_HTML_INDEX_<urlhash>` | context hash 列表，仅用于观察和后续清理 | TTL + 1 小时 |
 | `PC_DYNAMIC_<hash>` | `{blocks: {name: html}}`，仅显式标记 `page_cache_dynamic_cacheable` 的 block | `page_cache/dynamic/ttl` |
 | 静态文件 | `var/page-cache/static/{store}/{path}` + `.gz`，匿名默认页 | `page_cache_static_cleanup` |
 | `PC_PURGE_<timestamp>_<rand>` | `{urls: []}` | 24 小时 |
-| `PC_STAT_<date>_<result>` | int | 7 天 |
+| `PC_PURGE_INDEX` | 待处理 purge entry id 列表 | 25 小时 |
 | `PC_WARMUP_LAST_RUN` | 最近一次预热汇总 | 7 天 |
 | `page_cache_warmup_queue` | 预热队列，`url_hash` 唯一 | 由 cron 和上限控制 |
 | `page_cache_url` | page URL hash、变体 URL、公共路径、store、版本 | 由 URL 索引清理 |
 | `page_cache_url_tag` | URL 到实体 tag 的映射 | 由 URL 索引清理 |
+| `page_cache_static_file` | 静态文件相对路径、到期时间 | 由静态清理 cron 删除 |
+| `page_cache_stock_pending` | 待二次失效的 product ID | 由 stock index end 事件清空 |
 
 注意：
 
 - 实体使用原生 cache tag `PAGE_CACHE_TAG_<tag>`，HTML、meta 和 ETag 都打 tag；`clean($tags)` 由缓存适配器原子执行。
 - URL 索引在 DB，不会因为缓存淘汰而丢失；DB 查询失败时全量失效。
 - `page_cache_url` 按 `ttl + 3600` 清理，和 meta TTL 对齐。
+- purge entry 24 小时，index 25 小时，避免 index 先过期留下无法处理的 entry。
+- PHP 侧计数从 `page_cache_stat` 读取，统计关闭时不计数；缓存类型清理不会重置计数。
 - tag 值只允许 `[A-Za-z0-9_:.-]`，写入前过滤，避免 header 注入。
 - URL hash 和 context hash 使用 sha256，不保存原始 URL 或 cookie。
 - local HTML key 包含 URL、context、URL 版本、全局版本和模式；版本变化后旧 HTML 不再命中。
@@ -335,6 +343,7 @@ catalog rule：
 - 允许的 query 参数（排序后）
 - scheme + host + path
 - 模式
+- `page_cache_context_variant` registry（移动主题、A-B、geo-IP 等变体）
 
 `contextHash = sha256(json_encode(context))`。
 
@@ -345,7 +354,8 @@ Vary: Accept-Encoding, Cookie
 ```
 
 - 代理必须按 URL 和 `Cookie` 缓存，并遵守 `Vary: Accept-Encoding, Cookie`。
-- 代理不支持自定义 `Vary` 时，只缓存默认 context；非默认 context 直接 bypass。
+- `page_cache/proxy/context_mode` 默认 `cookie`；代理只按 URL 缓存时设为 `default`，此时只缓存默认 store 或 URL 带 store code 的请求，带 `___store` cookie 的切换请求 bypass。
+- 移动主题、A-B、geo-IP 等模块必须把当前变体写入 `page_cache_context_variant` registry；proxy/revalidating 遇到非空 variant 直接 bypass，local 用 variant 区分 HTML key。
 - 第一期不缓存登录用户、购物车、checkout、customer account，因此客户组固定为 guest。
 - 无 session 时可缓存请求的货币取 store 默认货币；切换货币会写入 session，从而带 session cookie 并 bypass。
 - 货币和 store 如果通过 cookie/URL 切换，会进入 context；无法确定时 bypass。

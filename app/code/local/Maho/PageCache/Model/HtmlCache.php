@@ -12,6 +12,9 @@ declare(strict_types=1);
 
 class Maho_PageCache_Model_HtmlCache
 {
+    private const int COMPRESS_MIN_BYTES = 4096;
+    private const int COMPRESS_LEVEL = 6;
+
     /**
      * @param array{global: int, url: int}|null $versions
      */
@@ -75,6 +78,15 @@ class Maho_PageCache_Model_HtmlCache
         ) {
             return null;
         }
+
+        if (($entry['html_encoding'] ?? 'plain') === 'gzip') {
+            $decoded = function_exists('gzdecode') ? @gzdecode($entry['html']) : false;
+            if (!is_string($decoded) || $decoded === '') {
+                return null;
+            }
+            $entry['html'] = $decoded;
+        }
+
         return $entry;
     }
 
@@ -98,8 +110,19 @@ class Maho_PageCache_Model_HtmlCache
         }
 
         $ttl = max(1, $ttl);
+        $storedHtml = $html;
+        $htmlEncoding = 'plain';
+        if (function_exists('gzencode') && strlen($html) >= self::COMPRESS_MIN_BYTES) {
+            $compressed = gzencode($html, self::COMPRESS_LEVEL);
+            if ($compressed !== false && strlen($compressed) < strlen($html)) {
+                $storedHtml = $compressed;
+                $htmlEncoding = 'gzip';
+            }
+        }
+
         $entry = [
-            'html' => $html,
+            'html' => $storedHtml,
+            'html_encoding' => $htmlEncoding,
             'headers' => $headers,
             'tags' => array_values(array_unique($tags)),
             'url' => $context->getPurgeUrl(),
@@ -152,6 +175,7 @@ class Maho_PageCache_Model_HtmlCache
 
         Mage::getSingleton('page_cache/urlIndex')->add($context, $entry['tags'], $versions['url']);
         $this->addIndex($urlHash, $context->getHash(), $ttl + 3600);
+        $entry['html'] = $html;
         return $entry;
     }
 

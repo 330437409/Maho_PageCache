@@ -2,7 +2,7 @@
 <config>
     <modules>
         <Maho_PageCache>
-            <version>0.5.2</version>
+            <version>0.5.3</version>
         </Maho_PageCache>
     </modules>
     <global>
@@ -34,6 +34,12 @@
                     <url_tag>
                         <table>page_cache_url_tag</table>
                     </url_tag>
+                    <static_file>
+                        <table>page_cache_static_file</table>
+                    </static_file>
+                    <stock_pending>
+                        <table>page_cache_stock_pending</table>
+                    </stock_pending>
                 </entities>
             </page_cache_resource>
         </models>
@@ -79,11 +85,16 @@ catalog_product_view]]></session_skip_routes>
                 <respect_no_cache>1</respect_no_cache>
                 <debug_headers>0</debug_headers>
             </general>
+            <proxy>
+                <context_mode>cookie</context_mode>
+            </proxy>
             <dynamic>
                 <injection>ajax</injection>
                 <ttl>0</ttl>
                 <server_side>0</server_side>
                 <server_types></server_types>
+                <rate_limit>120</rate_limit>
+                <rate_limit_window>60</rate_limit_window>
             </dynamic>
             <warmup>
                 <enabled>0</enabled>
