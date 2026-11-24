@@ -4,12 +4,12 @@ Maho 的 HTTP 页面缓存集成层。第一期支持 `proxy` 和 `revalidating`
 
 ## 状态
 
-0.3.0 已交付，累计包含第一期的 HTTP 集成层、proxy/revalidating 两种模式、session skip、tag 失效、purge 队列、配置和 CLI，第二期的 `local` 模式、Ajax/ESI 动态块和 `page-cache:warm`，以及第三期的静态文件导出和统计面板。定时预热正在 0.4.0 开发。
+0.4.0 已交付，累计包含第一期的 HTTP 集成层、proxy/revalidating 两种模式、session skip、tag 失效、purge 队列、配置和 CLI，第二期的 `local` 模式、Ajax/ESI 动态块和 `page-cache:warm`，以及第三期的静态文件导出、统计面板和定时预热。
 
 - 第一期：HTTP 集成层，`proxy` + `revalidating`。0.2.0 已交付。
 - 第二期：`local` 模式、整页 HTML 缓存、Ajax/ESI 动态块、缓存预热。0.2.0 已交付。
 - local 模式只缓存无 session cookie 的匿名页面；被动浏览不会建立 session。动态块打孔用于 proxy/revalidating 模式，local 模式缓存匿名渲染，form key 在用户提交表单时才获取。
-- 第三期：静态文件导出、统计面板、定时预热、服务器端占位符、代理模型、多节点 purge。静态导出和统计面板 0.3.0 已交付；定时预热 0.4.0 开发中；其余只登记。
+- 第三期：静态文件导出、统计面板、定时预热、服务器端占位符、代理模型、多节点 purge。静态导出和统计面板 0.3.0 已交付；定时预热 0.4.0 已交付；其余只登记。
 
 ## 文档
 
@@ -21,7 +21,7 @@ Maho 的 HTTP 页面缓存集成层。第一期支持 `proxy` 和 `revalidating`
 - `docs/specs/page-cache-phase2.md`：第二期规格（0.2.0 已交付）。
 - `docs/specs/page-cache-static-export.md`：第三期静态文件导出规格（0.3.0 已交付）。
 - `docs/specs/page-cache-stats-dashboard.md`：第三期统计面板规格（0.3.0 已交付）。
-- `docs/specs/page-cache-scheduled-warmup.md`：第三期定时预热规格（开发中）。
+- `docs/specs/page-cache-scheduled-warmup.md`：第三期定时预热规格（0.4.0 已交付）。
 - `.claude/rules/`：模块级防漂移规则。
 
 ## 设计来源
@@ -44,7 +44,7 @@ Maho 的 HTTP 页面缓存集成层。第一期支持 `proxy` 和 `revalidating`
 6. 运行 `./maho page-cache:status` 检查。
 7. 如果后台主题还没有统计面板使用的 Tailwind 类，运行 `./maho dev:admin:theme:build` 重新编译。
 
-0.3.0 和 0.4.0 会创建统计表和预热队列表；不新增 Composer 依赖。模块默认关闭，先在后台开启。
+0.4.0 会创建统计表和预热队列表；不新增 Composer 依赖。模块默认关闭，先在后台开启。
 
 ## 配置
 

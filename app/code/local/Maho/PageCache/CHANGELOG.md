@@ -2,7 +2,7 @@
 
 All notable changes to `Maho_PageCache` are recorded here.
 
-## Unreleased
+## 0.4.0 (2026-11-24)
 
 ### Added
 
@@ -10,6 +10,7 @@ All notable changes to `Maho_PageCache` are recorded here.
 - Queue limit, deduplication, retry backoff, permanent skip handling, batch delay and basic auth.
 - `page_cache_warmup_queue` table and warmup status in `page-cache:status`.
 - `page-cache:warm --queue` and `--delay`.
+- 153 unit tests covering the page cache, including scheduled warmup.
 
 ## 0.3.0 (2026-11-24)
 
