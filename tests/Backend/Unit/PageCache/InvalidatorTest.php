@@ -20,6 +20,11 @@ beforeEach(function () {
 afterEach(function () {
     Mage::getSingleton('page_cache/staticCache')->flush();
     Mage::app()->getStore()->setConfig('page_cache/static/enabled', '0');
+    Mage::app()->getStore()->setConfig('page_cache/warmup/enabled', '0');
+    Mage::getSingleton('core/resource')->getConnection('core_write')->delete(
+        Mage::getSingleton('core/resource')->getTableName('page_cache/warmup_queue'),
+        '1=1',
+    );
     Mage::app()->getCache()->cleanType('page_cache');
 });
 
@@ -269,4 +274,64 @@ it('invalidates the products and categories matched by a catalog rule', function
 
     expect((new Maho_PageCache_Model_Version())->getUrl('product-hash'))->toBe(2)
         ->and((new Maho_PageCache_Model_Version())->getUrl('category-hash'))->toBe(2);
+});
+
+it('queues the affected urls for warmup when enabled', function () {
+    Mage::app()->getStore()->setConfig('page_cache/warmup/enabled', '1');
+    $context = invalidatorStaticContext('/category');
+    $key = new Maho_PageCache_Model_Key();
+    $urlHash = $context->getUrlHash();
+    Mage::app()->getCache()->save(
+        [
+            'url' => $context->getPurgeUrl(),
+            'tags' => ['catalog_product_1'],
+            'version' => 1,
+            'ttl' => 3600,
+            'store_code' => 'default',
+            'store_id' => 1,
+        ],
+        $key->getMetaKey($urlHash),
+        ['PAGE_CACHE'],
+        3600,
+    );
+    (new Maho_PageCache_Model_TagIndex())->add($urlHash, ['catalog_product_1']);
+
+    (new Maho_PageCache_Service_Invalidator())->invalidateTags(['catalog_product_1']);
+
+    $read = Mage::getSingleton('core/resource')->getConnection('core_read');
+    $rows = $read->fetchAll($read->select()->from(
+        Mage::getSingleton('core/resource')->getTableName('page_cache/warmup_queue'),
+    ));
+
+    expect($rows)->toHaveCount(1)
+        ->and($rows[0]['url'])->toBe($context->getPurgeUrl())
+        ->and((int) $rows[0]['store_id'])->toBe(1)
+        ->and($rows[0]['reason'])->toBe('catalog_product_1');
+});
+
+it('does not queue warmup urls when warmup is disabled', function () {
+    $context = invalidatorStaticContext('/category');
+    $key = new Maho_PageCache_Model_Key();
+    $urlHash = $context->getUrlHash();
+    Mage::app()->getCache()->save(
+        ['url' => $context->getPurgeUrl(), 'tags' => ['catalog_product_1'], 'version' => 1, 'ttl' => 3600],
+        $key->getMetaKey($urlHash),
+        ['PAGE_CACHE'],
+        3600,
+    );
+    (new Maho_PageCache_Model_TagIndex())->add($urlHash, ['catalog_product_1']);
+
+    (new Maho_PageCache_Service_Invalidator())->invalidateTags(['catalog_product_1']);
+
+    expect(Mage::getModel('page_cache/warmQueue')->count())->toBe(0);
+});
+
+it('clears the warmup queue on full invalidation', function () {
+    Mage::app()->getStore()->setConfig('page_cache/warmup/enabled', '1');
+    $queue = Mage::getModel('page_cache/warmQueue');
+    $queue->enqueue(['https://example.com/category'], 1, 'test');
+
+    (new Maho_PageCache_Service_Invalidator())->invalidateAll('test');
+
+    expect($queue->count())->toBe(0);
 });

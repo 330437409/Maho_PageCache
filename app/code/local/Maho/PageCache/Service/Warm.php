@@ -15,6 +15,8 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 class Maho_PageCache_Service_Warm
 {
+    private const string WARMUP_LOCK = 'page_cache_warmup_queue';
+
     /**
      * @return list<string>
      */
@@ -136,22 +138,28 @@ class Maho_PageCache_Service_Warm
      * @param list<string> $urls
      * @return array{warmed: list<string>, skipped: array<string, string>, failed: array<string, string>}
      */
-    public function warm(array $urls, int $concurrency): array
+    public function warm(array $urls, int $concurrency, int $delayMs = 0): array
     {
         $client = $this->createClient();
         $concurrency = max(1, $concurrency);
+        $delayMs = max(0, $delayMs);
         $result = ['warmed' => [], 'skipped' => [], 'failed' => []];
 
-        foreach (array_chunk($urls, $concurrency) as $chunk) {
+        $headers = [
+            'Accept' => 'text/html,application/xhtml+xml',
+            'User-Agent' => 'Maho-PageCache-Warm/1.0',
+        ];
+        $auth = Mage::helper('page_cache')->getWarmupAuth();
+        if ($auth !== null) {
+            $headers['Authorization'] = 'Basic ' . base64_encode($auth['user'] . ':' . $auth['password']);
+        }
+
+        $chunks = array_chunk($urls, $concurrency);
+        foreach ($chunks as $index => $chunk) {
             $responses = [];
             foreach ($chunk as $url) {
                 try {
-                    $responses[$url] = $client->request('GET', $url, [
-                        'headers' => [
-                            'Accept' => 'text/html,application/xhtml+xml',
-                            'User-Agent' => 'Maho-PageCache-Warm/1.0',
-                        ],
-                    ]);
+                    $responses[$url] = $client->request('GET', $url, ['headers' => $headers]);
                 } catch (\Throwable $e) {
                     $result['failed'][$url] = $e->getMessage();
                 }
@@ -160,9 +168,9 @@ class Maho_PageCache_Service_Warm
             foreach ($responses as $url => $response) {
                 try {
                     $status = $response->getStatusCode();
-                    $headers = $response->getHeaders(false);
+                    $responseHeaders = $response->getHeaders(false);
                     $response->getContent(false);
-                    $cache = strtoupper((string) ($headers['x-maho-cache'][0] ?? ''));
+                    $cache = strtoupper((string) ($responseHeaders['x-maho-cache'][0] ?? ''));
 
                     if ($status === 200 && $cache !== 'BYPASS') {
                         $result['warmed'][] = $url;
@@ -170,17 +178,148 @@ class Maho_PageCache_Service_Warm
                         $result['skipped'][$url] = 'bypass';
                     } elseif ($status >= 300 && $status < 400) {
                         $result['skipped'][$url] = 'redirect';
-                    } elseif ($status === 404) {
+                    } elseif ($status === 404 || $status === 410) {
                         $result['skipped'][$url] = 'not_found';
-                    } else {
+                    } elseif ($status === 401 || $status === 403) {
+                        $result['skipped'][$url] = 'forbidden';
+                    } elseif ($status === 429 || $status >= 500) {
                         $result['failed'][$url] = 'HTTP ' . $status;
+                    } else {
+                        $result['skipped'][$url] = 'http_' . $status;
                     }
                 } catch (\Throwable $e) {
                     $result['failed'][$url] = $e->getMessage();
                 }
             }
+
+            if ($delayMs > 0 && $index < count($chunks) - 1) {
+                usleep($delayMs * 1000);
+            }
         }
 
+        $this->recordWarmupStat($result);
+
+        return $result;
+    }
+
+    /**
+     * @return array{at: int, processed: int, warmed: int, skipped: int, failed: int, dropped: int, remaining: int}
+     */
+    public function consumeQueue(int $limit = 0): array
+    {
+        $summary = $this->emptySummary();
+        $helper = Mage::helper('page_cache');
+        $queue = Mage::getSingleton('page_cache/warmQueue');
+        if (!$helper->getWarmupEnabled()) {
+            $summary['remaining'] = $queue->count();
+            return $summary;
+        }
+
+        $lock = Mage::getSingleton('core/lock');
+        if (!$lock->acquire(self::WARMUP_LOCK)) {
+            $summary['remaining'] = $queue->count();
+            return $summary;
+        }
+
+        try {
+            $batchSize = $limit > 0 ? $limit : $helper->getWarmupBatchSize();
+            $rows = $queue->claim($batchSize);
+            if ($rows === []) {
+                $summary['remaining'] = $queue->count();
+                return $summary;
+            }
+
+            $byUrl = [];
+            foreach ($rows as $row) {
+                $byUrl[(string) $row['url']] = $row;
+            }
+
+            $result = $this->warm(
+                array_keys($byUrl),
+                $helper->getWarmupConcurrency(),
+                $helper->getWarmupDelayMs(),
+            );
+
+            $warmed = 0;
+            $skipped = 0;
+            $failed = 0;
+            $dropped = 0;
+
+            foreach ($result['warmed'] as $url) {
+                if (isset($byUrl[$url])) {
+                    $queue->remove((int) $byUrl[$url]['queue_id']);
+                    $warmed++;
+                }
+            }
+            foreach ($result['skipped'] as $url => $reason) {
+                if (isset($byUrl[$url])) {
+                    $queue->remove((int) $byUrl[$url]['queue_id']);
+                    $skipped++;
+                }
+            }
+            foreach ($result['failed'] as $url => $reason) {
+                if (!isset($byUrl[$url])) {
+                    continue;
+                }
+                $failed++;
+                $outcome = $queue->retry(
+                    (int) $byUrl[$url]['queue_id'],
+                    (string) $reason,
+                    $helper->getWarmupMaxAttempts(),
+                    $helper->getWarmupRetryDelay(),
+                );
+                if ($outcome === 'dropped') {
+                    $dropped++;
+                }
+            }
+
+            $summary = [
+                'at' => time(),
+                'processed' => count($rows),
+                'warmed' => $warmed,
+                'skipped' => $skipped,
+                'failed' => $failed,
+                'dropped' => $dropped,
+                'remaining' => $queue->count(),
+            ];
+            $this->saveLastRun($summary);
+            $this->logSummary($summary, $result['failed']);
+
+            return $summary;
+        } catch (\Throwable $e) {
+            Mage::logException($e);
+            return $summary;
+        } finally {
+            $lock->release(self::WARMUP_LOCK);
+        }
+    }
+
+    /**
+     * @return array{at: int, processed: int, warmed: int, skipped: int, failed: int, dropped: int, remaining: int}|null
+     */
+    public function getLastRun(): ?array
+    {
+        $last = Mage::app()->getCache()->load($this->key()->getWarmupLastRunKey());
+        if (!is_array($last) || !isset($last['at'])) {
+            return null;
+        }
+
+        return [
+            'at' => (int) $last['at'],
+            'processed' => (int) ($last['processed'] ?? 0),
+            'warmed' => (int) ($last['warmed'] ?? 0),
+            'skipped' => (int) ($last['skipped'] ?? 0),
+            'failed' => (int) ($last['failed'] ?? 0),
+            'dropped' => (int) ($last['dropped'] ?? 0),
+            'remaining' => (int) ($last['remaining'] ?? 0),
+        ];
+    }
+
+    /**
+     * @param array{warmed: list<string>, skipped: array<string, string>, failed: array<string, string>} $result
+     */
+    private function recordWarmupStat(array $result): void
+    {
         Mage::getSingleton('page_cache/stat')->record(
             Maho_PageCache_Model_Stat::EVENT_WARMUP,
             null,
@@ -194,8 +333,65 @@ class Maho_PageCache_Service_Warm
             ),
         );
         Mage::getSingleton('page_cache/stat')->flush();
+    }
 
-        return $result;
+    /**
+     * @return array{at: int, processed: int, warmed: int, skipped: int, failed: int, dropped: int, remaining: int}
+     */
+    private function emptySummary(): array
+    {
+        return [
+            'at' => time(),
+            'processed' => 0,
+            'warmed' => 0,
+            'skipped' => 0,
+            'failed' => 0,
+            'dropped' => 0,
+            'remaining' => 0,
+        ];
+    }
+
+    /**
+     * @param array{at: int, processed: int, warmed: int, skipped: int, failed: int, dropped: int, remaining: int} $summary
+     */
+    private function saveLastRun(array $summary): void
+    {
+        try {
+            Mage::app()->getCache()->save(
+                $summary,
+                $this->key()->getWarmupLastRunKey(),
+                ['PAGE_CACHE'],
+                604800,
+            );
+        } catch (\Throwable $e) {
+            Mage::logException($e);
+        }
+    }
+
+    /**
+     * @param array{at: int, processed: int, warmed: int, skipped: int, failed: int, dropped: int, remaining: int} $summary
+     * @param array<string, string> $failed
+     */
+    private function logSummary(array $summary, array $failed): void
+    {
+        $message = sprintf(
+            'Page cache warmup: processed=%d warmed=%d skipped=%d failed=%d dropped=%d remaining=%d',
+            $summary['processed'],
+            $summary['warmed'],
+            $summary['skipped'],
+            $summary['failed'],
+            $summary['dropped'],
+            $summary['remaining'],
+        );
+        if ($failed !== []) {
+            $message .= '; failed=' . implode(',', array_slice(array_keys($failed), 0, 3));
+        }
+        Mage::log($message, Mage::LOG_INFO, 'page-cache-warmup.log');
+    }
+
+    private function key(): Maho_PageCache_Model_Key
+    {
+        return Mage::getSingleton('page_cache/key');
     }
 
     protected function createClient(): HttpClientInterface

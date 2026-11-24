@@ -1,0 +1,154 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - 'feat/**'
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  page-cache:
+    name: Page cache (${{ matrix.db }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - db: sqlite
+            db_engine: sqlite
+            db_name: sqlite
+          - db: mysql
+            db_engine: mysql
+            db_name: maho
+            db_user: root
+            db_pass: root
+          - db: pgsql
+            db_engine: pgsql
+            db_name: maho
+            db_user: postgres
+            db_pass: postgres
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_ROOT_HOST: '%'
+          MYSQL_DATABASE: maho
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+      pgsql:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: maho
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - name: Checkout the module
+        uses: actions/checkout@v4
+        with:
+          path: module
+
+      - name: Checkout Maho
+        uses: actions/checkout@v4
+        with:
+          repository: MahoCommerce/maho
+          ref: main
+          path: maho
+
+      - name: Overlay the module
+        run: |
+          cp -a module/app/. maho/app/
+          cp -a module/lib/. maho/lib/
+          cp -a module/tests/. maho/tests/
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: 8.5
+          extensions: pdo_sqlite, pdo_mysql, pdo_pgsql, intl, gd, soap, zip, sodium
+          coverage: none
+
+      - name: Cache Composer packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/composer
+          key: ${{ runner.os }}-composer-${{ hashFiles('maho/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-
+
+      - name: Install Composer dependencies
+        working-directory: maho
+        run: composer install --prefer-dist --no-progress --no-interaction --ignore-platform-req=ext-*
+
+      - name: Dump the autoloader
+        working-directory: maho
+        run: composer dump-autoload
+
+      - name: Install Maho
+        working-directory: maho
+        run: |
+          set -e
+          mkdir -p var/db
+          if [ "${{ matrix.db_engine }}" = "sqlite" ]; then
+            db_name="$PWD/var/db/maho.sqlite"
+            db_args=""
+          else
+            db_name="${{ matrix.db_name }}"
+            db_args="--db_host 127.0.0.1 --db_user ${{ matrix.db_user }} --db_pass ${{ matrix.db_pass }}"
+          fi
+          ./maho install \
+            --license_agreement_accepted yes \
+            --locale en_US \
+            --timezone Europe/London \
+            --default_currency USD \
+            --db_engine "${{ matrix.db_engine }}" \
+            --db_name "$db_name" \
+            --url "http://localhost:8000/" \
+            --secure_base_url "http://localhost:8000/" \
+            --use_secure 0 \
+            --use_secure_admin 0 \
+            --admin_lastname admin \
+            --admin_firstname admin \
+            --admin_email admin@example.com \
+            --admin_username admin \
+            --admin_password Admin1234567890 \
+            $db_args
+          ./maho cache:flush
+
+      - name: Run the page cache tests
+        working-directory: maho
+        run: vendor/bin/pest tests/Backend/Unit/PageCache
+
+      - name: Lint
+        working-directory: maho
+        run: |
+          XDEBUG_MODE=off vendor/bin/phpstan analyze app/code/local/Maho/PageCache lib/MahoCLI/Commands/PageCacheWarm.php lib/MahoCLI/Commands/PageCacheStatus.php --no-progress --memory-limit=2G
+          vendor/bin/php-cs-fixer fix --config=.php-cs-fixer.php --dry-run app/code/local/Maho/PageCache lib/MahoCLI/Commands/PageCacheWarm.php lib/MahoCLI/Commands/PageCacheStatus.php tests/Backend/Unit/PageCache
+          vendor/bin/php-cs-fixer fix --config=.php-cs-fixer.phtml.php --dry-run app/design/adminhtml/default/default/template/maho/pagecache/stats.phtml
+          vendor/bin/rector process app/code/local/Maho/PageCache lib/MahoCLI/Commands/PageCacheWarm.php lib/MahoCLI/Commands/PageCacheStatus.php --dry-run

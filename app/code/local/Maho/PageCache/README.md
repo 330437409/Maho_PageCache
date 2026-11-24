@@ -4,12 +4,12 @@ Maho 的 HTTP 页面缓存集成层。第一期支持 `proxy` 和 `revalidating`
 
 ## 状态
 
-0.3.0 已交付，累计包含第一期的 HTTP 集成层、proxy/revalidating 两种模式、session skip、tag 失效、purge 队列、配置和 CLI，第二期的 `local` 模式、Ajax/ESI 动态块和 `page-cache:warm`，以及第三期的静态文件导出和统计面板。
+0.3.0 已交付，累计包含第一期的 HTTP 集成层、proxy/revalidating 两种模式、session skip、tag 失效、purge 队列、配置和 CLI，第二期的 `local` 模式、Ajax/ESI 动态块和 `page-cache:warm`，以及第三期的静态文件导出和统计面板。定时预热正在 0.4.0 开发。
 
 - 第一期：HTTP 集成层，`proxy` + `revalidating`。0.2.0 已交付。
 - 第二期：`local` 模式、整页 HTML 缓存、Ajax/ESI 动态块、缓存预热。0.2.0 已交付。
 - local 模式只缓存无 session cookie 的匿名页面；被动浏览不会建立 session。动态块打孔用于 proxy/revalidating 模式，local 模式缓存匿名渲染，form key 在用户提交表单时才获取。
-- 第三期：静态文件导出、统计面板、定时预热、服务器端占位符、代理模型、多节点 purge。静态导出和统计面板 0.3.0 已交付，其余只登记。
+- 第三期：静态文件导出、统计面板、定时预热、服务器端占位符、代理模型、多节点 purge。静态导出和统计面板 0.3.0 已交付；定时预热 0.4.0 开发中；其余只登记。
 
 ## 文档
 
@@ -21,6 +21,7 @@ Maho 的 HTTP 页面缓存集成层。第一期支持 `proxy` 和 `revalidating`
 - `docs/specs/page-cache-phase2.md`：第二期规格（0.2.0 已交付）。
 - `docs/specs/page-cache-static-export.md`：第三期静态文件导出规格（0.3.0 已交付）。
 - `docs/specs/page-cache-stats-dashboard.md`：第三期统计面板规格（0.3.0 已交付）。
+- `docs/specs/page-cache-scheduled-warmup.md`：第三期定时预热规格（开发中）。
 - `.claude/rules/`：模块级防漂移规则。
 
 ## 设计来源
@@ -36,14 +37,14 @@ Maho 的 HTTP 页面缓存集成层。第一期支持 `proxy` 和 `revalidating`
 模块位于 `app/code/local/Maho/PageCache`，并附带 `app/etc/modules/Maho_PageCache.xml`。安装步骤：
 
 1. `composer dump-autoload`，让类映射、路由和观察者属性生效。
-2. `./maho migrate`，创建 `page_cache_stat`、`page_cache_stat_hourly` 两张统计表，并写入 `page_cache` 缓存类型选项。
+2. `./maho migrate`，创建统计表 `page_cache_stat`、`page_cache_stat_hourly`、预热队列 `page_cache_warmup_queue`，并写入 `page_cache` 缓存类型选项。
 3. `./maho cache:flush`。
 4. 在 `System > Configuration > Page Cache` 开启并选择模式。
 5. 配置反向代理或 CDN：遵守 `Vary: Accept-Encoding, Cookie`，按 URL 和 `Cookie` 区分缓存对象，并在 `Cookie` 含 `maho_session` 时 bypass；消费 purge 文件或监听 `maho_page_cache_purge_urls` 事件。`X-Maho-Cache-Context` 只用于调试。purge 文件中的 `*` 表示全量 purge。使用 ESI 时，代理还必须解析 `esi:include` 并禁止缓存 `X-Maho-Cache: DYNAMIC` 响应。
 6. 运行 `./maho page-cache:status` 检查。
 7. 如果后台主题还没有统计面板使用的 Tailwind 类，运行 `./maho dev:admin:theme:build` 重新编译。
 
-0.3.0 会创建 `page_cache_stat` 和 `page_cache_stat_hourly` 两张统计表；不新增 Composer 依赖。模块默认关闭，先在后台开启。
+0.3.0 和 0.4.0 会创建统计表和预热队列表；不新增 Composer 依赖。模块默认关闭，先在后台开启。
 
 ## 配置
 
@@ -51,7 +52,7 @@ Maho 的 HTTP 页面缓存集成层。第一期支持 `proxy` 和 `revalidating`
 System > Configuration > Page Cache
 ```
 
-主要字段：开关、模式（`proxy`、`revalidating`、`local`）、TTL、local HTML 大小上限、可缓存路由、允许的 query 参数、路径段数上限、分层导航标记和深度、是否遵守 no-cache、调试头、session skip 路由、动态块注入方式、动态块 TTL、预热并发、静态文件导出、统计开关和保留期。
+主要字段：开关、模式（`proxy`、`revalidating`、`local`）、TTL、local HTML 大小上限、可缓存路由、允许的 query 参数、路径段数上限、分层导航标记和深度、是否遵守 no-cache、调试头、session skip 路由、动态块注入方式、动态块 TTL、预热开关/批次/并发/间隔/重试/队列上限/basic auth、静态文件导出、统计开关和保留期。
 
 ## 静态文件导出
 
@@ -82,6 +83,16 @@ var/page-cache/static/{store_code}/{public_path}.gz
 - `page_cache_stats_rollup` 每小时聚合，`page_cache_stats_cleanup` 每天清理。
 - 静态文件、反向代理和 CDN 命中不经过 PHP，不计入面板。
 
+## 定时预热
+
+默认关闭。开启 `System > Configuration > Page Cache > Warmup` 后，tag 失效会把受影响 URL 写入 `page_cache_warmup_queue`，`page_cache_warmup` cron 每分钟按批次消费。
+
+- 队列按 URL 去重，有上限；超过上限时淘汰最旧行。
+- 404、redirect、bypass、401/403 和其他永久 4xx 跳过；429、5xx 和网络错误重试，超过次数后移出。
+- 支持批次大小、并发、批次间隔、最大尝试次数、重试间隔和 basic auth。
+- `page-cache:status` 显示队列长度和最近汇总；`page-cache:warm --queue` 手工补跑。
+- 全量失效清空队列，不自动全站预热；全站预热继续用 `--sitemap`。
+
 ## CLI
 
 ```bash
@@ -90,6 +101,8 @@ var/page-cache/static/{store_code}/{public_path}.gz
 ./maho page-cache:purge --limit=100
 ./maho page-cache:purge --tag=catalog_product_123
 ./maho page-cache:warm --sitemap --limit=100
+./maho page-cache:warm --queue --dry-run
+./maho page-cache:warm --queue --limit=100
 ./maho page-cache:warm --url=https://example.com/ --url=https://example.com/category.html
 ```
 
@@ -99,7 +112,7 @@ var/page-cache/static/{store_code}/{public_path}.gz
 vendor/bin/pest tests/Backend/Unit/PageCache
 ```
 
-当前 137 个测试通过。
+当前 153 个测试通过。
 
 ## 许可证
 

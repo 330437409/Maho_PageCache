@@ -2,6 +2,15 @@
 
 All notable changes to `Maho_PageCache` are recorded here.
 
+## Unreleased
+
+### Added
+
+- Scheduled page cache warmup: invalidated URLs enter a persistent queue, and the `page_cache_warmup` cron warms them in batches.
+- Queue limit, deduplication, retry backoff, permanent skip handling, batch delay and basic auth.
+- `page_cache_warmup_queue` table and warmup status in `page-cache:status`.
+- `page-cache:warm --queue` and `--delay`.
+
 ## 0.3.0 (2026-11-24)
 
 ### Added

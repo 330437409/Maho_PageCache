@@ -14,6 +14,35 @@ use Tests\MahoBackendTestCase;
 
 uses(MahoBackendTestCase::class);
 
+function warmupTestQueueTable(): string
+{
+    return Mage::getSingleton('core/resource')->getTableName('page_cache/warmup_queue');
+}
+
+function warmupTestQueueClean(): void
+{
+    Mage::getSingleton('core/resource')->getConnection('core_write')->delete(warmupTestQueueTable(), '1=1');
+}
+
+beforeEach(function () {
+    Mage::app()->getStore()->setConfig('page_cache/warmup/enabled', '1');
+    Mage::app()->getStore()->setConfig('page_cache/warmup/batch_size', '10');
+    Mage::app()->getStore()->setConfig('page_cache/warmup/concurrency', '2');
+    Mage::app()->getStore()->setConfig('page_cache/warmup/delay_ms', '25');
+    Mage::app()->getStore()->setConfig('page_cache/warmup/max_attempts', '2');
+    Mage::app()->getStore()->setConfig('page_cache/warmup/retry_delay', '60');
+    Mage::app()->getStore()->setConfig('page_cache/warmup/queue_limit', '100');
+    Mage::app()->getStore()->setConfig('page_cache/warmup/auth_user', '');
+    Mage::app()->getStore()->setConfig('page_cache/warmup/auth_password', '');
+    warmupTestQueueClean();
+});
+
+afterEach(function () {
+    warmupTestQueueClean();
+    Mage::app()->getStore()->setConfig('page_cache/warmup/enabled', '0');
+    Mage::app()->getCache()->remove(Mage::getModel('page_cache/key')->getWarmupLastRunKey());
+});
+
 function warmServiceWithResponses(array $responses): Maho_PageCache_Service_Warm
 {
     return new class ($responses) extends Maho_PageCache_Service_Warm {
@@ -22,6 +51,7 @@ function warmServiceWithResponses(array $responses): Maho_PageCache_Service_Warm
          */
         public function __construct(private array $responses) {}
 
+        #[\Override]
         protected function createClient(): HttpClientInterface
         {
             return new MockHttpClient($this->responses);
@@ -106,4 +136,174 @@ it('reports transport failures', function () {
 
     expect($result['warmed'])->toBe([])
         ->and($result['failed']['https://example.com/a'])->toBe('connection refused');
+});
+
+it('classifies permanent and retryable responses', function () {
+    $service = warmServiceWithResponses([
+        new MockResponse('ok', ['http_code' => 200, 'response_headers' => ['X-Maho-Cache' => 'MISS']]),
+        new MockResponse('', ['http_code' => 200, 'response_headers' => ['X-Maho-Cache' => 'BYPASS']]),
+        new MockResponse('', ['http_code' => 302]),
+        new MockResponse('', ['http_code' => 404]),
+        new MockResponse('', ['http_code' => 410]),
+        new MockResponse('', ['http_code' => 401]),
+        new MockResponse('', ['http_code' => 403]),
+        new MockResponse('', ['http_code' => 429]),
+        new MockResponse('', ['http_code' => 500]),
+        new MockResponse('', ['http_code' => 400]),
+    ]);
+
+    $urls = [
+        'https://example.com/ok',
+        'https://example.com/bypass',
+        'https://example.com/redirect',
+        'https://example.com/missing',
+        'https://example.com/gone',
+        'https://example.com/unauthorized',
+        'https://example.com/forbidden',
+        'https://example.com/limited',
+        'https://example.com/error',
+        'https://example.com/bad-request',
+    ];
+
+    $result = $service->warm($urls, 1);
+
+    expect($result['warmed'])->toBe(['https://example.com/ok'])
+        ->and($result['skipped'])->toMatchArray([
+            'https://example.com/bypass' => 'bypass',
+            'https://example.com/redirect' => 'redirect',
+            'https://example.com/missing' => 'not_found',
+            'https://example.com/gone' => 'not_found',
+            'https://example.com/unauthorized' => 'forbidden',
+            'https://example.com/forbidden' => 'forbidden',
+            'https://example.com/bad-request' => 'http_400',
+        ])
+        ->and($result['failed'])->toHaveKeys([
+            'https://example.com/limited',
+            'https://example.com/error',
+        ]);
+});
+
+it('sends basic auth when configured', function () {
+    Mage::app()->getStore()->setConfig('page_cache/warmup/auth_user', 'staging');
+    Mage::app()->getStore()->setConfig('page_cache/warmup/auth_password', 'secret');
+
+    $service = new class extends Maho_PageCache_Service_Warm {
+        /** @var list<array<string, mixed>> */
+        public array $requests = [];
+
+        #[\Override]
+        protected function createClient(): HttpClientInterface
+        {
+            return new MockHttpClient(function (string $method, string $url, array $options): MockResponse {
+                $this->requests[] = ['method' => $method, 'url' => $url, 'options' => $options];
+                return new MockResponse('ok', ['http_code' => 200]);
+            });
+        }
+    };
+
+    $service->warm(['https://example.com/a'], 1);
+
+    $headers = $service->requests[0]['options']['normalized_headers'] ?? [];
+
+    expect($headers['authorization'][0] ?? null)
+        ->toBe('Authorization: Basic ' . base64_encode('staging:secret'));
+});
+
+it('consumes queued urls and maps the result back to the queue', function () {
+    $queue = Mage::getModel('page_cache/warmQueue');
+    $queue->enqueue([
+        'https://example.com/ok',
+        'https://example.com/missing',
+        'https://example.com/fail',
+    ], 1, 'catalog_product_1');
+
+    $service = new class extends Maho_PageCache_Service_Warm {
+        /** @var list<array{urls: list<string>, concurrency: int, delay_ms: int}> */
+        public array $calls = [];
+
+        #[\Override]
+        public function warm(array $urls, int $concurrency, int $delayMs = 0): array
+        {
+            $this->calls[] = ['urls' => $urls, 'concurrency' => $concurrency, 'delay_ms' => $delayMs];
+            return [
+                'warmed' => [$urls[0]],
+                'skipped' => [$urls[1] => 'not_found'],
+                'failed' => [$urls[2] => 'HTTP 500'],
+            ];
+        }
+    };
+
+    $summary = $service->consumeQueue();
+
+    $read = Mage::getSingleton('core/resource')->getConnection('core_read');
+    $row = $read->fetchRow($read->select()->from(warmupTestQueueTable()));
+
+    expect($summary['processed'])->toBe(3)
+        ->and($summary['warmed'])->toBe(1)
+        ->and($summary['skipped'])->toBe(1)
+        ->and($summary['failed'])->toBe(1)
+        ->and($summary['dropped'])->toBe(0)
+        ->and($summary['remaining'])->toBe(1)
+        ->and($queue->count())->toBe(1)
+        ->and((int) $row['attempts'])->toBe(1)
+        ->and($row['last_error'])->toBe('HTTP 500')
+        ->and($service->calls[0]['concurrency'])->toBe(2)
+        ->and($service->calls[0]['delay_ms'])->toBe(25)
+        ->and($service->getLastRun())->toMatchArray([
+            'processed' => 3,
+            'warmed' => 1,
+            'skipped' => 1,
+            'failed' => 1,
+            'dropped' => 0,
+            'remaining' => 1,
+        ]);
+});
+
+it('drops a row after the last failed attempt', function () {
+    Mage::app()->getStore()->setConfig('page_cache/warmup/max_attempts', '1');
+    $queue = Mage::getModel('page_cache/warmQueue');
+    $queue->enqueue(['https://example.com/fail'], 1, 'test');
+
+    $service = new class extends Maho_PageCache_Service_Warm {
+        #[\Override]
+        public function warm(array $urls, int $concurrency, int $delayMs = 0): array
+        {
+            return ['warmed' => [], 'skipped' => [], 'failed' => [$urls[0] => 'HTTP 500']];
+        }
+    };
+
+    $summary = $service->consumeQueue();
+
+    expect($summary['failed'])->toBe(1)
+        ->and($summary['dropped'])->toBe(1)
+        ->and($queue->count())->toBe(0);
+});
+
+it('does nothing when the warmup lock is held', function () {
+    $queue = Mage::getModel('page_cache/warmQueue');
+    $queue->enqueue(['https://example.com/a'], 1, 'test');
+
+    $lock = Mage::getSingleton('core/lock');
+    expect($lock->acquire('page_cache_warmup_queue'))->toBeTrue();
+
+    $service = new class extends Maho_PageCache_Service_Warm {
+        public array $calls = [];
+
+        #[\Override]
+        public function warm(array $urls, int $concurrency, int $delayMs = 0): array
+        {
+            $this->calls[] = $urls;
+            return ['warmed' => $urls, 'skipped' => [], 'failed' => []];
+        }
+    };
+
+    try {
+        $summary = $service->consumeQueue();
+    } finally {
+        $lock->release('page_cache_warmup_queue');
+    }
+
+    expect($summary['processed'])->toBe(0)
+        ->and($service->calls)->toBe([])
+        ->and($queue->count())->toBe(1);
 });
