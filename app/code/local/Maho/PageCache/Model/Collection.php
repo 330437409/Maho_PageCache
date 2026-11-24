@@ -28,19 +28,19 @@ class Maho_PageCache_Model_Collection extends \Maho\Data\Collection\Db
     public function __clone() {}
 
     #[\Override]
-    public function getSize()
+    public function getSize(): int
     {
         return count($this->_items);
     }
 
     #[\Override]
-    public function getFirstItem()
+    public function getFirstItem(): \Maho\DataObject
     {
         return array_first($this->getItems()) ?? new \Maho\DataObject();
     }
 
     #[\Override]
-    public function getItems()
+    public function getItems(): array
     {
         $items = parent::getItems();
         if ($this->_pageSize) {
