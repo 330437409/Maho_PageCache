@@ -1,6 +1,6 @@
 # 功能规格：页面缓存 tag 索引重构
 
-> 状态：实现完成，待验收
+> 状态：已交付@v0.5.2
 > 关联 FR：FR-05、FR-06、FR-07（行为不变）
 > 关联 ADR：ADR-0004、ADR-0016
 > 分支：`feat/page-cache-phase2`
@@ -157,7 +157,7 @@
 - [x] `Model/Observer.php`：URL 索引清理。
 - [x] 测试：UrlIndex、原生 tag、失效、变体、store code、TTL/缺失 meta、静态、304。
 - [x] 文档：ARCHITECTURE、API（如需要）、README、CHANGELOG、ADR。
-- [ ] SQLite、PostgreSQL、MySQL 交叉验证。
+- [x] SQLite、PostgreSQL、MySQL 交叉验证。
 
 ## 4.1 实现记录
 
@@ -170,7 +170,7 @@
 - 全量失效不清 `page_cache` 缓存类型，保留统计计数器；旧条目靠全局版本不可达。
 - PHPStan 全仓通过；php-cs-fixer 与 Rector 对模块和测试通过。
 - 实机验证：local 模式商品页和分类页 MISS 后可 HIT；保存商品后两页 MISS，首页保持 HIT；URL 索引版本递增，商品 tag 从索引移除。
-- 交叉验证待补：SQLite 已通过；PostgreSQL、MySQL 待模块 CI。
+- 交叉验证：模块 CI run 45348166433 在 SQLite、MySQL、PostgreSQL 三个任务上全部通过（2026-11-24）。
 
 ## 5. 验收标准
 
