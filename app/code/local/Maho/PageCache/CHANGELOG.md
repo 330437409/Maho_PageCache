@@ -2,6 +2,16 @@
 
 All notable changes to `Maho_PageCache` are recorded here.
 
+## Unreleased
+
+### Fixed
+
+- Page cache URLs keep the store code for purge, warmup and cache keys; static files use the public path without it.
+- Query variants share one meta entry with a bounded URL list, and every variant is purged together; static files are removed for query variants.
+- Revalidating and local conditional requests use ETag only; `If-Modified-Since` no longer returns a stale 304.
+- Bypass responses set `Cache-Control: private, no-store, max-age=0` and `Vary`.
+- A missing meta or an expired tag index no longer triggers a full invalidation; tag index TTLs and the deliberate-flush registry are aligned.
+
 ## 0.5.0 (2026-11-24)
 
 ### Added

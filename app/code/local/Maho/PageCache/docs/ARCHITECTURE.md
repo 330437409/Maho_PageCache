@@ -1,6 +1,6 @@
 # 架构文档：Maho 页面缓存
 
-> 状态：0.5.0 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付，其余只登记
+> 状态：0.5.0 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付；0.5.1 cache integrity 修复开发中
 > 模块：`Maho_PageCache`
 > 关联 PRD：`docs/PRD.md`
 > 关联 spec：`docs/specs/page-cache.md`
@@ -107,7 +107,7 @@ tests/Backend/Unit/PageCache/*
 
 `controller_action_predispatch` 事件：
 
-1. 读取请求的 `If-None-Match` 和 `If-Modified-Since`。
+1. 读取请求的 `If-None-Match`。`Last-Modified` 只作为响应头，`If-Modified-Since` 不单独触发 304。
 2. 如果 `If-None-Match` 存在，计算当前 ETag：
    - 全局版本
    - URL 版本
@@ -172,7 +172,7 @@ tag 失效时：
 1. 如果请求可缓存、模式为 `local`，先读 `PC_HTML_<hash>`。
 2. 元数据缺失时不命中，避免版本 key 被淘汰后复活旧 HTML。
 3. 命中时设置 200、body、`Cache-Control: private, max-age=0, must-revalidate`、`ETag`、`X-Maho-Cache: HIT`，设置 `FLAG_NO_DISPATCH`，不生成 layout。
-4. `If-None-Match` 或 `If-Modified-Since` 命中时返回 304，body 为空。
+4. `If-None-Match` 命中时返回 304，body 为空。
 5. 未命中时用 core named lock `page_cache_html_<hash>` 保护回源。等待的请求在锁释放后重新读缓存；等待超时则正常渲染但不保存，返回 `lock_timeout` bypass。
 6. 渲染完成后，`controller_front_send_response_before` 检查版本没有变化，写入元数据、tag 索引和 HTML；版本在渲染期间变化时不保存，返回 `version_changed` bypass。
 7. HTML 超过 `page_cache/general/html_max_size` 时不缓存，返回 `html_too_large` bypass。

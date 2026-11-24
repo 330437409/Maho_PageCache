@@ -88,8 +88,7 @@ class Maho_PageCache_Model_Observer
 
         $request = $controller->getRequest();
         $ifNoneMatch = (string) $request->getHeader('If-None-Match');
-        $ifModifiedSince = (string) $request->getHeader('If-Modified-Since');
-        if ($ifNoneMatch === '' && $ifModifiedSince === '') {
+        if ($ifNoneMatch === '') {
             return;
         }
 
@@ -97,7 +96,7 @@ class Maho_PageCache_Model_Observer
             $context = Mage::getModel('page_cache/context');
             $service = Mage::getService('page_cache/response');
             $ttl = $helper->getTtl();
-            if (!$service->isNotModified($context, $ttl, $ifNoneMatch, $ifModifiedSince)) {
+            if (!$service->isNotModified($context, $ttl, $ifNoneMatch)) {
                 return;
             }
 
@@ -441,10 +440,16 @@ class Maho_PageCache_Model_Observer
                 is_array($existingMeta) && isset($existingMeta['version']) ? (int) $existingMeta['version'] : 1,
                 $version->getUrl($urlHash),
             );
+            $variants = Mage::getSingleton('page_cache/htmlCache')->buildMetaUrls(
+                $urlHash,
+                $context->getPurgeUrl(),
+            );
 
             Mage::app()->getCache()->save(
                 [
                     'url' => $context->getPurgeUrl(),
+                    'urls' => $variants['urls'],
+                    'variants_truncated' => $variants['truncated'],
                     'tags' => $tags,
                     'created_at' => time(),
                     'mode' => $context->getMode(),
@@ -661,7 +666,6 @@ class Maho_PageCache_Model_Observer
             $context,
             $entry,
             (string) $request->getHeader('If-None-Match'),
-            (string) $request->getHeader('If-Modified-Since'),
         )) {
             $service->applyLocalHitNotModified($context, $entry, $debug);
             $controller->setFlag('', Mage_Core_Controller_Varien_Action::FLAG_NO_DISPATCH, true);

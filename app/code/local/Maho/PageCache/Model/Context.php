@@ -123,14 +123,26 @@ class Maho_PageCache_Model_Context
         return $path !== '' ? $path : '/';
     }
 
+    public function getPublicPath(): string
+    {
+        $path = (string) ($this->data['public_path'] ?? $this->getPath());
+        return $path !== '' ? $path : '/';
+    }
+
     public function getMode(): string
     {
         return (string) ($this->data['mode'] ?? '');
     }
 
-    private function getPublicPath(Mage_Core_Controller_Request_Http $request): string
+    private function getRequestPath(Mage_Core_Controller_Request_Http $request): string
     {
         $path = (string) ($request->getOriginalPathInfo() ?: $request->getPathInfo());
+        return $path !== '' ? $path : '/';
+    }
+
+    private function collectPublicPath(Mage_Core_Controller_Request_Http $request): string
+    {
+        $path = $this->getRequestPath($request);
         if (Mage::getStoreConfigFlag(Mage_Core_Model_Store::XML_PATH_STORE_IN_URL)) {
             $storeCode = (string) $request->getStoreCodeFromPath();
             $prefix = '/' . $storeCode;
@@ -171,7 +183,8 @@ class Maho_PageCache_Model_Context
             'params' => $params,
             'scheme' => (string) $request->getScheme(),
             'host' => (string) $request->getHttpHost(false),
-            'path' => $this->getPublicPath($request),
+            'path' => $this->getRequestPath($request),
+            'public_path' => $this->collectPublicPath($request),
             'mode' => Mage::helper('page_cache')->getMode(),
         ];
     }

@@ -64,6 +64,23 @@ it('uses the original public path after a route rewrite', function () {
         ->and($context->getUrl())->toEndWith('/page-cache-test/');
 });
 
+it('keeps the store code for urls but strips it for static paths', function () {
+    $context = new Maho_PageCache_Model_Context(pageCacheContextData([
+        'path' => '/en/category.html',
+        'public_path' => '/category.html',
+    ]));
+    $plain = new Maho_PageCache_Model_Context(pageCacheContextData([
+        'path' => '/category.html',
+        'public_path' => '/category.html',
+    ]));
+
+    expect($context->getPath())->toBe('/en/category.html')
+        ->and($context->getPublicPath())->toBe('/category.html')
+        ->and($context->getUrl())->toBe('https://example.com/en/category.html')
+        ->and($context->getPurgeUrl())->toBe('https://example.com/en/category.html?limit=12&p=2')
+        ->and($context->getUrlHash())->not->toBe($plain->getUrlHash());
+});
+
 it('does not include the query string in the page url', function () {
     $context = new Maho_PageCache_Model_Context(pageCacheContextData([
         'params' => [],
