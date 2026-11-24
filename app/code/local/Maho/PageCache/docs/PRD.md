@@ -1,6 +1,6 @@
 # 产品需求文档（PRD）：Maho 页面缓存
 
-> 状态：0.5.5 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付；0.5.1 cache integrity 修复、0.5.2 tag 索引重构、0.5.3 P1 加固与性能优化、0.5.4 stock pending 监控和 0.5.5 监控指标导出与后台报表已交付
+> 状态：0.6.0 开发中：FR-15 请求级代理模型；0.5.5 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付；0.5.1 cache integrity 修复、0.5.2 tag 索引重构、0.5.3 P1 加固与性能优化、0.5.4 stock pending 监控和 0.5.5 监控指标导出与后台报表已交付
 > 模块：`Maho_PageCache`
 > 代码路径：`app/code/local/Maho/PageCache`
 > 关联 spec：`docs/specs/page-cache.md`
@@ -80,14 +80,14 @@ Maho 目前有 Symfony Cache 对象缓存（file/redis），但没有内置的 H
 | 编号 | 需求 | 优先级 | 状态 |
 |---|---|---|---|
 | FR-14 | 服务器端占位符打孔：缓存页面保存 block 占位符，命中时只渲染动态块 | P3 | 已交付@v0.5.0 |
-| FR-15 | 代理模型：product、category、CMS 的懒加载代理，减少动态块渲染成本 | P3 | 计划 |
+| FR-15 | 代理模型：product、category、CMS 的请求级代理加载器，动态块按 store/context 复用模型并批量预加载，减少重复查询和 N+1 | P3 | 开发中 |
 | FR-16 | 统计面板：DB 事件表、小时 rollup、后台面板，按路由/store/mode 统计 hit/miss/bypass/revalidated、PHP 耗时、top missed URL 和 flush 记录 | P3 | 已交付@v0.3.0 |
 | FR-17 | 静态文件导出：把匿名默认页的 local HTML 额外写成 path-based `.html`/`.gz`，由 Web 服务器直接返回；公共路径映射；允许参数变体继续走 PHP；严格 session cookie bypass；默认关闭，必须 deny 缓存目录 | P3 | 已交付@v0.3.0 |
 | FR-18 | 定时预热：后台 Warmup 配置组、purge 后 requeue、cron 分批预热、sitemap/URL、并发、限速、basic auth、重试和失败汇总；手工触发仍用 CLI | P3 | 已交付@v0.4.0 |
 | FR-19 | 多节点：purge 广播、Redis 共享版本、静态文件共享存储 | P3 | 计划 |
 | FR-20 | session cookie 安全命中：默认关闭的 opt-in，仅 local 模式对购物车为空、未登录、无消息且渲染不写 session 的匿名请求做短 TTL 缓存；proxy/revalidating 保持 bypass；需 ADR-0019 安全评审 | P2 | 暂停（等待 session 只读 API） |
 
-> 状态取值：计划 / 开发中 / 已交付@vX.Y.Z / 暂停。第一期和第二期已交付 0.2.0；第三期静态导出和统计面板已交付 0.3.0；定时预热已交付 0.4.0；服务器端动态块占位符已交付 0.5.0；其余只登记。静态文件导出、统计面板和定时预热分别见 ADR-0012、ADR-0013、ADR-0014。第三期拆解见 `.tmp/brainstorm-phase3-2026-11-23.md`。
+> 状态取值：计划 / 开发中 / 已交付@vX.Y.Z / 暂停。第一期和第二期已交付 0.2.0；第三期静态导出和统计面板已交付 0.3.0；定时预热已交付 0.4.0；服务器端动态块占位符已交付 0.5.0；请求级代理模型已实现，待 0.6.0 发版；多节点只登记。静态文件导出、统计面板和定时预热分别见 ADR-0012、ADR-0013、ADR-0014，代理模型见 ADR-0020。第三期拆解见 `.tmp/brainstorm-phase3-2026-11-23.md`。
 
 ## 5. 非功能需求（NFR）
 

@@ -2,6 +2,12 @@
 
 All notable changes to `Maho_PageCache` are recorded here.
 
+## Unreleased
+
+### Added
+
+- `page_cache/proxy` reuses product, category, CMS page and CMS block models within one request and loads a batch with one collection query. Server-side dynamic blocks can declare `page_cache_proxies` to preload their entities. Local hits restore the current product, category and CMS page from the cache entry and merge entity cache tags into the page tags. Model data is not stored in the page cache.
+
 ## 0.5.5 (2026-11-24)
 
 ### Added

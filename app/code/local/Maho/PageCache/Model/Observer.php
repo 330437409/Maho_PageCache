@@ -36,6 +36,7 @@ class Maho_PageCache_Model_Observer
             Mage::unregister('page_cache_tags');
             Mage::unregister('page_cache_server_blocks');
             Mage::unregister('page_cache_stock_pending');
+            Mage::getService('page_cache/proxy')->reset();
             $service = Mage::getService('page_cache/request');
             $input = $service->getInput($controller);
             $dynamic = Mage::getService('page_cache/dynamic');
@@ -446,6 +447,7 @@ class Maho_PageCache_Model_Observer
 
             $context = Mage::getModel('page_cache/context');
             $tags = array_keys(Mage::registry('page_cache_tags') ?: []);
+            $tags = array_merge($tags, Mage::getService('page_cache/proxy')->getTags());
             $tags[] = 'PAGE_CACHE';
             $tags = array_values(array_unique($tags));
             $ttl = $helper->getTtl();
@@ -644,6 +646,7 @@ class Maho_PageCache_Model_Observer
             $cache->collectHeaders(Mage::app()->getResponse()),
             $versions,
             is_array($dynamicBlocks) ? $dynamicBlocks : [],
+            Mage::getService('page_cache/proxy')->capturePageContext(),
         );
         if ($entry === null) {
             $service->applyBypass('cache_write', $debug);

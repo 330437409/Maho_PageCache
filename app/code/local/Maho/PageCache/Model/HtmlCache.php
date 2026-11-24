@@ -95,6 +95,7 @@ class Maho_PageCache_Model_HtmlCache
      * @param array<string, string> $headers
      * @param array{global: int, url: int} $versions
      * @param array<string, array<string, mixed>> $dynamicBlocks
+     * @param array<string, array<array-key, int|string>> $proxyEntities
      * @return array<string, mixed>|null
      */
     public function save(
@@ -105,6 +106,7 @@ class Maho_PageCache_Model_HtmlCache
         array $headers,
         array $versions,
         array $dynamicBlocks = [],
+        array $proxyEntities = [],
     ): ?array {
         if ($this->isTooLarge($html)) {
             return null;
@@ -142,6 +144,7 @@ class Maho_PageCache_Model_HtmlCache
             ),
             'last_modified' => time(),
             'dynamic_blocks' => $dynamicBlocks,
+            'proxy_entities' => $this->sanitizeProxyEntities($proxyEntities),
         ];
 
         $key = $this->key();
@@ -251,6 +254,39 @@ class Maho_PageCache_Model_HtmlCache
         }
 
         return preg_match('/^[A-Za-z0-9_-]+$/', $code) === 1 ? $code : '';
+    }
+
+    /**
+     * @param array<string, array<array-key, int|string>> $entities
+     * @return array<string, list<int>>
+     */
+    private function sanitizeProxyEntities(array $entities): array
+    {
+        $allowed = ['product', 'category', 'cms_page', 'cms_block'];
+        $result = [];
+        $count = 0;
+        foreach ($allowed as $type) {
+            $ids = $entities[$type] ?? [];
+            if (!is_array($ids)) {
+                continue;
+            }
+            foreach ($ids as $id) {
+                if (!is_numeric($id)) {
+                    continue;
+                }
+                $id = (int) $id;
+                if ($id <= 0 || isset($result[$type][$id])) {
+                    continue;
+                }
+                $result[$type][$id] = $id;
+                $count++;
+                if ($count >= 200) {
+                    break 2;
+                }
+            }
+        }
+
+        return array_map(array_values(...), $result);
     }
 
     private function key(): Maho_PageCache_Model_Key

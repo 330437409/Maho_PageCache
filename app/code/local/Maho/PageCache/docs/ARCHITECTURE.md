@@ -1,6 +1,6 @@
 # 架构文档：Maho 页面缓存
 
-> 状态：0.5.5 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付；0.5.1 cache integrity 修复、0.5.2 tag 索引重构、0.5.3 P1 加固与性能优化、0.5.4 stock pending 监控和 0.5.5 监控指标导出与后台报表已交付
+> 状态：0.6.0 开发中：FR-15 请求级代理模型；0.5.5 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付；0.5.1 cache integrity 修复、0.5.2 tag 索引重构、0.5.3 P1 加固与性能优化、0.5.4 stock pending 监控和 0.5.5 监控指标导出与后台报表已交付
 > 模块：`Maho_PageCache`
 > 关联 PRD：`docs/PRD.md`
 > 关联 spec：`docs/specs/page-cache.md`
@@ -207,6 +207,15 @@ local 服务器端占位符：
 - token 校验 URL、store、context 和 exp；失败、定义缺失或 block 抛异常时保留匿名 fallback。
 - 重建期间出现 `Set-Cookie` 或 session 启动时丢弃 live HTML 并移除该头，保持被动浏览不建立 session。
 - static 写入前剥离标记，只保留匿名 fallback。
+
+代理模型（FR-15）：
+
+- `page_cache/proxy` 服务按 `type + store_id + id` 在请求内复用 product/category/CMS page/CMS block；负结果也缓存。
+- 同类型多 ID 使用 collection 批量加载，查询次数不随实体数量增长。
+- local 保存时 entry 记录当前 product/category/CMS page 的 ID（`proxy_entities`）；命中时预加载并恢复 `current_product`、`current_category`、`cms_page` 等 registry。
+- 动态块可用 `page_cache_proxies` 声明预加载实体；渲染前统一批量加载。
+- 代理加载过的实体把 `getCacheTags()` 合并进页面 tag，失效继续走现有链路。
+- 不把模型数据写入页面缓存；旧 entry 没有 `proxy_entities` 时仍可命中。
 
 ### 3.7 静态文件导出
 
@@ -480,10 +489,10 @@ CLI：
 
 ### 第三期
 
-- 服务器端占位符：缓存页面保存 block 定义，命中时只渲染动态块。
-- 代理模型：product/category/CMS 懒加载，减少动态块的 DB 查询。
-- 面板：按路由、模式、结果统计 hit/miss/bypass、队列长度和失效次数。
-- 多节点：全局版本存 Redis，purge 事件广播到所有节点。
+- 服务器端占位符：缓存页面保存 block 定义，命中时只渲染动态块。0.5.0 已交付。
+- 代理模型：`page_cache/proxy` 在请求内复用 product/category/CMS 模型，批量加载并恢复页面上下文；不缓存模型数据。0.6.0 开发中。
+- 面板：按路由、模式、结果统计 hit/miss/bypass、队列长度和失效次数。0.3.0 已交付。
+- 多节点：全局版本存 Redis，purge 事件广播到所有节点。计划中。
 
 ## 11. 兼容性和依赖
 

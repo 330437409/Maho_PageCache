@@ -173,6 +173,28 @@ class Maho_PageCache_Service_Dynamic
             return $html;
         }
 
+        try {
+            $proxy = Mage::getService('page_cache/proxy');
+            $pageContext = $entry['proxy_entities'] ?? [];
+            $proxy->restorePageContext(is_array($pageContext) ? $pageContext : []);
+
+            $references = [];
+            foreach ($blocks as $definition) {
+                $data = is_array($definition) ? ($definition['data'] ?? null) : null;
+                if (is_array($data)
+                    && isset($data['page_cache_proxies'])
+                    && is_string($data['page_cache_proxies'])
+                ) {
+                    $references[] = $data['page_cache_proxies'];
+                }
+            }
+            if ($references !== []) {
+                $proxy->preload(implode(',', $references));
+            }
+        } catch (\Throwable $e) {
+            Mage::logException($e);
+        }
+
         $rendered = 0;
         $failed = 0;
         $result = preg_replace_callback(

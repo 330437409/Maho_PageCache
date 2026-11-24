@@ -1,6 +1,6 @@
 # 接口文档：Maho 页面缓存
 
-> 状态：0.5.5 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付；0.5.1 cache integrity 修复、0.5.2 tag 索引重构、0.5.3 P1 加固与性能优化、0.5.4 stock pending 监控和 0.5.5 监控指标导出与后台报表已交付
+> 状态：0.6.0 开发中：FR-15 请求级代理模型；0.5.5 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付；0.5.1 cache integrity 修复、0.5.2 tag 索引重构、0.5.3 P1 加固与性能优化、0.5.4 stock pending 监控和 0.5.5 监控指标导出与后台报表已交付
 > 关联 PRD：`docs/PRD.md`
 > 关联架构：`docs/ARCHITECTURE.md`
 
@@ -180,6 +180,24 @@ local 服务器端占位符：
 - local 命中只重建标记段，token 绑定 URL、store、context 和过期时间；不生成完整 layout。
 - token 无效、定义缺失、block 异常或出现 `Set-Cookie` 时保留匿名 fallback。
 - static 文件写入前剥离标记，只保留匿名 fallback。
+
+代理模型（FR-15）：
+
+```php
+$proxy = Mage::getService('page_cache/proxy');
+
+$product = $proxy->getProduct($productId);      // ?Mage_Catalog_Model_Product
+$products = $proxy->getProducts($productIds);   // [id => product]
+$category = $proxy->getCategory($categoryId);
+$page = $proxy->getCmsPage($pageId);
+$block = $proxy->getCmsBlock($blockId);
+```
+
+- 同一请求内按 `type + store_id + id` 复用实例；重复调用不再查询。
+- 单个 getter 传 `null` 时返回当前页面上下文实体；没有上下文时返回 `null`。
+- 动态块用 `page_cache_proxies="product:1,product:2,category:3"` 声明预加载实体，渲染前统一批量加载。
+- 代理加载的实体 tag 合并进页面 tag；模型数据不写入页面缓存。
+- 引用类型只允许 `product`、`category`、`cms_page`、`cms_block`；非法值和超过 200 个的引用被忽略。
 
 block 标记 `page_cache_dynamic_cacheable=1` 且 `page_cache/dynamic/ttl>0` 时，模块按 block 集合缓存动态响应；命中时跳过 layout，form key/SID 仍从当前 session 生成。key 包含 block 列表、页面 URL、context、customer group、store 和页面版本。
 

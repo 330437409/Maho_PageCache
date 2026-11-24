@@ -4,12 +4,12 @@ Maho 的 HTTP 页面缓存集成层。第一期支持 `proxy` 和 `revalidating`
 
 ## 状态
 
-0.5.5 已交付，累计包含第一期的 HTTP 集成层、proxy/revalidating 两种模式、session skip、tag 失效、purge 队列、配置和 CLI，第二期的 `local` 模式、Ajax/ESI 动态块和 `page-cache:warm`，第三期的静态文件导出、统计面板、定时预热和服务器端动态块占位符，以及 0.5.1 的 cache integrity 修复、0.5.2 的 tag 索引重构、0.5.3 的 P1 加固与性能优化、0.5.4 的 stock pending 监控和 0.5.5 的监控指标导出与 Page Cache 后台报表。
+0.6.0 开发中：FR-15 请求级代理模型。0.5.5 已交付，累计包含第一期的 HTTP 集成层、proxy/revalidating 两种模式、session skip、tag 失效、purge 队列、配置和 CLI，第二期的 `local` 模式、Ajax/ESI 动态块和 `page-cache:warm`，第三期的静态文件导出、统计面板、定时预热、服务器端动态块占位符和请求级代理模型，以及 0.5.1 的 cache integrity 修复、0.5.2 的 tag 索引重构、0.5.3 的 P1 加固与性能优化、0.5.4 的 stock pending 监控和 0.5.5 的监控指标导出与 Page Cache 后台报表。
 
 - 第一期：HTTP 集成层，`proxy` + `revalidating`。0.2.0 已交付。
 - 第二期：`local` 模式、整页 HTML 缓存、Ajax/ESI 动态块、缓存预热。0.2.0 已交付。
 - local 模式只缓存无 session cookie 的匿名页面；被动浏览不会建立 session。动态块打孔用于 proxy/revalidating 模式；local 模式缓存匿名渲染，显式 opt-in 的 leaf block 可以在命中时服务器端重建。form key 在用户提交表单时才获取。
-- 第三期：静态文件导出、统计面板、定时预热、服务器端占位符、代理模型、多节点 purge。静态导出和统计面板 0.3.0 已交付；定时预热 0.4.0 已交付；服务器端动态块占位符 0.5.0 已交付；代理模型和多节点只登记。
+- 第三期：静态文件导出、统计面板、定时预热、服务器端占位符、代理模型、多节点 purge。静态导出和统计面板 0.3.0 已交付；定时预热 0.4.0 已交付；服务器端动态块占位符 0.5.0 已交付；请求级代理模型 0.6.0 开发中；多节点只登记。
 
 ## 文档
 
@@ -33,6 +33,8 @@ Maho 的 HTTP 页面缓存集成层。第一期支持 `proxy` 和 `revalidating`
 - `docs/OPERATIONS.md`：0.5.4 生产观察和监控接入 runbook。
 - `docs/specs/page-cache-monitor-export.md`：0.5.5 监控指标导出规格。
 - `docs/specs/page-cache-admin-menu.md`：0.5.5 Page Cache 一级菜单和 Warm Now 规格。
+- `docs/specs/page-cache-proxy-models.md`：0.6.0 请求级代理模型规格。
+- `docs/adr/0020-request-scoped-proxy-models.md`：请求级代理模型的数据来源和失效边界。
 - `.claude/rules/`：模块级防漂移规则。
 
 ## 设计来源
