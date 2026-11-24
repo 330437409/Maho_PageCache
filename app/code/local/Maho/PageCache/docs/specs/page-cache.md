@@ -209,7 +209,7 @@ ETag = 'W/"' . version . '"'
 监听 `controller_action_predispatch`：
 
 1. 只在 `revalidating` 模式执行。
-2. 读取 `If-None-Match` 或 `If-Modified-Since`。
+2. 读取 `If-None-Match`。`Last-Modified` 仅作为响应头；`If-Modified-Since` 不单独触发 304。
 3. 匹配时：
    - `$response->setHttpResponseCode(304)`
    - `$response->clearBody()`
@@ -419,7 +419,7 @@ tag 失效：
 - 全量失效测试：连续两次全量失效，全局版本严格递增；proxy 模式写入 `*` 全量 purge 标记。
 - 版本键淘汰测试：元数据保留 `version`，删除 `PC_VERSION_URL_*` 后旧 ETag 返回 200，不返回错误 304；手工 curl 复验通过。
 - tag/debug/计数测试：proxy 的 `X-Cache-Tags`、debug 开关、tag 字符过滤、`X-Maho-Cache-Bypass` 原因码和 miss/bypass/revalidated 计数均有断言。
-- 条件请求测试：`If-None-Match` 优先于 `If-Modified-Since`；命中时设置 `FLAG_NO_DISPATCH`，304 在 layout 生成前短路。
+- 条件请求测试：只使用 `If-None-Match`；命中时设置 `FLAG_NO_DISPATCH`，304 在 layout 生成前短路。
 - purge 测试：`Context::getPurgeUrl()` 只保留白名单 query 参数；`writePurgeFile` 失败时队列保留，成功后移除。
 - 目标代理没有在本机运行；模块侧的 `X-Maho-Cache-Context` 和 `Vary` 已由测试覆盖。目标代理必须遵守 `Vary: Accept-Encoding, Cookie`，并处理 purge 文件中的 `*` 全量标记；否则不同 context 可能共享对象，或旧对象无法全量 purge。
 - 本地库没有分类/商品数据，分类/商品页未做手工验证；`Service\Request` 和 `Service\Response` 的单元测试覆盖相同代码路径。

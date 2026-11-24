@@ -33,7 +33,7 @@ class Maho_PageCache_Model_StaticCache
             return null;
         }
 
-        $relative = $this->getRelativePath($context->getPath());
+        $relative = $this->getRelativePath($context->getPublicPath());
         if ($relative === null) {
             return null;
         }
@@ -77,14 +77,22 @@ class Maho_PageCache_Model_StaticCache
                 return;
             }
 
-            if ($url === '' || str_contains($url, '?')) {
+            if ($url === '') {
                 return;
             }
 
             $path = parse_url($url, PHP_URL_PATH);
-            if (!is_string($path)) {
+            if (!is_string($path) || $path === '') {
                 $path = (string) preg_replace('#^[a-z][a-z0-9+.-]*://[^/]*#i', '', $url);
+                $path = (string) parse_url($path, PHP_URL_PATH);
                 $path = '/' . ltrim($path, '/');
+            }
+
+            $prefix = '/' . $storeCode;
+            if ($path === $prefix) {
+                $path = '/';
+            } elseif (str_starts_with($path, $prefix . '/')) {
+                $path = substr($path, strlen($prefix));
             }
 
             $relative = $this->getRelativePath($path);

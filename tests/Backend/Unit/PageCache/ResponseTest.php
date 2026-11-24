@@ -150,7 +150,7 @@ it('returns 304 when the etag still matches', function () {
     $service->apply($context, 3600, [], false);
     $etag = (string) pageCacheHeaderValue(pageCacheResponse(), 'ETag');
 
-    expect($service->isNotModified($context, 3600, $etag, ''))->toBeTrue();
+    expect($service->isNotModified($context, 3600, $etag))->toBeTrue();
 
     $service->applyNotModified($context, $etag, time(), false);
     expect(pageCacheResponse()->getHttpResponseCode())->toBe(304)
@@ -170,7 +170,7 @@ it('does not return 304 when the stored url version changed', function () {
     pageCacheSaveMeta($context, 2);
     $version->setUrl($context->getUrlHash(), 2);
 
-    expect($service->isNotModified($context, 3600, $etag, ''))->toBeFalse();
+    expect($service->isNotModified($context, 3600, $etag))->toBeFalse();
 });
 
 it('does not return 304 when the url version key is evicted after invalidation', function () {
@@ -185,7 +185,7 @@ it('does not return 304 when the url version key is evicted after invalidation',
     pageCacheSaveMeta($context, 2);
     Mage::app()->getCache()->remove($key->getVersionUrlKey($context->getUrlHash()));
 
-    expect($service->isNotModified($context, 3600, $oldEtag, ''))->toBeFalse();
+    expect($service->isNotModified($context, 3600, $oldEtag))->toBeFalse();
 });
 
 it('does not return 304 without page metadata', function () {
@@ -195,10 +195,10 @@ it('does not return 304 without page metadata', function () {
     $service->apply($context, 3600, [], false);
     $etag = (string) pageCacheHeaderValue(pageCacheResponse(), 'ETag');
 
-    expect($service->isNotModified($context, 3600, $etag, ''))->toBeFalse();
+    expect($service->isNotModified($context, 3600, $etag))->toBeFalse();
 });
 
-it('gives If-None-Match priority over If-Modified-Since', function () {
+it('ignores If-Modified-Since for conditional requests', function () {
     $context = new Maho_PageCache_Model_Context(pageCacheContextData(['mode' => 'revalidating']));
     $service = new Maho_PageCache_Service_Response();
 
@@ -206,10 +206,11 @@ it('gives If-None-Match priority over If-Modified-Since', function () {
     $service->apply($context, 3600, [], false);
     $lastModified = $service->getLastModified($context);
 
-    expect($service->isNotModified($context, 3600, 'W/"not-the-current-etag"', gmdate('D, d M Y H:i:s', $lastModified + 60) . ' GMT'))->toBeFalse();
+    expect($lastModified)->toBeGreaterThan(0)
+        ->and($service->isNotModified($context, 3600, 'W/"not-the-current-etag"'))->toBeFalse();
 });
 
-it('uses If-Modified-Since when If-None-Match is absent', function () {
+it('does not return 304 for If-Modified-Since without an ETag', function () {
     $context = new Maho_PageCache_Model_Context(pageCacheContextData(['mode' => 'revalidating']));
     $service = new Maho_PageCache_Service_Response();
 
@@ -217,6 +218,22 @@ it('uses If-Modified-Since when If-None-Match is absent', function () {
     $service->apply($context, 3600, [], false);
     $lastModified = $service->getLastModified($context);
 
-    expect($service->isNotModified($context, 3600, '', gmdate('D, d M Y H:i:s', $lastModified + 60) . ' GMT'))->toBeTrue()
-        ->and($service->isNotModified($context, 3600, '', gmdate('D, d M Y H:i:s', $lastModified - 60) . ' GMT'))->toBeFalse();
+    expect($lastModified)->toBeGreaterThan(0)
+        ->and($service->isNotModified($context, 3600, ''))->toBeFalse();
+});
+
+it('sets private no-store headers on bypass', function () {
+    $service = new Maho_PageCache_Service_Response();
+    $service->applyBypass('session_cookie', false);
+
+    $response = pageCacheResponse();
+
+    $cacheControl = (string) pageCacheHeaderValue($response, 'Cache-Control');
+
+    expect($cacheControl)->toContain('private')
+        ->and($cacheControl)->toContain('no-store')
+        ->and($cacheControl)->toContain('max-age=0')
+        ->and(pageCacheHeaderValue($response, 'Vary'))->toBe('Accept-Encoding, Cookie')
+        ->and(pageCacheHeaderValue($response, 'X-Maho-Cache'))->toBe('BYPASS')
+        ->and(pageCacheHeaderValue($response, 'X-Maho-Cache-Bypass'))->toBe('session_cookie');
 });

@@ -1,6 +1,6 @@
 # 接口文档：Maho 页面缓存
 
-> 状态：0.5.0 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付，其余只登记
+> 状态：0.5.0 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付；0.5.1 cache integrity 修复开发中
 > 关联 PRD：`docs/PRD.md`
 > 关联架构：`docs/ARCHITECTURE.md`
 
@@ -105,7 +105,7 @@ Vary: Accept-Encoding, Cookie
 X-Maho-Cache: REVALIDATED
 ```
 
-304 响应没有 body，不生成 layout。
+304 响应没有 body，不生成 layout。条件请求只使用 `If-None-Match`。`Last-Modified` 仍返回，但 `If-Modified-Since` 不单独触发 304，避免同一秒内内容变化后返回旧内容。
 
 ### 3.4 `local` 模式
 
@@ -131,7 +131,7 @@ X-Maho-Cache: HIT
 X-Maho-Cache-Mode: local
 ```
 
-local 命中不生成 layout。`If-None-Match` 优先于 `If-Modified-Since`。响应是 `private`，浏览器每次回源重新验证，命中发生在 Maho 内部。local 模式只缓存匿名默认 context，session cookie 请求 bypass。
+local 命中不生成 layout。条件请求只使用 `If-None-Match`；`If-Modified-Since` 不单独触发 304。响应是 `private`，浏览器每次回源重新验证，命中发生在 Maho 内部。local 模式只缓存匿名默认 context，session cookie 请求 bypass。
 
 缓存 HTML 里的 form key 和 SID 会替换成 `{{PAGE_CACHE_FORM_KEY}}` / `{{PAGE_CACHE_SID}}`，由注入的脚本用动态请求结果替换。没有 JavaScript 的客户端无法提交这些表单。
 

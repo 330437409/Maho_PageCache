@@ -98,6 +98,7 @@ class Maho_PageCache_Service_Invalidator
 
         $urls = [];
         $warmUrls = [];
+        $variantsTruncated = false;
         foreach ($tags as $tag) {
             $urlHashes = $this->tagIndex()->getUrls($tag);
             if ($urlHashes === false) {
@@ -111,8 +112,8 @@ class Maho_PageCache_Service_Invalidator
             foreach ($urlHashes as $urlHash) {
                 $meta = Mage::app()->getCache()->load($this->key()->getMetaKey($urlHash));
                 if (!is_array($meta) || empty($meta['url'])) {
-                    $this->invalidateAll('tag_fallback');
-                    return;
+                    $this->tagIndex()->removeUrl($tag, $urlHash);
+                    continue;
                 }
                 $newVersion = max(
                     (int) ($meta['version'] ?? 1) + 1,
@@ -125,18 +126,39 @@ class Maho_PageCache_Service_Invalidator
                     return;
                 }
                 $this->version()->setUrl($urlHash, $newVersion);
+                Mage::app()->getCache()->remove($this->key()->getEtagKey($urlHash));
                 $this->staticCache()->removeByUrl(
                     (string) $meta['url'],
                     (string) ($meta['store_code'] ?? ''),
                 );
-                $urls[] = (string) $meta['url'];
-                $warmUrls[(int) ($meta['store_id'] ?? 0)][] = (string) $meta['url'];
+
+                $variantUrls = is_array($meta['urls'] ?? null) ? $meta['urls'] : [];
+                if ($variantUrls === []) {
+                    $variantUrls = [(string) $meta['url']];
+                }
+                $variantUrls = array_values(array_unique(array_filter(
+                    $variantUrls,
+                    static fn(mixed $url): bool => is_string($url) && $url !== '',
+                )));
+                if ($variantUrls === []) {
+                    $variantUrls = [(string) $meta['url']];
+                }
+                $variantsTruncated = $variantsTruncated || !empty($meta['variants_truncated']);
+                $storeId = (int) ($meta['store_id'] ?? 0);
+                foreach ($variantUrls as $variantUrl) {
+                    $urls[] = $variantUrl;
+                    $warmUrls[$storeId][] = $variantUrl;
+                }
             }
             $this->tagIndex()->remove($tag);
         }
 
         if ($urls !== [] && $this->helper()->getMode() === Maho_PageCache_Helper_Data::MODE_PROXY) {
-            $this->queue()->enqueue($urls, $tags, Maho_PageCache_Helper_Data::MODE_PROXY);
+            if ($variantsTruncated) {
+                $this->queue()->enqueueFullPurge();
+            } else {
+                $this->queue()->enqueue($urls, $tags, Maho_PageCache_Helper_Data::MODE_PROXY);
+            }
         }
 
         if ($warmUrls !== [] && $this->helper()->getWarmupEnabled()) {

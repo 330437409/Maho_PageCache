@@ -1,6 +1,6 @@
 # 产品需求文档（PRD）：Maho 页面缓存
 
-> 状态：0.5.0 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付，其余只登记
+> 状态：0.5.0 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付；0.5.1 cache integrity 修复开发中
 > 模块：`Maho_PageCache`
 > 代码路径：`app/code/local/Maho/PageCache`
 > 关联 spec：`docs/specs/page-cache.md`
@@ -59,7 +59,7 @@ Maho 目前有 Symfony Cache 对象缓存（file/redis），但没有内置的 H
 | FR-01 | 页面缓存配置：开关、模式（`proxy`/`revalidating`）、TTL、可缓存路由、允许的 query 参数、bypass 规则、调试头开关 | P1 | 已交付@v0.2.0 |
 | FR-02 | 匿名 GET session skip：可缓存路由在没有 Maho session cookie 时跳过 session，不返回会话 `Set-Cookie` | P1 | 已交付@v0.2.0 |
 | FR-03 | 上下文与 HTTP 头：按 store、货币、客户组、税、query 参数生成 context hash；设置 `Cache-Control`、`Vary`、`X-Maho-Cache-*` | P1 | 已交付@v0.2.0 |
-| FR-04 | `revalidating` 模式：设置 `ETag` 或 `Last-Modified`；请求带 `If-None-Match`/`If-Modified-Since` 且版本未变时返回 304，不渲染页面 | P1 | 已交付@v0.2.0 |
+| FR-04 | `revalidating` 模式：设置 `ETag`；请求带 `If-None-Match` 且版本未变时返回 304，不渲染页面；`Last-Modified` 仅作为响应头 | P1 | 已交付@v0.2.0 |
 | FR-05 | `proxy` 模式：设置反向代理可缓存的 `Cache-Control` 和 `X-Cache-Tags`；维护 tag 到 URL 的索引；tag 失效时写入 purge 队列 | P1 | 已交付@v0.2.0 |
 | FR-06 | 实体 tag 失效：product、category、CMS page、CMS block 的 save/delete 按 `getCacheIdTags()` 清理相关页面 | P1 | 已交付@v0.2.0 |
 | FR-07 | 规则和配置失效：catalog rule 按受影响产品和分类细粒度失效；stock 状态变化和批量属性更新按 product tag 失效；sales rule、配置、主题、layout、全量缓存清理时全量失效 | P1 | 已交付@v0.2.0 |
@@ -136,7 +136,7 @@ Maho 目前有 Symfony Cache 对象缓存（file/redis），但没有内置的 H
 - 第一次 200 响应带 `ETag`，版本包含全局版本、URL 版本、URL、context 和 TTL。
 - 第二次请求带相同 `If-None-Match` 时返回 304，响应体为空，不生成 layout。
 - 实体保存或全量失效后，相同 `If-None-Match` 返回 200 和新 `ETag`。
-- `If-Modified-Since` 在配置使用 Last-Modified 时同样生效。
+- 304 只由 `If-None-Match` 触发；`Last-Modified` 仍返回，但 `If-Modified-Since` 不单独触发 304，避免同一秒内内容变化后返回旧内容。
 - 没有缓存元数据或版本索引丢失时回退 200，不返回错误的 304。
 - URL 版本键被淘汰但元数据仍在时，旧 ETag 返回 200，不返回错误的 304。
 

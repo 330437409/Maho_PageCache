@@ -4,7 +4,7 @@ Maho 的 HTTP 页面缓存集成层。第一期支持 `proxy` 和 `revalidating`
 
 ## 状态
 
-0.5.0 已交付，累计包含第一期的 HTTP 集成层、proxy/revalidating 两种模式、session skip、tag 失效、purge 队列、配置和 CLI，第二期的 `local` 模式、Ajax/ESI 动态块和 `page-cache:warm`，以及第三期的静态文件导出、统计面板、定时预热和服务器端动态块占位符。
+0.5.0 已交付，累计包含第一期的 HTTP 集成层、proxy/revalidating 两种模式、session skip、tag 失效、purge 队列、配置和 CLI，第二期的 `local` 模式、Ajax/ESI 动态块和 `page-cache:warm`，以及第三期的静态文件导出、统计面板、定时预热和服务器端动态块占位符。0.5.1 cache integrity 修复开发中。
 
 - 第一期：HTTP 集成层，`proxy` + `revalidating`。0.2.0 已交付。
 - 第二期：`local` 模式、整页 HTML 缓存、Ajax/ESI 动态块、缓存预热。0.2.0 已交付。
@@ -123,7 +123,7 @@ local 命中时，显式标记的 leaf block 可以在服务器端重建，不�
 vendor/bin/pest tests/Backend/Unit/PageCache
 ```
 
-当前 163 个测试通过。
+当前 175 个测试通过。
 
 ## 许可证
 

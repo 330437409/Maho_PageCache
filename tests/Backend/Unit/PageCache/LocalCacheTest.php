@@ -401,3 +401,41 @@ it('releases the local lock after saving the response', function () {
     expect(Mage::getSingleton('core/lock')->isHeld($lockName))->toBeFalse()
         ->and($cache->load($context))->not->toBeNull();
 });
+
+it('keeps every url variant in the local meta', function () {
+    $cache = new Maho_PageCache_Model_HtmlCache();
+    $first = localCacheContext(['path' => '/product.html', 'params' => ['p' => '1']]);
+    $second = localCacheContext(['path' => '/product.html', 'params' => ['p' => '2']]);
+    $versions = ['global' => 1, 'url' => 1];
+
+    $cache->save($first, '<html>one</html>', ['PAGE_CACHE'], 3600, [], $versions);
+    $cache->save($second, '<html>two</html>', ['PAGE_CACHE'], 3600, [], $versions);
+
+    $meta = Mage::app()->getCache()->load(
+        (new Maho_PageCache_Model_Key())->getMetaKey($first->getUrlHash()),
+    );
+
+    expect($meta['urls'])->toContain($first->getPurgeUrl(), $second->getPurgeUrl())
+        ->and($meta['url'])->toBe($second->getPurgeUrl())
+        ->and($meta['variants_truncated'])->toBeFalse();
+});
+
+it('caps the stored url variants', function () {
+    $cache = new Maho_PageCache_Model_HtmlCache();
+    $context = localCacheContext(['path' => '/product.html']);
+    $urls = [];
+    for ($i = 0; $i < 51; $i++) {
+        $urls[] = 'https://example.com/product.html?p=' . $i;
+    }
+    Mage::app()->getCache()->save(
+        ['url' => end($urls), 'urls' => $urls],
+        (new Maho_PageCache_Model_Key())->getMetaKey($context->getUrlHash()),
+        ['PAGE_CACHE'],
+        3600,
+    );
+
+    $result = $cache->buildMetaUrls($context->getUrlHash(), 'https://example.com/product.html?p=51');
+
+    expect($result['urls'])->toHaveCount(50)
+        ->and($result['truncated'])->toBeTrue();
+});

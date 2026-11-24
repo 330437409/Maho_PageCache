@@ -2,7 +2,7 @@
 
 ## 状态
 
-已接受。
+已接受。0.5.1 起条件请求只使用 ETag；`Last-Modified` 仍返回，但 `If-Modified-Since` 不单独触发 304。
 
 ## 背景
 
@@ -31,6 +31,7 @@ ETag = W/"<version>"
 - `contextHash` 包含 store、货币、客户组、税和允许的 query 参数。
 - `ttlBucket = floor(time() / ttl)`，让 ETag 有自然过期。
 - 304 在 `controller_action_predispatch` 判断，设置 `FLAG_NO_DISPATCH`，不进入 layout。
+- 只有 `If-None-Match` 参与 304 判断。`Last-Modified` 继续返回给客户端和代理，但 `If-Modified-Since` 不单独触发 304，避免同一秒内内容变化后返回旧内容。
 
 ## 理由
 
@@ -48,5 +49,5 @@ ETag = W/"<version>"
 ## 备选方案
 
 - **响应体 hash**：必须先渲染，失去 304 的意义，不采用。
-- **只用 Last-Modified**：精度低，容易误判，作为 fallback。
+- **只用 Last-Modified**：精度低，同一秒内变化会误判，不采用。
 - **不做 304，只做普通 proxy 缓存**：无法在 CDN 上实时失效，不采用。

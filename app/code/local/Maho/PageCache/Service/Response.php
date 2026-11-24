@@ -78,33 +78,23 @@ class Maho_PageCache_Service_Response
         Maho_PageCache_Model_Context $context,
         array $entry,
         string $ifNoneMatch,
-        string $ifModifiedSince,
     ): bool {
-        if ($context->getMode() !== Maho_PageCache_Helper_Data::MODE_LOCAL) {
+        if ($context->getMode() !== Maho_PageCache_Helper_Data::MODE_LOCAL || trim($ifNoneMatch) === '') {
             return false;
         }
 
-        if (trim($ifNoneMatch) !== '') {
-            $etag = (string) ($entry['etag'] ?? '');
-            return $etag !== '' && Mage::getSingleton('page_cache/version')->isNotModified($ifNoneMatch, $etag);
-        }
-
-        if (trim($ifModifiedSince) !== '') {
-            $lastModified = (int) ($entry['last_modified'] ?? 0);
-            $since = strtotime($ifModifiedSince);
-            return $lastModified > 0 && $since !== false && $lastModified <= $since;
-        }
-
-        return false;
+        $etag = (string) ($entry['etag'] ?? '');
+        return $etag !== '' && Mage::getSingleton('page_cache/version')->isNotModified($ifNoneMatch, $etag);
     }
 
     public function isNotModified(
         Maho_PageCache_Model_Context $context,
         int $ttl,
         string $ifNoneMatch,
-        string $ifModifiedSince,
     ): bool {
-        if ($context->getMode() !== Maho_PageCache_Helper_Data::MODE_REVALIDATING) {
+        if ($context->getMode() !== Maho_PageCache_Helper_Data::MODE_REVALIDATING
+            || trim($ifNoneMatch) === ''
+        ) {
             return false;
         }
 
@@ -113,20 +103,10 @@ class Maho_PageCache_Service_Response
             return false;
         }
 
-        if (trim($ifNoneMatch) !== '') {
-            return Mage::getSingleton('page_cache/version')->isNotModified(
-                $ifNoneMatch,
-                $this->getEtag($context, $ttl, $urlVersion),
-            );
-        }
-
-        if (trim($ifModifiedSince) !== '') {
-            $lastModified = $this->getLastModified($context);
-            $since = strtotime($ifModifiedSince);
-            return $lastModified > 0 && $since !== false && $lastModified <= $since;
-        }
-
-        return false;
+        return Mage::getSingleton('page_cache/version')->isNotModified(
+            $ifNoneMatch,
+            $this->getEtag($context, $ttl, $urlVersion),
+        );
     }
 
     public function getEtag(
@@ -160,6 +140,8 @@ class Maho_PageCache_Service_Response
     public function applyBypass(string $reason, bool $debug): void
     {
         $response = Mage::app()->getResponse();
+        $response->setHeader('Cache-Control', 'private, no-store, max-age=0', true);
+        $response->setHeader('Vary', 'Accept-Encoding, Cookie', true);
         $response->setHeader('X-Maho-Cache', 'BYPASS', true);
         $response->setHeader(
             'X-Maho-Cache-Mode',

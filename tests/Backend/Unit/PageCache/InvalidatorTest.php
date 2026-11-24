@@ -335,3 +335,130 @@ it('clears the warmup queue on full invalidation', function () {
 
     expect($queue->count())->toBe(0);
 });
+
+it('skips a missing meta instead of a full invalidation', function () {
+    $index = new Maho_PageCache_Model_TagIndex();
+    $index->add('missing-meta-hash', ['catalog_product_1']);
+    $version = new Maho_PageCache_Model_Version();
+    $before = $version->getGlobal();
+
+    (new Maho_PageCache_Service_Invalidator())->invalidateTags(['catalog_product_1']);
+
+    expect($version->getGlobal())->toBe($before)
+        ->and($index->getUrls('catalog_product_1'))->toBeFalse();
+});
+
+it('does not full-invalidate after a deliberate tag index flush', function () {
+    (new Maho_PageCache_Model_TagIndex())->flush();
+    $version = new Maho_PageCache_Model_Version();
+    $before = $version->getGlobal();
+
+    (new Maho_PageCache_Service_Invalidator())->invalidateTags(['catalog_product_1']);
+
+    expect($version->getGlobal())->toBe($before);
+});
+
+it('purges every stored url variant and removes the default static file', function () {
+    Mage::app()->getStore()->setConfig('page_cache/static/enabled', '1');
+    Mage::app()->getStore()->setConfig('page_cache/warmup/enabled', '1');
+    $context = invalidatorStaticContext('/category');
+    $urlHash = $context->getUrlHash();
+    $defaultUrl = $context->getPurgeUrl();
+    $variantUrl = $defaultUrl . '?p=2';
+    $key = new Maho_PageCache_Model_Key();
+    Mage::app()->getCache()->save(
+        [
+            'url' => $variantUrl,
+            'urls' => [$defaultUrl, $variantUrl],
+            'variants_truncated' => false,
+            'tags' => ['catalog_product_1'],
+            'version' => 1,
+            'ttl' => 3600,
+            'store_code' => 'default',
+            'store_id' => 1,
+        ],
+        $key->getMetaKey($urlHash),
+        ['PAGE_CACHE'],
+        3600,
+    );
+    (new Maho_PageCache_Model_TagIndex())->add($urlHash, ['catalog_product_1']);
+    $static = Mage::getSingleton('page_cache/staticCache');
+    $static->save($context, '<html>category</html>');
+    $path = $static->getFilePath($context);
+
+    (new Maho_PageCache_Service_Invalidator())->invalidateTags(['catalog_product_1']);
+
+    $urls = [];
+    foreach ((new Maho_PageCache_Model_PurgeQueue())->getEntries() as $entry) {
+        $urls = array_merge($urls, $entry['urls']);
+    }
+    $resource = Mage::getSingleton('core/resource');
+    $read = $resource->getConnection('core_read');
+    $warmUrls = $read->fetchCol(
+        $read->select()->from($resource->getTableName('page_cache/warmup_queue'), ['url']),
+    );
+
+    expect($urls)->toContain($defaultUrl)
+        ->and($urls)->toContain($variantUrl)
+        ->and($warmUrls)->toContain($defaultUrl)
+        ->and($warmUrls)->toContain($variantUrl)
+        ->and(file_exists((string) $path))->toBeFalse();
+});
+
+it('enqueues a full purge when the variant list was truncated', function () {
+    $context = invalidatorStaticContext('/category');
+    $urlHash = $context->getUrlHash();
+    $key = new Maho_PageCache_Model_Key();
+    Mage::app()->getCache()->save(
+        [
+            'url' => $context->getPurgeUrl(),
+            'urls' => [$context->getPurgeUrl()],
+            'variants_truncated' => true,
+            'tags' => ['catalog_product_1'],
+            'version' => 1,
+            'ttl' => 3600,
+            'store_code' => 'default',
+            'store_id' => 1,
+        ],
+        $key->getMetaKey($urlHash),
+        ['PAGE_CACHE'],
+        3600,
+    );
+    (new Maho_PageCache_Model_TagIndex())->add($urlHash, ['catalog_product_1']);
+
+    (new Maho_PageCache_Service_Invalidator())->invalidateTags(['catalog_product_1']);
+
+    $urls = [];
+    foreach ((new Maho_PageCache_Model_PurgeQueue())->getEntries() as $entry) {
+        $urls = array_merge($urls, $entry['urls']);
+    }
+
+    expect($urls)->toContain('*');
+});
+
+it('clears the stored etag when a tag is invalidated', function () {
+    $context = invalidatorStaticContext('/category');
+    $urlHash = $context->getUrlHash();
+    $key = new Maho_PageCache_Model_Key();
+    $version = new Maho_PageCache_Model_Version();
+    $version->storeEtag($urlHash, 'W/"old"', 100);
+    Mage::app()->getCache()->save(
+        [
+            'url' => $context->getPurgeUrl(),
+            'tags' => ['catalog_product_1'],
+            'version' => 1,
+            'ttl' => 3600,
+            'store_code' => 'default',
+            'store_id' => 1,
+        ],
+        $key->getMetaKey($urlHash),
+        ['PAGE_CACHE'],
+        3600,
+    );
+    (new Maho_PageCache_Model_TagIndex())->add($urlHash, ['catalog_product_1']);
+
+    (new Maho_PageCache_Service_Invalidator())->invalidateTags(['catalog_product_1']);
+
+    expect($version->getLastModified($urlHash))->toBe(0)
+        ->and(Mage::app()->getCache()->load($key->getEtagKey($urlHash)))->toBeFalse();
+});

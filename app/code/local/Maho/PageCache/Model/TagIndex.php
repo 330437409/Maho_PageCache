@@ -13,6 +13,7 @@ declare(strict_types=1);
 class Maho_PageCache_Model_TagIndex
 {
     private const string REGISTRY_KEY = 'PC_TAG_REGISTRY';
+    private const int INDEX_TTL = 2592000;
 
     /**
      * @param list<string> $tags
@@ -31,7 +32,7 @@ class Maho_PageCache_Model_TagIndex
             if (!in_array($urlHash, $urls, true)) {
                 $urls[] = $urlHash;
             }
-            Mage::app()->getCache()->save(array_values($urls), $key, ['PAGE_CACHE']);
+            Mage::app()->getCache()->save(array_values($urls), $key, ['PAGE_CACHE'], self::INDEX_TTL);
             $this->register($tag);
         }
     }
@@ -65,12 +66,33 @@ class Maho_PageCache_Model_TagIndex
             $this->getRegistry(),
             static fn(string $value): bool => $value !== $tag,
         ));
-        Mage::app()->getCache()->save($registry, self::REGISTRY_KEY, ['PAGE_CACHE']);
+        Mage::app()->getCache()->save($registry, self::REGISTRY_KEY, ['PAGE_CACHE'], self::INDEX_TTL);
+    }
+
+    public function removeUrl(string $tag, string $urlHash): void
+    {
+        $key = $this->key()->getTagKey($tag);
+        $urls = Mage::app()->getCache()->load($key);
+        if (!is_array($urls)) {
+            return;
+        }
+
+        $urls = array_values(array_filter(
+            $urls,
+            static fn(mixed $value): bool => is_string($value) && $value !== $urlHash,
+        ));
+        if ($urls === []) {
+            $this->remove($tag);
+            return;
+        }
+
+        Mage::app()->getCache()->save($urls, $key, ['PAGE_CACHE'], self::INDEX_TTL);
     }
 
     public function flush(): void
     {
         Mage::app()->getCache()->cleanType('page_cache');
+        Mage::app()->getCache()->save([], self::REGISTRY_KEY, ['PAGE_CACHE'], self::INDEX_TTL);
     }
 
     private function register(string $tag): void
@@ -78,7 +100,7 @@ class Maho_PageCache_Model_TagIndex
         $registry = $this->getRegistry();
         if (!in_array($tag, $registry, true)) {
             $registry[] = $tag;
-            Mage::app()->getCache()->save($registry, self::REGISTRY_KEY, ['PAGE_CACHE']);
+            Mage::app()->getCache()->save($registry, self::REGISTRY_KEY, ['PAGE_CACHE'], self::INDEX_TTL);
         }
     }
 

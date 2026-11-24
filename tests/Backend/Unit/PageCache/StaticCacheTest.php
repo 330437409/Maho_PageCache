@@ -111,7 +111,7 @@ it('removes a static file by url', function () {
         ->and(file_exists($path . '.gz'))->toBeFalse();
 });
 
-it('does not remove a static file for a query variant', function () {
+it('removes the default static file for a query variant', function () {
     $cache = Mage::getSingleton('page_cache/staticCache');
     $context = staticCacheContext();
     $path = (string) $cache->getFilePath($context);
@@ -119,7 +119,18 @@ it('does not remove a static file for a query variant', function () {
 
     $cache->removeByUrl('https://example.com/category?p=2', 'default');
 
-    expect(file_exists($path))->toBeTrue();
+    expect(file_exists($path))->toBeFalse();
+});
+
+it('removes a static file for a store-code url', function () {
+    $cache = Mage::getSingleton('page_cache/staticCache');
+    $context = staticCacheContext(['path' => '/default/category', 'public_path' => '/category']);
+    $path = (string) $cache->getFilePath($context);
+    $cache->save($context, '<html>category</html>');
+
+    $cache->removeByUrl('https://example.com/default/category?p=2', 'default');
+
+    expect(file_exists($path))->toBeFalse();
 });
 
 it('does not remove a static file without a store code', function () {
