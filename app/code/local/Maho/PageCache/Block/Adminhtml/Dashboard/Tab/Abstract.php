@@ -22,12 +22,6 @@ abstract class Maho_PageCache_Block_Adminhtml_Dashboard_Tab_Abstract extends Mag
         $this->setEmptyText($this->__('No records found for this period.'));
     }
 
-    #[\Override]
-    public function getRowUrl($row)
-    {
-        return '';
-    }
-
     protected function getDays(): int
     {
         $days = (int) $this->getRequest()->getParam('days', 1);
