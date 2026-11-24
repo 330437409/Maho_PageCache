@@ -73,7 +73,7 @@ Maho 目前有 Symfony Cache 对象缓存（file/redis），但没有内置的 H
 |---|---|---|---|
 | FR-11 | `local` 模式：用 Symfony Cache 在 PHP 内保存整页 HTML，支持 TTL、tag 失效、并发保护和上下文 key | P2 | 已交付@v0.2.0 |
 | FR-12 | 动态块打孔：Ajax 和 ESI 两种注入；动态块白名单；form key 和 SID 处理；首次 POST 建立 session 的行为 | P2 | 已交付@v0.2.0 |
-| FR-13 | 缓存预热：按 sitemap 或 URL 列表预热页面；第二期提供 CLI，后台按钮留到第三期 | P2 | 已交付@v0.2.0 |
+| FR-13 | 缓存预热 CLI：按 sitemap 或 URL 列表手工预热；第二期交付 CLI，不提供独立后台按钮；后台调度配置属于 FR-18 | P2 | 已交付@v0.2.0 |
 
 ### 4.3 第三期（0.3.0 交付静态导出和统计面板，0.4.0 交付定时预热，0.5.0 交付服务器端占位符）
 
@@ -83,7 +83,7 @@ Maho 目前有 Symfony Cache 对象缓存（file/redis），但没有内置的 H
 | FR-15 | 代理模型：product、category、CMS 的懒加载代理，减少动态块渲染成本 | P3 | 计划 |
 | FR-16 | 统计面板：DB 事件表、小时 rollup、后台面板，按路由/store/mode 统计 hit/miss/bypass/revalidated、PHP 耗时、top missed URL 和 flush 记录 | P3 | 已交付@v0.3.0 |
 | FR-17 | 静态文件导出：把匿名默认页的 local HTML 额外写成 path-based `.html`/`.gz`，由 Web 服务器直接返回；公共路径映射；允许参数变体继续走 PHP；严格 session cookie bypass；默认关闭，必须 deny 缓存目录 | P3 | 已交付@v0.3.0 |
-| FR-18 | 定时预热：purge 后 requeue、cron 分批预热、sitemap/URL、并发、限速、basic auth、重试和失败汇总 | P3 | 已交付@v0.4.0 |
+| FR-18 | 定时预热：后台 Warmup 配置组、purge 后 requeue、cron 分批预热、sitemap/URL、并发、限速、basic auth、重试和失败汇总；手工触发仍用 CLI | P3 | 已交付@v0.4.0 |
 | FR-19 | 多节点：purge 广播、Redis 共享版本、静态文件共享存储 | P3 | 计划 |
 | FR-20 | session cookie 安全命中：默认关闭的 opt-in，仅 local 模式对购物车为空、未登录、无消息且渲染不写 session 的匿名请求做短 TTL 缓存；proxy/revalidating 保持 bypass；需 ADR-0019 安全评审 | P2 | 暂停（等待 session 只读 API） |
 
@@ -216,12 +216,14 @@ Maho 目前有 Symfony Cache 对象缓存（file/redis），但没有内置的 H
 
 - 统计表记录 hit/miss/bypass/revalidated、route、store、mode、PHP 耗时、flush/purge/warmup 原因。
 - 小时 rollup 生效，原始数据按保留天数清理。
-- 后台面板 `Reports > Page Cache` 显示 hit rate、PHP 耗时、趋势、top missed URL 和最近 flush，ACL 为 `admin/report/page_cache`。
+- 一级菜单 `Page Cache` 显示 hit rate、PHP 耗时、趋势、top missed URL 和最近 flush，ACL 保留 `admin/report/page_cache`；页面提供 `Warm Now` 和 `Configuration` 按钮。
 - admin 前台请求不记录，避免 secret key 进入统计。
 - 统计写入失败不影响页面响应，不记录完整 query 或 PII。
 
 #### AC-13 定时预热（FR-18）
 
+- 后台 `System > Configuration > Page Cache > Warmup` 提供 `Enable Scheduled Warmup`、并发、批次、延迟、重试、队列上限和 basic auth。
+- 不提供手工预热按钮；手工触发通过 `./maho page-cache:warm`，后台只控制调度和队列参数。
 - tag/URL 失效后，受影响 URL 进入预热队列。
 - cron 按批次和并发消费队列，预热后 local/静态命中。
 - 队列有上限，404/redirect/非 200 跳过，失败按次数重试后移出。

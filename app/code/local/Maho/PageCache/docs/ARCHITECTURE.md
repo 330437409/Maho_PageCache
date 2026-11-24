@@ -253,7 +253,7 @@ local 服务器端占位符：
 - 响应后批量写入，失败只记录日志。
 - admin 前台请求不记录，避免 admin secret key 进入统计；flush/purge/warmup 系统事件不带 admin 路径。
 - `page_cache_stats_rollup` 每小时聚合，`page_cache_stats_cleanup` 每天清理。
-- `Reports > Page Cache` 面板读取原始表或 rollup 表，显示 hit rate、PHP duration、trend、top missed 和最近系统事件。
+- 一级菜单 `Page Cache` 面板读取原始表或 rollup 表，显示 hit rate、PHP duration、trend、top missed 和最近系统事件；`Warm Now` 处理一个预热队列批次。
 - 静态、代理和 CDN 命中不经过 PHP，不计入。
 
 ### 3.10 失效

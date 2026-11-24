@@ -32,6 +32,7 @@ Maho 的 HTTP 页面缓存集成层。第一期支持 `proxy` 和 `revalidating`
 - `docs/specs/page-cache-fr20-session-spike.md`：FR-20 session 命中只读安全 spike。
 - `docs/OPERATIONS.md`：0.5.4 生产观察和监控接入 runbook。
 - `docs/specs/page-cache-monitor-export.md`：0.5.5 监控指标导出规格。
+- `docs/specs/page-cache-admin-menu.md`：0.5.5 Page Cache 一级菜单和 Warm Now 规格。
 - `.claude/rules/`：模块级防漂移规则。
 
 ## 设计来源
@@ -87,7 +88,7 @@ var/page-cache/static/{store_code}/{public_path}.gz
 
 ## 统计面板
 
-`Reports > Page Cache` 显示 PHP 侧 hit rate、平均耗时、trend、top missed URL 和最近 flush/purge/warmup。默认关闭；在 `System > Configuration > Page Cache > Statistics` 开启。
+一级菜单 `Page Cache` 显示 PHP 侧 hit rate、平均耗时、trend、top missed URL 和最近 flush/purge/warmup，并提供 `Warm Now`（一个预热队列批次）和 `Configuration` 按钮。默认关闭；在 `System > Configuration > Page Cache > Statistics` 开启。
 
 - 原始事件保留 30 天，小时 rollup 保留 365 天，均可配置。
 - `page_cache_stats_rollup` 每小时聚合，`page_cache_stats_cleanup` 每天清理。
@@ -134,7 +135,7 @@ local 命中时，显式标记的 leaf block 可以在服务器端重建，不�
 vendor/bin/pest tests/Backend/Unit/PageCache
 ```
 
-当前 198 个测试通过。
+当前 199 个测试通过。
 
 ## 许可证
 

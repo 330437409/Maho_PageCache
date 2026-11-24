@@ -246,7 +246,7 @@ var/page-cache/static/{store_code}/{public_path}.gz
 
 ### 3.8 统计面板
 
-`Reports > Page Cache`，ACL `admin/report/page_cache`。
+一级菜单 `Page Cache`，ACL 保留 `admin/report/page_cache`。页面提供 `Warm Now`（处理一个预热队列批次）和 `Configuration` 按钮。
 
 - 范围：24 小时、7 天、30 天；可按 store 过滤。
 - 指标：hit rate、PHP 平均耗时、miss、bypass、trend、top missed URL、最近 flush/purge/warmup。
@@ -256,7 +256,7 @@ var/page-cache/static/{store_code}/{public_path}.gz
 
 ### 3.9 定时预热
 
-默认关闭。开启 `page_cache/warmup/enabled` 后：
+默认关闭。后台 `Warmup` 配置组只控制调度开关、队列和请求参数，不提供“立即预热”按钮；立即预热使用 `./maho page-cache:warm`。开启 `page_cache/warmup/enabled` 后：
 
 - tag 失效把受影响 URL 写入 `page_cache_warmup_queue`，按 URL sha256 去重。
 - `page_cache_warmup` cron 每分钟消费，批次大小、并发、间隔、重试和队列上限见配置。

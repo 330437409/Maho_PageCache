@@ -44,7 +44,7 @@ grep -i page_cache var/log/exception.log | tail -n 50
 
 ### 2.3 统计面板
 
-后台 `Reports > Page Cache`，记录：
+后台一级菜单 `Page Cache`，记录：
 
 - hit rate
 - hit / miss / bypass / revalidated

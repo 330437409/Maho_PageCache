@@ -18,18 +18,54 @@ class Maho_PageCache_Adminhtml_PageCacheController extends Mage_Adminhtml_Contro
     public function statsAction(): void
     {
         $this->_initAction();
-        $this->_addContent($this->getLayout()->createBlock('page_cache/adminhtml_stats'));
+        $this->_addContent($this->getLayout()->createBlock('page_cache/adminhtml_dashboard'));
         $this->renderLayout();
+    }
+
+    #[\Maho\Config\Route('/admin/page_cache/warm', methods: ['POST'])]
+    public function warmAction(): void
+    {
+        $helper = Mage::helper('page_cache');
+        try {
+            if (!$helper->getWarmupEnabled()) {
+                Mage::getSingleton('adminhtml/session')->addNotice(
+                    $helper->__('Scheduled warmup is disabled. Enable it before warming the queue.'),
+                );
+            } else {
+                $summary = Mage::getService('page_cache/warm')->consumeQueue($helper->getWarmupBatchSize());
+                if ($summary['processed'] === 0) {
+                    $message = $summary['remaining'] > 0
+                        ? $helper->__('No URLs are due now. %d URL(s) remain in the warmup queue.', $summary['remaining'])
+                        : $helper->__('The warmup queue is empty.');
+                    Mage::getSingleton('adminhtml/session')->addNotice($message);
+                } else {
+                    Mage::getSingleton('adminhtml/session')->addSuccess(
+                        $helper->__(
+                            'Processed %d URL(s): warmed=%d skipped=%d failed=%d dropped=%d remaining=%d.',
+                            $summary['processed'],
+                            $summary['warmed'],
+                            $summary['skipped'],
+                            $summary['failed'],
+                            $summary['dropped'],
+                            $summary['remaining'],
+                        ),
+                    );
+                }
+            }
+        } catch (\Throwable $e) {
+            Mage::logException($e);
+            Mage::getSingleton('adminhtml/session')->addError(
+                $helper->__('Warmup failed. Check the logs and try again.'),
+            );
+        }
+
+        $this->_redirect('*/*/stats');
     }
 
     protected function _initAction(): static
     {
         $this->loadLayout()
-            ->_setActiveMenu('report/page_cache')
-            ->_addBreadcrumb(
-                Mage::helper('page_cache')->__('Reports'),
-                Mage::helper('page_cache')->__('Reports'),
-            )
+            ->_setActiveMenu('page_cache')
             ->_addBreadcrumb(
                 Mage::helper('page_cache')->__('Page Cache'),
                 Mage::helper('page_cache')->__('Page Cache'),

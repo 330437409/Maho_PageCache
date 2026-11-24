@@ -1,6 +1,6 @@
 # 功能规格：监控指标导出
 
-> 状态：实现完成，待跨库 CI 和发版 0.5.5
+> 状态：实现完成，待发版 0.5.5
 > 关联 ADR：ADR-0017
 > 分支：`feat/page-cache-phase2`
 
@@ -43,4 +43,4 @@ CLI：
 - 测试：`MonitorTest`。
 - 测试结果：198 passed（562 assertions）。
 - 实机：`page-cache:monitor --format=text`、`--format=json`、`--format=prometheus` 和 `--check` 已验证。
-- 交叉验证待补：SQLite 已通过；PostgreSQL、MySQL 待模块 CI。
+- 交叉验证：模块 CI run 45366567751 在 SQLite、MySQL、PostgreSQL 三个任务上全部通过（2026-11-24）。
