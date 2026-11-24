@@ -19,6 +19,10 @@ class ProxyModelFixture
     /** @var list<int> */
     public static array $storeIds = [];
 
+    public static int $categoryId = 0;
+    public static int $cmsPageId = 0;
+    public static int $cmsBlockId = 0;
+
     /**
      * @return list<int>
      */
@@ -35,7 +39,7 @@ class ProxyModelFixture
                 ->setStatus(Mage_Catalog_Model_Product_Status::STATUS_ENABLED)
                 ->setVisibility(Mage_Catalog_Model_Product_Visibility::VISIBILITY_BOTH)
                 ->setTypeId(Mage_Catalog_Model_Product_Type::TYPE_SIMPLE)
-                ->setAttributeSetId(4)
+                ->setAttributeSetId((int) $product->getDefaultAttributeSetId())
                 ->setWebsiteIds([1])
                 ->setStockData([
                     'use_config_manage_stock' => 0,
@@ -50,6 +54,61 @@ class ProxyModelFixture
         }
 
         return $ids;
+    }
+
+    public static function createCategory(): int
+    {
+        $parent = Mage::getModel('catalog/category')->load(2);
+        if (!$parent->getId()) {
+            $parent = Mage::getModel('catalog/category')->getCollection()
+                ->addAttributeToSelect('name')
+                ->addFieldToFilter('level', 1)
+                ->setPageSize(1)
+                ->getFirstItem();
+        }
+
+        $category = Mage::getModel('catalog/category');
+        $category->setStoreId(0)
+            ->setName('Proxy Model Category ' . uniqid())
+            ->setPath($parent->getPath())
+            ->setParentId((int) $parent->getId())
+            ->setIsActive(1)
+            ->setAttributeSetId((int) $category->getDefaultAttributeSetId())
+            ->save();
+        self::$categoryId = (int) $category->getId();
+
+        return self::$categoryId;
+    }
+
+    public static function createCmsPage(): int
+    {
+        $page = Mage::getModel('cms/page');
+        $page->setData([
+            'identifier' => 'proxy-model-page-' . uniqid(),
+            'title' => 'Proxy Model Page',
+            'content' => '<p>proxy model page</p>',
+            'root_template' => 'one_column',
+            'is_active' => 1,
+            'stores' => [0],
+        ])->save();
+        self::$cmsPageId = (int) $page->getId();
+
+        return self::$cmsPageId;
+    }
+
+    public static function createCmsBlock(): int
+    {
+        $block = Mage::getModel('cms/block');
+        $block->setData([
+            'identifier' => 'proxy-model-block-' . uniqid(),
+            'title' => 'Proxy Model Block',
+            'content' => '<p>proxy model block</p>',
+            'is_active' => 1,
+            'stores' => [0],
+        ])->save();
+        self::$cmsBlockId = (int) $block->getId();
+
+        return self::$cmsBlockId;
     }
 
     public static function createStore(): int
@@ -84,6 +143,30 @@ class ProxyModelFixture
             }
         }
         self::$storeIds = [];
+
+        if (self::$cmsBlockId > 0) {
+            try {
+                Mage::getModel('cms/block')->load(self::$cmsBlockId)->delete();
+            } catch (\Throwable) {
+            }
+        }
+        self::$cmsBlockId = 0;
+
+        if (self::$cmsPageId > 0) {
+            try {
+                Mage::getModel('cms/page')->load(self::$cmsPageId)->delete();
+            } catch (\Throwable) {
+            }
+        }
+        self::$cmsPageId = 0;
+
+        if (self::$categoryId > 0) {
+            try {
+                Mage::getModel('catalog/category')->load(self::$categoryId)->delete();
+            } catch (\Throwable) {
+            }
+        }
+        self::$categoryId = 0;
     }
 }
 
@@ -147,28 +230,17 @@ function proxyModelQueryCount(callable $operation): int
 
 function proxyModelCategoryId(): int
 {
-    return (int) Mage::getModel('catalog/category')->getCollection()
-        ->addAttributeToSelect('name')
-        ->addFieldToFilter('level', ['gt' => 1])
-        ->setPageSize(1)
-        ->getFirstItem()
-        ->getId();
+    return ProxyModelFixture::$categoryId;
 }
 
 function proxyModelCmsPageId(): int
 {
-    return (int) Mage::getModel('cms/page')->getCollection()
-        ->setPageSize(1)
-        ->getFirstItem()
-        ->getId();
+    return ProxyModelFixture::$cmsPageId;
 }
 
 function proxyModelCmsBlockId(): int
 {
-    return (int) Mage::getModel('cms/block')->getCollection()
-        ->setPageSize(1)
-        ->getFirstItem()
-        ->getId();
+    return ProxyModelFixture::$cmsBlockId;
 }
 
 function proxyModelResetRegistries(): void
@@ -196,6 +268,9 @@ beforeEach(function () {
     proxyModelResetRegistries();
 
     ProxyModelFixture::createProducts(3);
+    ProxyModelFixture::createCategory();
+    ProxyModelFixture::createCmsPage();
+    ProxyModelFixture::createCmsBlock();
 });
 
 afterEach(function () {
@@ -245,6 +320,23 @@ it('returns loaded models for a batch', function () {
         expect((int) $result[$id]->getId())->toBe($id)
             ->and($result[$id]->getName())->toStartWith('Proxy Model Product');
     }
+});
+
+it('loads categories, CMS pages and CMS blocks in batches', function () {
+    $proxy = Mage::getService('page_cache/proxy');
+    $categoryId = proxyModelCategoryId();
+    $pageId = proxyModelCmsPageId();
+    $blockId = proxyModelCmsBlockId();
+
+    expect($proxy->getCategory($categoryId))->toBeInstanceOf(Mage_Catalog_Model_Category::class)
+        ->and((int) $proxy->getCategory($categoryId)->getId())->toBe($categoryId)
+        ->and($proxy->getCmsPage($pageId))->toBeInstanceOf(Mage_Cms_Model_Page::class)
+        ->and((int) $proxy->getCmsPage($pageId)->getId())->toBe($pageId)
+        ->and($proxy->getCmsBlock($blockId))->toBeInstanceOf(Mage_Cms_Model_Block::class)
+        ->and((int) $proxy->getCmsBlock($blockId)->getId())->toBe($blockId)
+        ->and($proxy->getCategories([$categoryId]))->toHaveKey($categoryId)
+        ->and($proxy->getCmsPages([$pageId]))->toHaveKey($pageId)
+        ->and($proxy->getCmsBlocks([$blockId]))->toHaveKey($blockId);
 });
 
 it('returns null for a missing entity and remembers the miss', function () {

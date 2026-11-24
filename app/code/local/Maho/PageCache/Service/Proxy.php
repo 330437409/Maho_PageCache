@@ -436,7 +436,7 @@ class Maho_PageCache_Service_Proxy
     private function loadCmsPages(array $ids, int $storeId): array
     {
         $collection = Mage::getModel('cms/page')->getCollection()
-            ->addFieldToFilter('page_id', ['in' => $ids])
+            ->addFieldToFilter('main_table.page_id', ['in' => $ids])
             ->addStoreFilter($storeId);
         $collection->load();
 
@@ -458,7 +458,7 @@ class Maho_PageCache_Service_Proxy
     private function loadCmsBlocks(array $ids, int $storeId): array
     {
         $collection = Mage::getModel('cms/block')->getCollection()
-            ->addFieldToFilter('block_id', ['in' => $ids])
+            ->addFieldToFilter('main_table.block_id', ['in' => $ids])
             ->addStoreFilter($storeId);
         $collection->load();
 

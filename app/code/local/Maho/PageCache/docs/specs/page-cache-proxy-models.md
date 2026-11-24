@@ -116,8 +116,8 @@ $proxy->preload([
 
 - product：`catalog/product` collection，`addIdFilter()`、`addStoreFilter()`、`addAttributeToSelect('*')`、`addUrlRewrite()`、`addCategoryIds()`。
 - category：`catalog/category` collection，`addIdFilter()`、`addAttributeToSelect('*')`、`addUrlRewriteToResult()`；store 由 collection 的当前 store 决定。
-- cms page：`cms/page` collection，`page_id in (...)`、`addStoreFilter($storeId)`，包含 store 0 的全局页面。
-- cms block：`cms/block` collection，`block_id in (...)`、`addStoreFilter($storeId)`，包含 store 0 的全局 block。
+- cms page：`cms/page` collection，`main_table.page_id in (...)`、`addStoreFilter($storeId)`，包含 store 0 的全局页面。
+- cms block：`cms/block` collection，`main_table.block_id in (...)`、`addStoreFilter($storeId)`，包含 store 0 的全局 block；过滤列必须带表名，避免和 store 表的同名列冲突。
 
 加载后把每个 item 放入 map，并收集 `getCacheTags()`。`addCategoryIds()` 和 URL rewrite 的 join 属于固定附加查询，不随实体数量增长。
 
@@ -238,7 +238,7 @@ $cmsPage = $proxy->getCmsPage();
 
 - 代码：`Service/Proxy.php`、`Model/HtmlCache.php`、`Model/Observer.php`、`Service/Dynamic.php`、`etc/config.xml`。
 - ADR：`docs/adr/0020-request-scoped-proxy-models.md`。
-- 测试：`tests/Backend/Unit/PageCache/ProxyModelTest.php` 新增 12 个用例；PageCache 套件 213 passed（615 assertions）。
+- 测试：`tests/Backend/Unit/PageCache/ProxyModelTest.php` 新增 13 个用例；PageCache 套件 214 passed（624 assertions）。测试自建商品、分类、CMS page、CMS block 和 store view，不依赖 sample data。
 - 静态检查：PHPStan、php-cs-fixer、Rector 通过。
 - 实机（SQLite，local 模式）：
   - CMS 页面挂两个 `core/template` 服务器端动态块，声明 `page_cache_proxies="product:1"`。
