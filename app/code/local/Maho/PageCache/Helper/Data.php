@@ -21,6 +21,7 @@ class Maho_PageCache_Helper_Data extends Mage_Core_Helper_Abstract
     public const XML_PATH_RESPECT_NO_CACHE = 'page_cache/general/respect_no_cache';
     public const XML_PATH_DEBUG_HEADERS = 'page_cache/general/debug_headers';
     public const XML_PATH_PROXY_CONTEXT_MODE = 'page_cache/proxy/context_mode';
+    public const XML_PATH_STOCK_PENDING_WARN_AGE = 'page_cache/general/stock_pending_warn_age';
     public const XML_PATH_HTML_MAX_SIZE = 'page_cache/general/html_max_size';
     public const XML_PATH_DYNAMIC_INJECTION = 'page_cache/dynamic/injection';
     public const XML_PATH_DYNAMIC_TTL = 'page_cache/dynamic/ttl';
@@ -107,6 +108,11 @@ class Maho_PageCache_Helper_Data extends Mage_Core_Helper_Abstract
     public function isDebugHeaders(): bool
     {
         return Mage::getStoreConfigFlag(self::XML_PATH_DEBUG_HEADERS);
+    }
+
+    public function getStockPendingWarnAge(): int
+    {
+        return max(0, (int) Mage::getStoreConfig(self::XML_PATH_STOCK_PENDING_WARN_AGE));
     }
 
     public function getProxyContextMode(): string

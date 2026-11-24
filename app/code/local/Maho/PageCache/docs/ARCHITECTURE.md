@@ -263,7 +263,7 @@ local 服务器端占位符：
 - 通用 observer 监听 `model_save_commit_after` 和 `model_delete_commit_after`。
 - 读取 `getCacheIdTags()`；product 使用 `getCacheIdTagsWithCategories()` 追加分类 tag。
 - 用原生实体 tag 清理相关页面，并从 URL 索引删除对应 URL。
-- stock item 保存时，只有 `is_in_stock` 变化或库存状态自动变化才失效，qty-only 更新不清理页面；可配置子商品同时失效父商品。保存后把 product ID 写入 `page_cache_stock_pending`，`end_process_event_cataloginventory_stock_item_save`、`end_index_events_cataloginventory_stock_item_save`、`after_reindex_process_cataloginventory_stock` 或 `end_index_events_catalog_product_mass_action` 时再次失效并清空 pending，覆盖同步和异步索引。
+- stock item 保存时，只有 `is_in_stock` 变化或库存状态自动变化才失效，qty-only 更新不清理页面；可配置子商品同时失效父商品。保存后把 product ID 写入 `page_cache_stock_pending`，`end_process_event_cataloginventory_stock_item_save`、`end_index_events_cataloginventory_stock_item_save`、`after_reindex_process_cataloginventory_stock` 或 `end_index_events_catalog_product_mass_action` 时再次失效并清空 pending，覆盖同步和异步索引。`page_cache_stock_pending_alert` cron 每小时检查最老 pending 年龄，超过 `page_cache/general/stock_pending_warn_age` 时写 `page-cache-stock.log`；`page-cache:status` 显示 pending 数量和 oldest 年龄。
 - `catalog_product_attribute_update_after` 批量属性更新按 product tag 失效；超过 30 个商品时回退全量失效，避免管理请求过慢。
 - `catalog_product_import_finish_before` 读取导入 adapter 的 affected product IDs，导入结束后统一失效；超过 30 个商品时回退全量失效。
 

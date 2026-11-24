@@ -2,6 +2,13 @@
 
 All notable changes to `Maho_PageCache` are recorded here.
 
+## Unreleased
+
+### Added
+
+- `page_cache/general/stock_pending_warn_age`, default 3600 seconds, controls when the hourly `page_cache_stock_pending_alert` cron logs a warning for stale pending stock invalidations.
+- `page-cache:status` reports the pending stock count, the oldest age and a warning when the threshold is crossed.
+
 ## 0.5.3 (2026-11-24)
 
 ### Added

@@ -122,3 +122,5 @@
 "Maximum dynamic block requests per client in the window. 0 disables the limit.","Maximum dynamic block requests per client in the window. 0 disables the limit."
 "Dynamic Request Window (seconds)","Dynamic Request Window (seconds)"
 "Window for the dynamic request limit. Default is 60 seconds.","Window for the dynamic request limit. Default is 60 seconds."
+"Stock Pending Warning (seconds)","Stock Pending Warning (seconds)"
+"The hourly cron logs a warning when the oldest pending stock invalidation is older than this. 0 disables the warning.","The hourly cron logs a warning when the oldest pending stock invalidation is older than this. 0 disables the warning."
