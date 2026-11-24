@@ -1,6 +1,6 @@
 # 功能规格：P1 剩余正确性项
 
-> 状态：实现完成，待跨库 CI 和发版 0.5.3
+> 状态：实现完成，待发版 0.5.3
 > 关联 ADR：ADR-0008、ADR-0017
 > 分支：`feat/page-cache-phase2`
 
@@ -38,7 +38,7 @@
 
 - 表 `page_cache_stock_pending(product_id PK, created_at)`。
 - stock item 状态变化时 upsert product ID。
-- `end_process_event_cataloginventory_stock_item_save` 和 `end_index_events_cataloginventory_stock_item_save` 读取 pending，调用 `invalidateProductIds()`，成功后清空对应行。
+- `end_process_event_cataloginventory_stock_item_save`、`end_index_events_cataloginventory_stock_item_save`、`after_reindex_process_cataloginventory_stock` 和 `end_index_events_catalog_product_mass_action` 读取 pending，调用 `invalidateProductIds()`，成功后清空对应行。
 - DB 写失败时回退进程内 registry，至少同一请求能 flush。
 
 ## 3. 验收标准
@@ -48,7 +48,7 @@
 - 超过 dynamic 限流返回 429 和 `Retry-After`，不注册 dynamic request。
 - static 文档和示例包含 `___store` 回 PHP。
 - proxy 遇到 context variant bypass；local 的 variant 进入 context key。
-- stock 保存写 pending 表；index end 后二次失效并清空表。
+- stock 保存写 pending 表；实时事件、manual 完整重索引和 mass-action end 后二次失效并清空表。
 - 现有测试、PHPStan、php-cs-fixer、Rector 通过。
 - SQLite、MySQL、PostgreSQL 建表和相关测试通过。
 
@@ -57,4 +57,4 @@
 - 代码：`Model/Context.php`、`Service/Dynamic.php`、`Service/Request.php`、`Model/Observer.php`、`Helper/Data.php`、`etc/config.xml`、`etc/system.xml`、`sql/schema.php`。
 - 测试：`DynamicBlockTest`、`ProxyContextTest`、`ObserverTest`、`ContextTest`。
 - 测试结果：191 passed（531 assertions）。
-- 交叉验证待补：SQLite 已通过；PostgreSQL、MySQL 待模块 CI。
+- 交叉验证：模块 CI run 45358076133 在 SQLite、MySQL、PostgreSQL 三个任务上全部通过（2026-11-24）。

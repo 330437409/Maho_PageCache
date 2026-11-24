@@ -280,6 +280,7 @@ Enabled: yes
 TTL: 3600
 Global version: 12
 Purge queue: 3
+Stock pending: 0
 Warmup: enabled, queue=12
 Last warmup: warmed=8 skipped=2 failed=1 dropped=0 remaining=12 at 2026-11-24 02:10:00
 PHP counters (today): hit=300 miss=120 bypass=45 revalidated=80

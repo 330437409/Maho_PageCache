@@ -747,6 +747,8 @@ class Maho_PageCache_Model_Observer
 
     #[\Maho\Config\Observer('end_process_event_cataloginventory_stock_item_save')]
     #[\Maho\Config\Observer('end_index_events_cataloginventory_stock_item_save')]
+    #[\Maho\Config\Observer('after_reindex_process_cataloginventory_stock')]
+    #[\Maho\Config\Observer('end_index_events_catalog_product_mass_action')]
     public function flushPendingStockInvalidation(Maho\Event\Observer $observer): void
     {
         $productIds = Mage::registry('page_cache_stock_pending');

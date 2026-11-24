@@ -22,7 +22,7 @@ ADR-0008 用 `Vary: Cookie` 作为 proxy/revalidating 的隔离契约，`X-Maho-
 - dynamic 请求只允许 GET 和 `cacheable_routes` 中的路由；dynamic 响应不缓存，因此跳过 session cookie、`Cache-Control: no-cache` 和 AJAX 排除。
 - `catalogrule_after_apply` 在索引刷新后按 `product` 或 `affected_product` 再次失效。
 - `catalog_product_import_finish_before` 按 adapter 的 affected product IDs 统一失效。
-- stock item 保存后把 product ID 写入 `page_cache_stock_pending`，在 `end_process_event_cataloginventory_stock_item_save` 或 `end_index_events_cataloginventory_stock_item_save` 时再次失效并清空。
+- stock item 保存后把 product ID 写入 `page_cache_stock_pending`，在实时 end 事件、`after_reindex_process_cataloginventory_stock` 或 `end_index_events_catalog_product_mass_action` 时再次失效并清空。
 - dynamic token 的过期时间跟随页面 TTL，URL 使用 store base URL 的 scheme/host。
 - dynamic 请求按客户端限流，超限返回 429。
 - 移动主题、A-B、geo-IP 通过 `page_cache_context_variant` 进入 local context；proxy 遇到非空 variant 时 bypass。
