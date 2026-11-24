@@ -45,6 +45,22 @@ class Maho_PageCache_Model_Observer
                     Mage::register('page_cache_bypass_reason', $reason);
                     return;
                 }
+
+                $helper = Mage::helper('page_cache');
+                $limit = $helper->getDynamicRateLimit();
+                if ($limit > 0) {
+                    $window = $helper->getDynamicRateLimitWindow();
+                    $limiter = Mage::helper('core')->rateLimiter('page_cache_dynamic', $limit, $window);
+                    if (!$limiter->attempt()) {
+                        Mage::register('page_cache_bypass_reason', 'rate_limit');
+                        $response = Mage::app()->getResponse();
+                        $response->setHttpResponseCode(429);
+                        $response->setHeader('Retry-After', (string) $window, true);
+                        $controller->setFlag('', Mage_Core_Controller_Varien_Action::FLAG_NO_DISPATCH, true);
+                        return;
+                    }
+                }
+
                 Mage::register('page_cache_dynamic_request', true);
                 try {
                     Mage::register(
@@ -345,6 +361,7 @@ class Maho_PageCache_Model_Observer
                 Mage::getService('page_cache/dynamic')->getPlaceholder(
                     $name,
                     Mage::getModel('page_cache/context'),
+                    Mage::helper('page_cache')->getTtl(),
                 ),
             );
         } catch (\Throwable $e) {
@@ -734,12 +751,33 @@ class Maho_PageCache_Model_Observer
     {
         $productIds = Mage::registry('page_cache_stock_pending');
         Mage::unregister('page_cache_stock_pending');
-        if (!is_array($productIds) || $productIds === []) {
+        $productIds = is_array($productIds) ? $productIds : [];
+
+        try {
+            $read = Mage::getSingleton('core/resource')->getConnection('core_read');
+            $rows = $read->fetchCol(
+                $read->select()->from($this->stockPendingTable(), ['product_id']),
+            );
+            $productIds = array_merge($productIds, is_array($rows) ? $rows : []);
+        } catch (\Throwable $e) {
+            Mage::logException($e);
+        }
+
+        $productIds = array_values(array_unique(array_filter(
+            array_map(intval(...), $productIds),
+            static fn(int $productId): bool => $productId > 0,
+        )));
+        if ($productIds === []) {
             return;
         }
 
         try {
             Mage::getService('page_cache/invalidator')->invalidateProductIds($productIds);
+            $write = Mage::getSingleton('core/resource')->getConnection('core_write');
+            $write->delete(
+                $this->stockPendingTable(),
+                $write->quoteInto('product_id IN (?)', $productIds),
+            );
         } catch (\Throwable $e) {
             Mage::logException($e);
             $this->invalidateAll('stock_index');
@@ -925,10 +963,25 @@ class Maho_PageCache_Model_Observer
         if ($productId <= 0) {
             return;
         }
-        $productIds = Mage::registry('page_cache_stock_pending');
-        $productIds = is_array($productIds) ? $productIds : [];
-        $productIds[$productId] = $productId;
-        Mage::register('page_cache_stock_pending', array_values($productIds));
+
+        try {
+            $write = Mage::getSingleton('core/resource')->getConnection('core_write');
+            $write->insertOnDuplicate($this->stockPendingTable(), [
+                'product_id' => $productId,
+                'created_at' => gmdate('Y-m-d H:i:s'),
+            ], ['created_at']);
+        } catch (\Throwable $e) {
+            Mage::logException($e);
+            $productIds = Mage::registry('page_cache_stock_pending');
+            $productIds = is_array($productIds) ? $productIds : [];
+            $productIds[$productId] = $productId;
+            Mage::register('page_cache_stock_pending', array_values($productIds));
+        }
+    }
+
+    private function stockPendingTable(): string
+    {
+        return Mage::getSingleton('core/resource')->getTableName('page_cache/stock_pending');
     }
 
     private function invalidateObject(mixed $object): void

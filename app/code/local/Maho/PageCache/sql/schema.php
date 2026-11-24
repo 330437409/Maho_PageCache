@@ -151,4 +151,16 @@ return function (SchemaEditor $schema): void {
             ->setComment('Page Cache Static File Index')
             ->create(),
     );
+
+    $schema->addTable(
+        Table::editor()
+            ->setUnquotedName('page_cache_stock_pending')
+            ->addColumn(Schema::column('product_id', Types::INTEGER, unsigned: true))
+            ->addColumn(Schema::column('created_at', Types::DATETIME_IMMUTABLE))
+            ->addPrimaryKeyConstraint(
+                PrimaryKeyConstraint::editor()->setUnquotedColumnNames('product_id')->create(),
+            )
+            ->setComment('Page Cache Pending Stock Invalidation')
+            ->create(),
+    );
 };

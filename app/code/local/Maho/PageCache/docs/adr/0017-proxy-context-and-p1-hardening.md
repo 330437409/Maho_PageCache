@@ -22,7 +22,10 @@ ADR-0008 用 `Vary: Cookie` 作为 proxy/revalidating 的隔离契约，`X-Maho-
 - dynamic 请求只允许 GET 和 `cacheable_routes` 中的路由；dynamic 响应不缓存，因此跳过 session cookie、`Cache-Control: no-cache` 和 AJAX 排除。
 - `catalogrule_after_apply` 在索引刷新后按 `product` 或 `affected_product` 再次失效。
 - `catalog_product_import_finish_before` 按 adapter 的 affected product IDs 统一失效。
-- stock item 保存后记录 product ID，在 `end_process_event_cataloginventory_stock_item_save` 或 `end_index_events_cataloginventory_stock_item_save` 时再次失效。
+- stock item 保存后把 product ID 写入 `page_cache_stock_pending`，在 `end_process_event_cataloginventory_stock_item_save` 或 `end_index_events_cataloginventory_stock_item_save` 时再次失效并清空。
+- dynamic token 的过期时间跟随页面 TTL，URL 使用 store base URL 的 scheme/host。
+- dynamic 请求按客户端限流，超限返回 429。
+- 移动主题、A-B、geo-IP 通过 `page_cache_context_variant` 进入 local context；proxy 遇到非空 variant 时 bypass。
 - 受影响商品超过 30 个时沿用全量失效。
 
 ## 理由
@@ -35,7 +38,7 @@ ADR-0008 用 `Vary: Cookie` 作为 proxy/revalidating 的隔离契约，`X-Maho-
 
 - 默认 `cookie` 不改变现有 proxy 行为。
 - `default` 会降低多 store 命中率，只用于 URL-only 代理。
-- stock index 事件由 Maho 索引器触发；manual/异步索引仍需要持久化 pending 队列，当前版本只覆盖实时索引。
+- stock index 事件由 Maho 索引器触发；pending 表现在跨请求保留，manual/异步索引也会在 end 事件清空。
 
 ## 备选方案
 

@@ -8,13 +8,18 @@ All notable changes to `Maho_PageCache` are recorded here.
 
 - `page_cache/proxy/context_mode` with `cookie` (default) and `default` for URL-only proxies.
 - `page_cache_static_file` table that tracks static exports and their expiry for indexed cleanup.
+- `page_cache_stock_pending` table that carries stock invalidations across asynchronous index runs.
+- `page_cache/dynamic/rate_limit` and `rate_limit_window` settings; dynamic requests over the limit answer 429.
+- `page_cache_context_variant` registry hook for mobile theme, A/B and geo-IP modules; local mode partitions the cache and proxy mode bypasses.
 
 ### Changed
 
+- Dynamic tokens use the store base URL scheme and host, and expire no earlier than the page TTL plus 300 seconds.
 - Local HTML entries larger than 4 KB are stored gzip-compressed and decompressed on a local hit.
 - PHP-side counters read from the statistics table instead of a cache load and save on every hit; statistics must be enabled, and `page-cache:status` reports counters as unavailable otherwise.
 - Purge queue entries live for 24 hours and the queue index for 25 hours, so the index cannot expire before its entries.
 - Static cleanup deletes files from the static file index and falls back to a directory scan only when the index is empty.
+- The static export contract now requires `___store` cookies to return to PHP, and the nginx and Caddy examples include that rule.
 
 ### Fixed
 
@@ -40,10 +45,12 @@ All notable changes to `Maho_PageCache` are recorded here.
 
 ### Changed
 
+- Dynamic tokens use the store base URL scheme and host, and expire no earlier than the page TTL plus 300 seconds.
 - Local HTML entries larger than 4 KB are stored gzip-compressed and decompressed on a local hit.
 - PHP-side counters read from the statistics table instead of a cache load and save on every hit; statistics must be enabled, and `page-cache:status` reports counters as unavailable otherwise.
 - Purge queue entries live for 24 hours and the queue index for 25 hours, so the index cannot expire before its entries.
 - Static cleanup deletes files from the static file index and falls back to a directory scan only when the index is empty.
+- The static export contract now requires `___store` cookies to return to PHP, and the nginx and Caddy examples include that rule.
 
 ### Fixed
 
@@ -110,10 +117,12 @@ All notable changes to `Maho_PageCache` are recorded here.
 
 ### Changed
 
+- Dynamic tokens use the store base URL scheme and host, and expire no earlier than the page TTL plus 300 seconds.
 - Local HTML entries larger than 4 KB are stored gzip-compressed and decompressed on a local hit.
 - PHP-side counters read from the statistics table instead of a cache load and save on every hit; statistics must be enabled, and `page-cache:status` reports counters as unavailable otherwise.
 - Purge queue entries live for 24 hours and the queue index for 25 hours, so the index cannot expire before its entries.
 - Static cleanup deletes files from the static file index and falls back to a directory scan only when the index is empty.
+- The static export contract now requires `___store` cookies to return to PHP, and the nginx and Caddy examples include that rule.
 
 ### Fixed
 

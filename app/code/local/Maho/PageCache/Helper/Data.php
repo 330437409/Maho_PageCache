@@ -26,6 +26,8 @@ class Maho_PageCache_Helper_Data extends Mage_Core_Helper_Abstract
     public const XML_PATH_DYNAMIC_TTL = 'page_cache/dynamic/ttl';
     public const XML_PATH_DYNAMIC_SERVER_SIDE = 'page_cache/dynamic/server_side';
     public const XML_PATH_DYNAMIC_SERVER_TYPES = 'page_cache/dynamic/server_types';
+    public const XML_PATH_DYNAMIC_RATE_LIMIT = 'page_cache/dynamic/rate_limit';
+    public const XML_PATH_DYNAMIC_RATE_LIMIT_WINDOW = 'page_cache/dynamic/rate_limit_window';
     public const XML_PATH_WARMUP_ENABLED = 'page_cache/warmup/enabled';
     public const XML_PATH_WARMUP_CONCURRENCY = 'page_cache/warmup/concurrency';
     public const XML_PATH_WARMUP_BATCH_SIZE = 'page_cache/warmup/batch_size';
@@ -132,6 +134,17 @@ class Maho_PageCache_Helper_Data extends Mage_Core_Helper_Abstract
     public function getDynamicServerSide(): bool
     {
         return Mage::getStoreConfigFlag(self::XML_PATH_DYNAMIC_SERVER_SIDE);
+    }
+
+    public function getDynamicRateLimit(): int
+    {
+        return max(0, (int) Mage::getStoreConfig(self::XML_PATH_DYNAMIC_RATE_LIMIT));
+    }
+
+    public function getDynamicRateLimitWindow(): int
+    {
+        $window = (int) Mage::getStoreConfig(self::XML_PATH_DYNAMIC_RATE_LIMIT_WINDOW);
+        return $window > 0 ? $window : 60;
     }
 
     /**

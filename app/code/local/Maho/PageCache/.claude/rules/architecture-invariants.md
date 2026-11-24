@@ -14,6 +14,10 @@
 - 缓存 key 和 purge 文件不使用邮箱、姓名、地址等 PII，只使用 hash 和 tag。
 - URL 索引查询失败、规则计算失败或异常时，回退全量失效；宁可多清，不可漏清。
 - proxy 默认按 `Vary: Cookie` 隔离；`context_mode=default` 时，带 `___store` cookie 的请求必须 bypass。
+- 移动主题、A-B、geo-IP 等变体必须写入 `page_cache_context_variant`；proxy 遇到非空 variant 必须 bypass。
+- dynamic token 的 URL 使用 store base URL 的 scheme/host，过期时间不短于页面 TTL。
+- dynamic 请求必须按客户端限流；超限返回 429，不注册 dynamic request。
+- stock 二次失效的 pending ID 必须持久化到 `page_cache_stock_pending`，不能只放进程内 registry。
 - catalog rule、import 和 stock 的失效必须发生在对应索引或导入完成之后。
 - 全量失效递增全局版本；tag 失效递增相关 URL 版本。
 - PHP 计数从统计表读取，不在命中热路径读写 cache。

@@ -118,3 +118,7 @@
 "Cookie (proxy honors Vary: Cookie)","Cookie (proxy honors Vary: Cookie)"
 "Default context only (URL-only proxy)","Default context only (URL-only proxy)"
 "Cookie works when the proxy honors Vary: Cookie. Default context only is a fallback for URL-only proxies; requests that switch store with a cookie then bypass.","Cookie works when the proxy honors Vary: Cookie. Default context only is a fallback for URL-only proxies; requests that switch store with a cookie then bypass."
+"Dynamic Request Limit","Dynamic Request Limit"
+"Maximum dynamic block requests per client in the window. 0 disables the limit.","Maximum dynamic block requests per client in the window. 0 disables the limit."
+"Dynamic Request Window (seconds)","Dynamic Request Window (seconds)"
+"Window for the dynamic request limit. Default is 60 seconds.","Window for the dynamic request limit. Default is 60 seconds."

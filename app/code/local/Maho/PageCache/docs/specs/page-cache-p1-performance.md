@@ -1,6 +1,6 @@
 # 功能规格：P1 缓存性能
 
-> 状态：实现完成，待跨库 CI 和发版 0.5.3
+> 状态：实现完成，待发版 0.5.3
 > 关联 ADR：ADR-0018
 > 分支：`feat/page-cache-phase2`
 
@@ -53,6 +53,6 @@
 
 - 代码：`Model/PurgeQueue.php`、`Model/Counter.php`、`Model/Stat.php`、`Model/StaticCache.php`、`Model/HtmlCache.php`、`Model/Key.php`、`sql/schema.php`、`etc/config.xml`、`lib/MahoCLI/Commands/PageCacheStatus.php`。
 - 测试：`CounterTest`、`LocalCacheTest`、`StaticCacheTest`、`PurgeQueueTest`。
-- 测试结果：187 passed（520 assertions）。
+- 测试结果：191 passed（531 assertions）。
 - PHPStan、php-cs-fixer、Rector 通过。
-- 交叉验证待补：SQLite 已通过；PostgreSQL、MySQL 待模块 CI。
+- 交叉验证：模块 CI run 45356300789 在 SQLite、MySQL、PostgreSQL 三个任务上全部通过（2026-11-24）。

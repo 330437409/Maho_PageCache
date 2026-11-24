@@ -142,6 +142,10 @@ class Maho_PageCache_Service_Request
             return true;
         }
 
+        if ((string) Mage::registry('page_cache_context_variant') !== '') {
+            return false;
+        }
+
         $request = $controller->getRequest();
         if ($request->getCookie('___store')) {
             return false;

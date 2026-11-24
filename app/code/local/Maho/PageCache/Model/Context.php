@@ -57,6 +57,25 @@ class Maho_PageCache_Model_Context
         return Mage::getModel('page_cache/key')->getUrlHash($this->getUrl());
     }
 
+    public function getCanonicalUrl(): string
+    {
+        try {
+            $baseUrl = (string) Mage::app()->getStore($this->getStoreId())
+                ->getBaseUrl(Mage_Core_Model_Store::URL_TYPE_LINK);
+            $parts = parse_url($baseUrl);
+            if (is_array($parts) && isset($parts['scheme'], $parts['host'])) {
+                $origin = $parts['scheme'] . '://' . $parts['host'];
+                if (isset($parts['port'])) {
+                    $origin .= ':' . $parts['port'];
+                }
+                return $origin . $this->getPath();
+            }
+        } catch (\Throwable) {
+        }
+
+        return $this->getUrl();
+    }
+
     public function getStoreId(): int
     {
         return (int) ($this->data['store_id'] ?? 0);
@@ -134,6 +153,11 @@ class Maho_PageCache_Model_Context
         return (string) ($this->data['mode'] ?? '');
     }
 
+    public function getVariant(): string
+    {
+        return (string) ($this->data['variant'] ?? '');
+    }
+
     private function getRequestPath(Mage_Core_Controller_Request_Http $request): string
     {
         $path = (string) ($request->getOriginalPathInfo() ?: $request->getPathInfo());
@@ -186,6 +210,7 @@ class Maho_PageCache_Model_Context
             'path' => $this->getRequestPath($request),
             'public_path' => $this->collectPublicPath($request),
             'mode' => Mage::helper('page_cache')->getMode(),
+            'variant' => (string) Mage::registry('page_cache_context_variant'),
         ];
     }
 }

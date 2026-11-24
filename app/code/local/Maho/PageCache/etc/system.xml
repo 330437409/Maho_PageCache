@@ -206,6 +206,26 @@
                             <show_in_website>0</show_in_website>
                             <show_in_store>0</show_in_store>
                         </server_types>
+                        <rate_limit translate="label comment">
+                            <label>Dynamic Request Limit</label>
+                            <comment>Maximum dynamic block requests per client in the window. 0 disables the limit.</comment>
+                            <frontend_type>text</frontend_type>
+                            <validate>validate-number</validate>
+                            <sort_order>25</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>0</show_in_website>
+                            <show_in_store>0</show_in_store>
+                        </rate_limit>
+                        <rate_limit_window translate="label comment">
+                            <label>Dynamic Request Window (seconds)</label>
+                            <comment>Window for the dynamic request limit. Default is 60 seconds.</comment>
+                            <frontend_type>text</frontend_type>
+                            <validate>validate-greater-than-zero</validate>
+                            <sort_order>26</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>0</show_in_website>
+                            <show_in_store>0</show_in_store>
+                        </rate_limit_window>
                     </fields>
                 </dynamic>
                 <warmup translate="label">

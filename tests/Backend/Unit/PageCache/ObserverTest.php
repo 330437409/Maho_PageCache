@@ -25,6 +25,10 @@ afterEach(function () {
     Mage::app()->getStore()->setConfig('page_cache/static/enabled', '0');
     Mage::app()->getCache()->cleanType('page_cache');
     Mage::getModel('page_cache/urlIndex')->clear();
+    Mage::getSingleton('core/resource')->getConnection('core_write')->delete(
+        Mage::getSingleton('core/resource')->getTableName('page_cache/stock_pending'),
+        '1=1',
+    );
 });
 
 function observerStaticContext(string $path = '/category'): Maho_PageCache_Model_Context
@@ -109,12 +113,16 @@ it('invalidates stock pages again after the stock index is processed', function 
     $item->setData('is_in_stock', 0);
     $observer = new Maho_PageCache_Model_Observer();
     $observer->invalidateOnStockSave(new Maho\Event\Observer(['item' => $item]));
+    $table = Mage::getSingleton('core/resource')->getTableName('page_cache/stock_pending');
+    $read = Mage::getSingleton('core/resource')->getConnection('core_read');
+    expect($read->fetchCol($read->select()->from($table, ['product_id'])))->toBe([1]);
     Mage::getModel('page_cache/urlIndex')->add($context, ['catalog_product_1'], 2);
 
     $observer->flushPendingStockInvalidation(new Maho\Event\Observer([]));
 
     expect((new Maho_PageCache_Model_Version())->getUrl($context->getUrlHash()))->toBe(3)
-        ->and(Mage::getModel('page_cache/urlIndex')->getByTag('catalog_product_1'))->toBe([]);
+        ->and(Mage::getModel('page_cache/urlIndex')->getByTag('catalog_product_1'))->toBe([])
+        ->and($read->fetchCol($read->select()->from($table, ['product_id'])))->toBe([]);
 });
 
 it('invalidates deleted products when a delete import finishes', function () {

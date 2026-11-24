@@ -28,6 +28,8 @@
 | `page_cache/dynamic/ttl` | text | 0 | 显式标记可缓存的动态块响应秒数，0 不缓存 |
 | `page_cache/dynamic/server_side` | yes/no | 0 | local 命中服务器端重建开关 |
 | `page_cache/dynamic/server_types` | text | 空 | 允许重建的 block type 别名，逗号分隔 |
+| `page_cache/dynamic/rate_limit` | text | 120 | 每个客户端在窗口内允许的动态请求数，0 关闭 |
+| `page_cache/dynamic/rate_limit_window` | text | 60 | 动态请求限流窗口秒数 |
 | `page_cache/warmup/enabled` | yes/no | 0 | 调度预热开关 |
 | `page_cache/warmup/concurrency` | text | 4 | `page-cache:warm` 和预热队列默认并发 |
 | `page_cache/warmup/batch_size` | text | 50 | 单次 cron 最大 URL 数 |
@@ -165,7 +167,7 @@ X-Maho-Page-Cache-Blocks: <token>[,<token>...]
 }
 ```
 
-响应头 `Cache-Control: private, no-store`、`X-Maho-Cache: DYNAMIC`。token 绑定 block、页面 URL、store、context，默认 1 小时过期；签名错误、过期、跨 URL/store/context 或请求未标记的 block 返回 400。dynamic 请求只允许 `cacheable_routes` 中的路由和 GET，其他路由按正常 bypass 处理；dynamic 请求不缓存，因此不受 session cookie、`Cache-Control: no-cache` 或 AJAX 排除影响。没有 block token 的 dynamic 请求只返回 `form_key`/`sid`，供表单占位符替换。
+响应头 `Cache-Control: private, no-store`、`X-Maho-Cache: DYNAMIC`。token 绑定 block、页面 URL、store、context，过期时间为 `max(3600, 页面 TTL + 300)`；页面 URL 使用 store base URL 的 scheme/host，避免 TLS 终止在代理后出现 http/https 不一致。签名错误、过期、跨 URL/store/context 或请求未标记的 block 返回 400。dynamic 请求只允许 `cacheable_routes` 中的路由和 GET，其他路由按正常 bypass 处理；dynamic 请求不缓存，因此不受 session cookie、`Cache-Control: no-cache` 或 AJAX 排除影响。超过 `page_cache/dynamic/rate_limit` 时返回 429、`Retry-After` 和 `rate_limit` bypass。没有 block token 的 dynamic 请求只返回 `form_key`/`sid`，供表单占位符替换。
 
 `local` 模式缓存无 session 时的匿名渲染。local 命中只发生在没有 session cookie 的请求上，因此不会把用户数据写进 HTML 缓存。显式 opt-in 的 leaf block 可以在 local 命中时服务器端重建；其余动态块保留匿名渲染。form key/SID 仍替换为占位符；local 模式的前端脚本只在用户聚焦或提交 POST 表单时请求新的 form key，被动浏览不会建立 session。
 
@@ -206,7 +208,7 @@ var/page-cache/static/{store_code}/{public_path}.gz
 - 路由改写后使用公共路径，例如 `/page-cache-test/` 写成 `page-cache-test/index.html`。
 - 静态文件由 nginx 或 Caddy 直接返回，PHP 不启动；Web 服务器示例见 `docs/specs/page-cache-static-export.md`。
 - 缓存目录必须 deny 直接访问。
-- Web 服务器必须在 `Cookie` 含 `maho_session` 或有 query 参数时回 PHP。
+- Web 服务器必须在 `Cookie` 含 `maho_session`、`___store` 或有 query 参数时回 PHP。
 - tag 失效和全量失效会删除静态文件；`page_cache_static_cleanup` cron 按 `page_cache_static_file` 索引删除到期文件，索引为空时回退目录扫描。
 - 静态命中不经过 PHP，不计入 PHP 侧计数；Caddy 示例可加 `X-Page-Cache: HIT-static`，nginx 以没有 `X-Maho-Cache` 和 PHP 不启动为准。
 - 第一版只支持单节点；多节点共享存储和广播见 FR-19。
@@ -229,6 +231,7 @@ var/page-cache/static/{store_code}/{public_path}.gz
 | `preview` | 预览模式 |
 | `maintenance` | 维护模式 |
 | `context` | `context_mode=default` 时请求用 `___store` cookie 切换 store，或 context 无法安全确定 |
+| `rate_limit` | dynamic 请求超过客户端限流 |
 | `response` | 响应不是 200 或包含 `Set-Cookie` |
 | `empty_body` | 响应体为空 |
 | `html_too_large` | local HTML 超过大小上限 |
@@ -345,6 +348,7 @@ purge entry 保留 24 小时，queue index 保留 25 小时。index 不会先于
 - `revalidated`：条件请求命中，返回 304。
 - 代理直接命中的请求不经过 Maho，不计入 PHP 侧计数。
 - 计数来自 `page_cache_stat`，需要开启统计；缓存类型清理不会重置当天计数。
+- `page_cache_context_variant` registry 由移动主题、A-B、geo-IP 等模块设置；proxy/revalidating 遇到非空 variant 会 bypass，local 会把它计入 context key。
 - 统计关闭时 `page-cache:status` 显示 counters unavailable。
 
 ## 6. Purge 事件

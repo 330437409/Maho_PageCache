@@ -133,7 +133,7 @@ page_cache_static_cleanup   */5 * * * *
 
 - GET
 - 无 query 参数
-- Cookie 不含 `maho_session`
+- Cookie 不含 `maho_session` 或 `___store`
 - 命中安全路径下的静态文件
 
 缓存目录必须 deny 直接访问。
@@ -145,6 +145,7 @@ http {
     map $http_cookie $page_cache_cookie_off {
         default 0;
         "~*maho_session" 1;
+        "~*___store" 1;
     }
 
     map $args $page_cache_args_off {
@@ -221,6 +222,7 @@ ln -s ../../../var/page-cache/static public/var/page-cache/static
     @page_cache_static {
         method GET
         not header Cookie *maho_session*
+        not header Cookie *___store*
         expression {query} == ""
         file {
             try_files /var/page-cache/static/default{path} /var/page-cache/static/default{path}/index.html /var/page-cache/static/default/index.html
@@ -271,7 +273,7 @@ ln -s ../../../var/page-cache/static public/var/page-cache/static
 ### 3.8 安全
 
 - 静态文件只来自无 session cookie、无 query 参数的匿名请求。
-- Web 服务器必须在 `Cookie` 含 `maho_session` 时回 PHP；示例配置必须包含这一条。
+- Web 服务器必须在 `Cookie` 含 `maho_session` 或 `___store` 时回 PHP；示例配置必须包含这两条。
 - 缓存目录必须 deny 直接访问。
 - 路径和 store code 白名单，拒绝 `..`、`.` 段、`//`、反斜杠、null 字节、非 ASCII 和过长路径。
 - 写入前校验最终路径前缀，防目录穿越。
@@ -325,7 +327,7 @@ ln -s ../../../var/page-cache/static public/var/page-cache/static
 
 ### AC-11.3 session 和参数
 
-- 带 `maho_session` 的请求不命中静态文件，回 PHP 并返回 `X-Maho-Cache: BYPASS`。
+- 带 `maho_session` 或 `___store` 的请求不命中静态文件，回 PHP 并返回 `X-Maho-Cache: BYPASS`。
 - 带 `p`、`limit` 等允许参数的请求回 PHP，命中 local。
 - 带未知参数的请求回 PHP 并 bypass。
 
