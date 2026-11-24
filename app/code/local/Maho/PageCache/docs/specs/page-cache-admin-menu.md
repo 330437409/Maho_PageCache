@@ -1,6 +1,6 @@
 # 功能规格：Page Cache 一级菜单和 Warm Now
 
-> 状态：实现完成，待发版 0.5.5
+> 状态：已交付@v0.5.5
 > 关联 PRD：FR-13、FR-16、FR-18
 > 分支：`feat/page-cache-phase2`
 
@@ -56,4 +56,4 @@
 - 代码：`etc/adminhtml.xml`、`controllers/Adminhtml/PageCacheController.php`、`Block/Adminhtml/Dashboard.php`、`template/maho/pagecache/dashboard.phtml`。
 - 测试：`AdminMenuTest`、`ReportGridTest`；手工验证一级菜单、content header、四张 grid、分页/列过滤、CSV/Excel 导出、Warm Now POST 和空队列提示。
 - 测试结果：201 passed（575 assertions）。
-- 交叉验证：模块 CI run 45386519804 在 SQLite、MySQL、PostgreSQL 三个任务上全部通过（2026-11-24）。
+- 交叉验证：模块 CI run 45391144326 在 SQLite、MySQL、PostgreSQL 三个任务上全部通过（2026-11-24）。
