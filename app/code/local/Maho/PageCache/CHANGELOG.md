@@ -2,6 +2,13 @@
 
 All notable changes to `Maho_PageCache` are recorded here.
 
+## Unreleased
+
+### Added
+
+- `page-cache:monitor` exports stock pending, queue and PHP counter metrics as Prometheus, JSON or text for an external monitoring system.
+- `--check` exits non-zero when the oldest pending stock invalidation crossed `page_cache/general/stock_pending_warn_age`.
+
 ## 0.5.4 (2026-11-24)
 
 ### Added

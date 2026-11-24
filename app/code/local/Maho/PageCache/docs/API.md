@@ -361,6 +361,36 @@ purge entry 保留 24 小时，queue index 保留 25 小时。index 不会先于
 - `page_cache_context_variant` registry 由移动主题、A-B、geo-IP 等模块设置；proxy/revalidating 遇到非空 variant 会 bypass，local 会把它计入 context key。
 - 统计关闭时 `page-cache:status` 显示 counters unavailable。
 
+### 5.4 `page-cache:monitor`
+
+```bash
+./maho page-cache:monitor --format=prometheus
+./maho page-cache:monitor --format=json
+./maho page-cache:monitor --format=text --check
+```
+
+选项：
+
+| 选项 | 说明 |
+|---|---|
+| `--format=prometheus` | Prometheus 文本格式，默认 |
+| `--format=json` | JSON，适合 Zabbix、Nagios、脚本 |
+| `--format=text` | 一行 key=value，适合简单探针 |
+| `--check` | stock pending 超过告警阈值时返回退出码 1 |
+
+指标：
+
+- `maho_page_cache_stock_pending_count`
+- `maho_page_cache_stock_pending_oldest_seconds`
+- `maho_page_cache_stock_pending_stale`
+- `maho_page_cache_stock_pending_warn_age_seconds`
+- `maho_page_cache_purge_queue`
+- `maho_page_cache_warmup_queue`
+- `maho_page_cache_hit_today` / `miss` / `bypass` / `revalidated`
+- `maho_page_cache_enabled` / `stats_enabled` / `warmup_enabled`
+
+计数来自 `page_cache_stat`；统计关闭时 counter 为 0，`stats_enabled` 为 0。
+
 ## 6. Purge 事件
 
 事件名：`maho_page_cache_purge_urls`
