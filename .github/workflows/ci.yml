@@ -149,7 +149,7 @@ jobs:
       - name: Lint
         working-directory: maho
         run: |
-          XDEBUG_MODE=off vendor/bin/phpstan analyze app/code/local/Maho/PageCache lib/MahoCLI/Commands/PageCacheWarm.php lib/MahoCLI/Commands/PageCacheStatus.php --no-progress --memory-limit=2G
-          vendor/bin/php-cs-fixer fix --config=.php-cs-fixer.php --dry-run app/code/local/Maho/PageCache lib/MahoCLI/Commands/PageCacheWarm.php lib/MahoCLI/Commands/PageCacheStatus.php tests/Backend/Unit/PageCache
-          vendor/bin/php-cs-fixer fix --config=.php-cs-fixer.phtml.php --dry-run app/design/adminhtml/default/default/template/maho/pagecache/stats.phtml
-          vendor/bin/rector process app/code/local/Maho/PageCache lib/MahoCLI/Commands/PageCacheWarm.php lib/MahoCLI/Commands/PageCacheStatus.php --dry-run
+          XDEBUG_MODE=off vendor/bin/phpstan analyze --no-progress --memory-limit=2G
+          vendor/bin/php-cs-fixer fix --config=.php-cs-fixer.php --dry-run app/code/local/Maho/PageCache lib/MahoCLI/Commands/PageCacheWarm.php lib/MahoCLI/Commands/PageCacheStatus.php lib/MahoCLI/Commands/PageCacheMonitor.php tests/Backend/Unit/PageCache
+          vendor/bin/php-cs-fixer fix --config=.php-cs-fixer.phtml.php --dry-run app/design/adminhtml/default/default/template/maho/pagecache/stats.phtml app/design/adminhtml/default/default/template/maho/pagecache/dashboard.phtml
+          vendor/bin/rector process app/code/local/Maho/PageCache lib/MahoCLI/Commands/PageCacheWarm.php lib/MahoCLI/Commands/PageCacheStatus.php lib/MahoCLI/Commands/PageCacheMonitor.php --dry-run
