@@ -2,6 +2,18 @@
 
 All notable changes to `Maho_PageCache` are recorded here.
 
+## Unreleased
+
+### Added
+
+- `page_cache_url` and `page_cache_url_tag` tables, created by `./maho migrate`, that hold the page URL hash, query variants, public path, store and entity tags for proxy purge, warmup and static removal.
+
+### Changed
+
+- Refactored the page cache invalidation index to native tag-aware cache tags and the `page_cache_url` and `page_cache_url_tag` tables.
+- Removed the cache-backed tag index and its registry; URL lookup, proxy purge, warmup and static removal now use the persistent URL index.
+- No user-visible behavior change.
+
 ## 0.5.1 (2026-11-24)
 
 ### Fixed

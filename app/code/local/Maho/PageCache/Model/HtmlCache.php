@@ -12,8 +12,6 @@ declare(strict_types=1);
 
 class Maho_PageCache_Model_HtmlCache
 {
-    private const int MAX_URL_VARIANTS = 50;
-
     /**
      * @param array{global: int, url: int}|null $versions
      */
@@ -81,34 +79,6 @@ class Maho_PageCache_Model_HtmlCache
     }
 
     /**
-     * @return array{urls: list<string>, truncated: bool}
-     */
-    public function buildMetaUrls(string $urlHash, string $url): array
-    {
-        $meta = Mage::app()->getCache()->load($this->key()->getMetaKey($urlHash));
-        $urls = [];
-        if (is_array($meta)) {
-            if (is_array($meta['urls'] ?? null)) {
-                $urls = $meta['urls'];
-            }
-            if (isset($meta['url']) && is_string($meta['url'])) {
-                $urls[] = $meta['url'];
-            }
-        }
-        $urls[] = $url;
-        $urls = array_values(array_unique(array_filter(
-            $urls,
-            static fn(mixed $value): bool => is_string($value) && $value !== '',
-        )));
-        $truncated = count($urls) > self::MAX_URL_VARIANTS;
-        if ($truncated) {
-            $urls = array_slice($urls, -self::MAX_URL_VARIANTS);
-        }
-
-        return ['urls' => $urls, 'truncated' => $truncated];
-    }
-
-    /**
      * @param list<string> $tags
      * @param array<string, string> $headers
      * @param array{global: int, url: int} $versions
@@ -152,40 +122,35 @@ class Maho_PageCache_Model_HtmlCache
 
         $key = $this->key();
         $urlHash = $context->getUrlHash();
-        $variants = $this->buildMetaUrls($urlHash, $context->getPurgeUrl());
         $metaSaved = Mage::app()->getCache()->save(
             [
                 'url' => $context->getPurgeUrl(),
-                'urls' => $variants['urls'],
-                'variants_truncated' => $variants['truncated'],
                 'tags' => $entry['tags'],
                 'created_at' => $entry['created_at'],
                 'mode' => $context->getMode(),
                 'ttl' => $ttl,
                 'version' => $versions['url'],
-                'store_code' => $this->getStoreCode($context),
                 'store_id' => $context->getStoreId(),
             ],
             $key->getMetaKey($urlHash),
-            ['PAGE_CACHE'],
+            array_merge(['PAGE_CACHE'], $key->getCacheTags($tags)),
             $ttl + 3600,
         );
         if (!$metaSaved) {
             return null;
         }
 
-        Mage::getSingleton('page_cache/tagIndex')->add($urlHash, $entry['tags']);
-
         $saved = Mage::app()->getCache()->save(
             $entry,
             $key->getHtmlKey($this->getHash($context, $versions)),
-            ['PAGE_CACHE', 'PAGE_CACHE_HTML'],
+            array_merge(['PAGE_CACHE', 'PAGE_CACHE_HTML'], $key->getCacheTags($tags)),
             $ttl,
         );
         if (!$saved) {
             return null;
         }
 
+        Mage::getSingleton('page_cache/urlIndex')->add($context, $entry['tags'], $versions['url']);
         $this->addIndex($urlHash, $context->getHash(), $ttl + 3600);
         return $entry;
     }

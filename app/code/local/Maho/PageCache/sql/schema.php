@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Page cache statistics tables.
+ * Declarative schema for page cache statistics, warmup queue and URL index.
  *
  * SPDX-FileCopyrightText: 2026 Maho <https://mahocommerce.com>
  * SPDX-License-Identifier: OSL-3.0
@@ -89,6 +89,46 @@ return function (SchemaEditor $schema): void {
             ->addIndex(Index::editor()->setUnquotedColumnNames('store_id'))
             ->addIndex(Index::editor()->setUnquotedColumnNames('created_at'))
             ->setComment('Page Cache Warmup Queue')
+            ->create(),
+    );
+
+    $schema->addTable(
+        Table::editor()
+            ->setUnquotedName('page_cache_url')
+            ->addColumn(Schema::column('url_id', Types::INTEGER, unsigned: true, autoincrement: true))
+            ->addColumn(Schema::column('url_hash', Types::STRING, length: 64))
+            ->addColumn(Schema::column('url', Types::STRING, length: 2048))
+            ->addColumn(Schema::column('urls', Types::TEXT))
+            ->addColumn(Schema::column('variants_truncated', Types::SMALLINT, unsigned: true, default: 0))
+            ->addColumn(Schema::column('public_path', Types::STRING, length: 2048))
+            ->addColumn(Schema::column('store_id', Types::SMALLINT, unsigned: true, default: 0))
+            ->addColumn(Schema::column('store_code', Types::STRING, length: 32, default: ''))
+            ->addColumn(Schema::column('version', Types::INTEGER, unsigned: true, default: 1))
+            ->addColumn(Schema::column('created_at', Types::DATETIME_IMMUTABLE))
+            ->addColumn(Schema::column('updated_at', Types::DATETIME_IMMUTABLE))
+            ->addPrimaryKeyConstraint(
+                PrimaryKeyConstraint::editor()->setUnquotedColumnNames('url_id')->create(),
+            )
+            ->addIndex(
+                Index::editor()->setType(IndexType::UNIQUE)->setUnquotedColumnNames('url_hash'),
+            )
+            ->addIndex(Index::editor()->setUnquotedColumnNames('updated_at'))
+            ->setComment('Page Cache URL Index')
+            ->create(),
+    );
+
+    $schema->addTable(
+        Table::editor()
+            ->setUnquotedName('page_cache_url_tag')
+            ->addColumn(Schema::column('url_id', Types::INTEGER, unsigned: true))
+            ->addColumn(Schema::column('tag', Types::STRING, length: 128))
+            ->addIndex(
+                Index::editor()
+                    ->setType(IndexType::UNIQUE)
+                    ->setUnquotedColumnNames('url_id', 'tag'),
+            )
+            ->addIndex(Index::editor()->setUnquotedColumnNames('tag'))
+            ->setComment('Page Cache URL Tag Index')
             ->create(),
     );
 };

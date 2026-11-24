@@ -22,7 +22,7 @@
 - Session skip：无 cookie 跳过、有 cookie 不跳过、POST 不跳过。
 - Header：proxy/revalidating 的 `Cache-Control`、`Vary`、`X-Maho-Cache`。
 - ETag：匹配 304、版本变化 200、context 变化 200、TTL 变化 200、元数据丢失 200。
-- TagIndex：添加、读取、重复添加、索引丢失回退全量。
+- UrlIndex：添加、变体合并与截断、tag 查询、removeTag、清理、DB 异常回退全量。
 - PurgeQueue：入队、去重、dry-run、limit、tag 过滤、成功删除、失败保留。
 - 失效：product/category/CMS、catalog rule 细粒度、sales rule/config 全量。
 - CLI：status 输出、purge 选项、事件/文件输出。

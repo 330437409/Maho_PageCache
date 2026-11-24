@@ -361,7 +361,7 @@ payload：
 
 模块声明缓存类型 `page_cache`，出现在 `System > Cache Management`。
 
-- 清理该类型会清空页面缓存元数据、tag 索引、版本和 purge 队列。
+- 清理该类型会清空页面缓存元数据、URL 索引、版本和 purge 队列。
 - 关闭该类型等同于关闭模块的缓存读写。
 - 缓存类型使用 `PAGE_CACHE` tag。
 

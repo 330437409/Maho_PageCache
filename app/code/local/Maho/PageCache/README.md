@@ -4,7 +4,7 @@ Maho 的 HTTP 页面缓存集成层。第一期支持 `proxy` 和 `revalidating`
 
 ## 状态
 
-0.5.1 已交付，累计包含第一期的 HTTP 集成层、proxy/revalidating 两种模式、session skip、tag 失效、purge 队列、配置和 CLI，第二期的 `local` 模式、Ajax/ESI 动态块和 `page-cache:warm`，第三期的静态文件导出、统计面板、定时预热和服务器端动态块占位符，以及 0.5.1 的 store code、变体失效、ETag-only 条件请求、bypass no-store 和 tag index 生命周期修复。
+0.5.1 已交付，累计包含第一期的 HTTP 集成层、proxy/revalidating 两种模式、session skip、tag 失效、purge 队列、配置和 CLI，第二期的 `local` 模式、Ajax/ESI 动态块和 `page-cache:warm`，第三期的静态文件导出、统计面板、定时预热和服务器端动态块占位符，以及 0.5.1 的 cache integrity 修复。0.5.2 的 tag 索引重构已实现，待发版。
 
 - 第一期：HTTP 集成层，`proxy` + `revalidating`。0.2.0 已交付。
 - 第二期：`local` 模式、整页 HTML 缓存、Ajax/ESI 动态块、缓存预热。0.2.0 已交付。
@@ -23,6 +23,7 @@ Maho 的 HTTP 页面缓存集成层。第一期支持 `proxy` 和 `revalidating`
 - `docs/specs/page-cache-stats-dashboard.md`：第三期统计面板规格（0.3.0 已交付）。
 - `docs/specs/page-cache-scheduled-warmup.md`：第三期定时预热规格（0.4.0 已交付）。
 - `docs/specs/page-cache-server-placeholders.md`：第三期服务器端动态块占位符规格（0.5.0 已交付）。
+- `docs/specs/page-cache-tag-index-refactor.md`：0.5.2 tag 索引重构规格。
 - `.claude/rules/`：模块级防漂移规则。
 
 ## 设计来源
@@ -38,14 +39,14 @@ Maho 的 HTTP 页面缓存集成层。第一期支持 `proxy` 和 `revalidating`
 模块位于 `app/code/local/Maho/PageCache`，并附带 `app/etc/modules/Maho_PageCache.xml`。安装步骤：
 
 1. `composer dump-autoload`，让类映射、路由和观察者属性生效。
-2. `./maho migrate`，创建统计表 `page_cache_stat`、`page_cache_stat_hourly`、预热队列 `page_cache_warmup_queue`，并写入 `page_cache` 缓存类型选项。
+2. `./maho migrate`，创建统计表、预热队列、URL 索引表 `page_cache_url`/`page_cache_url_tag`，并写入 `page_cache` 缓存类型选项。
 3. `./maho cache:flush`。
 4. 在 `System > Configuration > Page Cache` 开启并选择模式。
 5. 配置反向代理或 CDN：遵守 `Vary: Accept-Encoding, Cookie`，按 URL 和 `Cookie` 区分缓存对象，并在 `Cookie` 含 `maho_session` 时 bypass；消费 purge 文件或监听 `maho_page_cache_purge_urls` 事件。`X-Maho-Cache-Context` 只用于调试。purge 文件中的 `*` 表示全量 purge。使用 ESI 时，代理还必须解析 `esi:include` 并禁止缓存 `X-Maho-Cache: DYNAMIC` 响应。
 6. 运行 `./maho page-cache:status` 检查。
 7. 如果后台主题还没有统计面板使用的 Tailwind 类，运行 `./maho dev:admin:theme:build` 重新编译。
 
-0.4.0 会创建统计表和预热队列表；不新增 Composer 依赖。模块默认关闭，先在后台开启。
+0.4.0 会创建统计表和预热队列表；0.5.2 会创建 URL 索引表。升级到 0.5.2 后运行 `./maho migrate` 和 `./maho cache:flush`；旧 `PC_TAG_*` 索引不再读取。不新增 Composer 依赖。模块默认关闭，先在后台开启。
 
 ## 配置
 
@@ -123,7 +124,7 @@ local 命中时，显式标记的 leaf block 可以在服务器端重建，不�
 vendor/bin/pest tests/Backend/Unit/PageCache
 ```
 
-当前 175 个测试通过。
+当前 173 个测试通过。
 
 ## 许可证
 

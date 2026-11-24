@@ -24,6 +24,7 @@ afterEach(function () {
     Mage::getSingleton('page_cache/staticCache')->flush();
     Mage::app()->getStore()->setConfig('page_cache/static/enabled', '0');
     Mage::app()->getCache()->cleanType('page_cache');
+    Mage::getModel('page_cache/urlIndex')->clear();
 });
 
 function observerStaticContext(): Maho_PageCache_Model_Context
