@@ -2,7 +2,7 @@
 <config>
     <modules>
         <Maho_PageCache>
-            <version>0.5.1</version>
+            <version>0.5.2</version>
         </Maho_PageCache>
     </modules>
     <global>
@@ -28,6 +28,12 @@
                     <warmup_queue>
                         <table>page_cache_warmup_queue</table>
                     </warmup_queue>
+                    <url>
+                        <table>page_cache_url</table>
+                    </url>
+                    <url_tag>
+                        <table>page_cache_url_tag</table>
+                    </url_tag>
                 </entities>
             </page_cache_resource>
         </models>
@@ -45,7 +51,7 @@
             <types>
                 <page_cache>
                     <label>Page Cache</label>
-                    <description>HTTP page cache metadata, tag index and purge queue.</description>
+                    <description>HTTP page cache metadata, URL index and purge queue.</description>
                     <tags>PAGE_CACHE</tags>
                 </page_cache>
             </types>

@@ -440,16 +440,9 @@ class Maho_PageCache_Model_Observer
                 is_array($existingMeta) && isset($existingMeta['version']) ? (int) $existingMeta['version'] : 1,
                 $version->getUrl($urlHash),
             );
-            $variants = Mage::getSingleton('page_cache/htmlCache')->buildMetaUrls(
-                $urlHash,
-                $context->getPurgeUrl(),
-            );
-
             Mage::app()->getCache()->save(
                 [
                     'url' => $context->getPurgeUrl(),
-                    'urls' => $variants['urls'],
-                    'variants_truncated' => $variants['truncated'],
                     'tags' => $tags,
                     'created_at' => time(),
                     'mode' => $context->getMode(),
@@ -458,10 +451,10 @@ class Maho_PageCache_Model_Observer
                     'store_id' => $context->getStoreId(),
                 ],
                 $key->getMetaKey($urlHash),
-                ['PAGE_CACHE'],
+                array_merge(['PAGE_CACHE'], $key->getCacheTags($tags)),
                 $ttl + 3600,
             );
-            Mage::getSingleton('page_cache/tagIndex')->add($urlHash, $tags);
+            Mage::getSingleton('page_cache/urlIndex')->add($context, $tags, $urlVersion);
             $service->apply($context, $ttl, $tags, $helper->isDebugHeaders(), $urlVersion);
             Mage::getModel('page_cache/counter')->increment(Maho_PageCache_Model_Counter::RESULT_MISS);
         } catch (\Throwable $e) {
@@ -786,6 +779,9 @@ class Maho_PageCache_Model_Observer
         try {
             Mage::getSingleton('page_cache/staticCache')->cleanup(
                 Mage::helper('page_cache')->getTtl() + 300,
+            );
+            Mage::getSingleton('page_cache/urlIndex')->cleanup(
+                Mage::helper('page_cache')->getTtl() + 3600,
             );
         } catch (\Throwable $e) {
             Mage::logException($e);

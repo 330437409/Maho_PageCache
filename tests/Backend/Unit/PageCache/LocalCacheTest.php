@@ -66,6 +66,7 @@ beforeEach(function () {
     Mage::unregister('page_cache_local_versions');
     Mage::unregister('page_cache_tags');
     Mage::unregister('page_cache_not_modified');
+    Mage::getModel('page_cache/urlIndex')->clear();
 });
 
 afterEach(function () {
@@ -229,22 +230,38 @@ it('does not store html above the configured size limit', function () {
 it('stops loading the old html after a tag invalidation', function () {
     $context = localCacheContext();
     $cache = new Maho_PageCache_Model_HtmlCache();
-    $key = new Maho_PageCache_Model_Key();
-    $urlHash = $context->getUrlHash();
     $versions = $cache->getVersions($context);
 
     $cache->save($context, '<html>old</html>', ['catalog_product_1'], 3600, [], $versions);
-    Mage::app()->getCache()->save(
-        ['url' => $context->getPurgeUrl(), 'tags' => ['catalog_product_1'], 'version' => $versions['url'], 'ttl' => 3600],
-        $key->getMetaKey($urlHash),
-        ['PAGE_CACHE'],
-        7200,
-    );
-    (new Maho_PageCache_Model_TagIndex())->add($urlHash, ['catalog_product_1']);
 
     (new Maho_PageCache_Service_Invalidator())->invalidateTags(['catalog_product_1']);
 
     expect($cache->load($context))->toBeNull();
+});
+
+it('tags local html and meta with the entity cache tag', function () {
+    $context = localCacheContext();
+    $cache = new Maho_PageCache_Model_HtmlCache();
+    $key = new Maho_PageCache_Model_Key();
+    $versions = $cache->getVersions($context);
+
+    expect($cache->save($context, '<html>tagged</html>', ['catalog_product_1', 'PAGE_CACHE'], 3600, [], $versions))
+        ->not->toBeNull();
+
+    $htmlKey = $key->getHtmlKey($cache->getHash($context, $versions));
+    $metaKey = $key->getMetaKey($context->getUrlHash());
+    expect(Mage::app()->getCache()->load($htmlKey))->not->toBeFalse()
+        ->and(Mage::app()->getCache()->load($metaKey))->not->toBeFalse();
+
+    Mage::app()->getCache()->clean([$key->getCacheTag('PAGE_CACHE')]);
+
+    expect(Mage::app()->getCache()->load($htmlKey))->not->toBeFalse()
+        ->and(Mage::app()->getCache()->load($metaKey))->not->toBeFalse();
+
+    Mage::app()->getCache()->clean([$key->getCacheTag('catalog_product_1')]);
+
+    expect(Mage::app()->getCache()->load($htmlKey))->toBeFalse()
+        ->and(Mage::app()->getCache()->load($metaKey))->toBeFalse();
 });
 
 it('serves a local hit before dispatch', function () {
@@ -400,42 +417,4 @@ it('releases the local lock after saving the response', function () {
 
     expect(Mage::getSingleton('core/lock')->isHeld($lockName))->toBeFalse()
         ->and($cache->load($context))->not->toBeNull();
-});
-
-it('keeps every url variant in the local meta', function () {
-    $cache = new Maho_PageCache_Model_HtmlCache();
-    $first = localCacheContext(['path' => '/product.html', 'params' => ['p' => '1']]);
-    $second = localCacheContext(['path' => '/product.html', 'params' => ['p' => '2']]);
-    $versions = ['global' => 1, 'url' => 1];
-
-    $cache->save($first, '<html>one</html>', ['PAGE_CACHE'], 3600, [], $versions);
-    $cache->save($second, '<html>two</html>', ['PAGE_CACHE'], 3600, [], $versions);
-
-    $meta = Mage::app()->getCache()->load(
-        (new Maho_PageCache_Model_Key())->getMetaKey($first->getUrlHash()),
-    );
-
-    expect($meta['urls'])->toContain($first->getPurgeUrl(), $second->getPurgeUrl())
-        ->and($meta['url'])->toBe($second->getPurgeUrl())
-        ->and($meta['variants_truncated'])->toBeFalse();
-});
-
-it('caps the stored url variants', function () {
-    $cache = new Maho_PageCache_Model_HtmlCache();
-    $context = localCacheContext(['path' => '/product.html']);
-    $urls = [];
-    for ($i = 0; $i < 51; $i++) {
-        $urls[] = 'https://example.com/product.html?p=' . $i;
-    }
-    Mage::app()->getCache()->save(
-        ['url' => end($urls), 'urls' => $urls],
-        (new Maho_PageCache_Model_Key())->getMetaKey($context->getUrlHash()),
-        ['PAGE_CACHE'],
-        3600,
-    );
-
-    $result = $cache->buildMetaUrls($context->getUrlHash(), 'https://example.com/product.html?p=51');
-
-    expect($result['urls'])->toHaveCount(50)
-        ->and($result['truncated'])->toBeTrue();
 });

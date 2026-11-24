@@ -89,12 +89,15 @@ class Maho_PageCache_Model_Version
         return false;
     }
 
-    public function storeEtag(string $urlHash, string $etag, int $lastModified): void
+    /**
+     * @param list<string> $tags
+     */
+    public function storeEtag(string $urlHash, string $etag, int $lastModified, array $tags = []): void
     {
         Mage::app()->getCache()->save(
             ['etag' => $etag, 'last_modified' => $lastModified],
             $this->key()->getEtagKey($urlHash),
-            ['PAGE_CACHE'],
+            array_merge(['PAGE_CACHE'], $this->key()->getCacheTags($tags)),
         );
     }
 

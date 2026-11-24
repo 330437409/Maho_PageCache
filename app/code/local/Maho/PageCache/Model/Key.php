@@ -22,9 +22,29 @@ class Maho_PageCache_Model_Key
         return 'PC_META_' . $urlHash;
     }
 
-    public function getTagKey(string $tag): string
+    public function getCacheTag(string $tag): string
     {
-        return 'PC_TAG_' . $this->sanitizeTag($tag);
+        return 'PAGE_CACHE_TAG_' . strtoupper($this->sanitizeTag($tag));
+    }
+
+    /**
+     * @param list<string> $tags
+     * @return list<string>
+     */
+    public function getCacheTags(array $tags): array
+    {
+        $result = [];
+        foreach ($tags as $tag) {
+            if (!is_string($tag)
+                || $tag === ''
+                || in_array($tag, ['PAGE_CACHE', 'PAGE_CACHE_HTML', 'PAGE_CACHE_DYNAMIC'], true)
+            ) {
+                continue;
+            }
+            $result[$this->getCacheTag($tag)] = true;
+        }
+
+        return array_keys($result);
     }
 
     public function getVersionGlobalKey(): string

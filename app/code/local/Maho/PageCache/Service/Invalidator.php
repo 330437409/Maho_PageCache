@@ -96,61 +96,57 @@ class Maho_PageCache_Service_Invalidator
             return;
         }
 
+        $cacheTags = $this->key()->getCacheTags($tags);
+        if ($cacheTags !== [] && !Mage::app()->getCache()->clean($cacheTags)) {
+            $this->invalidateAll('tag_fallback');
+            return;
+        }
+
         $urls = [];
         $warmUrls = [];
         $variantsTruncated = false;
         foreach ($tags as $tag) {
-            $urlHashes = $this->tagIndex()->getUrls($tag);
-            if ($urlHashes === false) {
-                if ($this->tagIndex()->isKnown($tag)) {
-                    $this->invalidateAll('tag_fallback');
-                    return;
-                }
-                continue;
+            $rows = $this->urlIndex()->getByTag($tag);
+            if ($rows === null) {
+                $this->invalidateAll('tag_fallback');
+                return;
             }
 
-            foreach ($urlHashes as $urlHash) {
-                $meta = Mage::app()->getCache()->load($this->key()->getMetaKey($urlHash));
-                if (!is_array($meta) || empty($meta['url'])) {
-                    $this->tagIndex()->removeUrl($tag, $urlHash);
+            foreach ($rows as $row) {
+                $urlHash = (string) ($row['url_hash'] ?? '');
+                if ($urlHash === '') {
                     continue;
                 }
+
                 $newVersion = max(
-                    (int) ($meta['version'] ?? 1) + 1,
+                    (int) ($row['version'] ?? 1) + 1,
                     $this->version()->getUrl($urlHash) + 1,
                 );
-                $meta['version'] = $newVersion;
-                $ttl = isset($meta['ttl']) ? (int) $meta['ttl'] + 3600 : null;
-                if (!Mage::app()->getCache()->save($meta, $this->key()->getMetaKey($urlHash), ['PAGE_CACHE'], $ttl)) {
-                    $this->invalidateAll('tag_fallback');
-                    return;
-                }
                 $this->version()->setUrl($urlHash, $newVersion);
+                $this->urlIndex()->setVersion((int) ($row['url_id'] ?? 0), $newVersion);
                 Mage::app()->getCache()->remove($this->key()->getEtagKey($urlHash));
                 $this->staticCache()->removeByUrl(
-                    (string) $meta['url'],
-                    (string) ($meta['store_code'] ?? ''),
+                    (string) ($row['public_path'] ?? ''),
+                    (string) ($row['store_code'] ?? ''),
                 );
 
-                $variantUrls = is_array($meta['urls'] ?? null) ? $meta['urls'] : [];
+                $variantUrls = is_array($row['urls'] ?? null) ? $row['urls'] : [];
                 if ($variantUrls === []) {
-                    $variantUrls = [(string) $meta['url']];
+                    $variantUrls = [(string) ($row['url'] ?? '')];
                 }
                 $variantUrls = array_values(array_unique(array_filter(
                     $variantUrls,
                     static fn(mixed $url): bool => is_string($url) && $url !== '',
                 )));
-                if ($variantUrls === []) {
-                    $variantUrls = [(string) $meta['url']];
-                }
-                $variantsTruncated = $variantsTruncated || !empty($meta['variants_truncated']);
-                $storeId = (int) ($meta['store_id'] ?? 0);
+                $variantsTruncated = $variantsTruncated || !empty($row['variants_truncated']);
+                $storeId = (int) ($row['store_id'] ?? 0);
                 foreach ($variantUrls as $variantUrl) {
                     $urls[] = $variantUrl;
                     $warmUrls[$storeId][] = $variantUrl;
                 }
             }
-            $this->tagIndex()->remove($tag);
+
+            $this->urlIndex()->removeTag($tag);
         }
 
         if ($urls !== [] && $this->helper()->getMode() === Maho_PageCache_Helper_Data::MODE_PROXY) {
@@ -207,7 +203,7 @@ class Maho_PageCache_Service_Invalidator
     {
         $nextGlobalVersion = max($this->version()->getGlobal() + 1, time());
         try {
-            $this->tagIndex()->flush();
+            $this->urlIndex()->clear();
             $this->staticCache()->flush();
         } finally {
             $this->version()->setGlobal($nextGlobalVersion);
@@ -249,9 +245,9 @@ class Maho_PageCache_Service_Invalidator
         return array_values(array_map(intval(...), $read->fetchCol($select)));
     }
 
-    private function tagIndex(): Maho_PageCache_Model_TagIndex
+    private function urlIndex(): Maho_PageCache_Model_UrlIndex
     {
-        return Mage::getSingleton('page_cache/tagIndex');
+        return Mage::getSingleton('page_cache/urlIndex');
     }
 
     private function version(): Maho_PageCache_Model_Version

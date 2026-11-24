@@ -57,6 +57,18 @@ it('builds a stable etag and changes it with each dimension', function () {
     expect($version->getEtag('abc', 'context', 3600, 'revalidating'))->not->toBe($version->getEtag('abc', 'other', 3600, 'revalidating'));
 });
 
+it('tags the etag entry with the entity cache tag', function () {
+    $version = new Maho_PageCache_Model_Version();
+    $key = new Maho_PageCache_Model_Key();
+    $version->storeEtag('tagged-hash', 'W/"x"', 100, ['catalog_product_1']);
+
+    expect(Mage::app()->getCache()->load($key->getEtagKey('tagged-hash')))->not->toBeFalse();
+
+    Mage::app()->getCache()->clean([$key->getCacheTag('catalog_product_1')]);
+
+    expect(Mage::app()->getCache()->load($key->getEtagKey('tagged-hash')))->toBeFalse();
+});
+
 it('matches weak, strong and comma separated if-none-match values', function () {
     $version = new Maho_PageCache_Model_Version();
 

@@ -14,7 +14,7 @@
 - `var/page-cache/static/{store}/{path}/index.html`
 - 同名 `.html.gz`
 
-nginx 或 Caddy 用 `try_files` / `file` matcher 直接返回，PHP 不启动。元数据、tag 索引和 URL/global version 仍是权威来源，静态文件只是输出。
+nginx 或 Caddy 用 `try_files` / `file` matcher 直接返回，PHP 不启动。元数据、URL 索引和 URL/global version 仍是权威来源，静态文件只是输出。
 
 第一版只支持单节点。多节点共享存储和广播留到 FR-19。
 
@@ -49,14 +49,14 @@ nginx 或 Caddy 用 `try_files` / `file` matcher 直接返回，PHP 不启动。
 `local` 模式 MISS 时，`saveLocalResponse()` 当前顺序是：
 
 1. 检查 bypass、版本、大小。
-2. `HtmlCache::save()` 写元数据、tag 索引和 HTML。
+2. `HtmlCache::save()` 写元数据、URL 索引和 HTML。
 3. 再次检查版本，版本变化则删除 HTML 并 bypass。
 4. 应用 local MISS 头并计数。
 
 新顺序：
 
 1. 检查 bypass、版本、大小。
-2. `HtmlCache::save()` 写元数据、tag 索引和 HTML。元数据新增 `store_code`。
+2. `HtmlCache::save()` 写元数据、URL 索引和 HTML。元数据新增 `store_code`。
 3. 如果静态导出开启，且请求无 query 参数，`StaticCache::save()` 写静态文件和 `.gz`。
 4. 再次检查版本；版本变化则删除 HTML 和静态文件，bypass。
 5. 应用 local MISS 头并计数。

@@ -36,7 +36,7 @@ app/code/local/Maho/PageCache/
 │   ├── StaticCache.php             # 匿名默认页静态 HTML 导出
 │   ├── Stat.php                    # 统计记录、rollup、面板数据
 │   ├── Resource.php                # 统计表资源模型
-│   ├── TagIndex.php                # tag 到 URL hash 的索引
+│   ├── UrlIndex.php                # 持久化 tag 到 URL 的索引
 │   ├── PurgeQueue.php              # purge 队列
 │   ├── WarmQueue.php               # 预热队列，入队、去重、重试和上限
 │   ├── Counter.php                 # PHP 侧 hit/miss/bypass 计数
@@ -137,7 +137,7 @@ tests/Backend/Unit/PageCache/*
    - 模式
    - 创建时间
    - TTL
-6. 更新 tag 到 URL 的索引。
+6. 给 meta 打实体原生 tag，并写入 `page_cache_url` / `page_cache_url_tag` URL 索引。
 7. 设置响应头。
 8. 递增 PHP 侧计数。
 
@@ -160,10 +160,12 @@ X-Cache-Tags: <tag1>,<tag2>
 
 tag 失效时：
 
-1. 从 tag 索引读出 URL hash 列表。
-2. 递增每个 URL 的版本。
-3. 把 URL 写入 purge 队列。
-4. `page-cache:purge` 处理队列，触发 `maho_page_cache_purge_urls` 事件，或写 purge 文件。
+1. 用 `PAGE_CACHE_TAG_<tag>` 原生 cache tag 原子清理 HTML、meta 和 ETag。
+2. 从 `page_cache_url_tag` 读出该 tag 的 URL 行。
+3. 递增每个 URL 的版本，删除 ETag，删除静态文件。
+4. 把 URL 变体写入 purge 队列和预热队列；变体截断时全量 purge。
+5. DB 查询失败时回退全量失效。
+6. `page-cache:purge` 处理队列，触发 `maho_page_cache_purge_urls` 事件，或写 purge 文件。
 
 ### 3.5 local 模式
 
@@ -174,7 +176,7 @@ tag 失效时：
 3. 命中时设置 200、body、`Cache-Control: private, max-age=0, must-revalidate`、`ETag`、`X-Maho-Cache: HIT`，设置 `FLAG_NO_DISPATCH`，不生成 layout。
 4. `If-None-Match` 命中时返回 304，body 为空。
 5. 未命中时用 core named lock `page_cache_html_<hash>` 保护回源。等待的请求在锁释放后重新读缓存；等待超时则正常渲染但不保存，返回 `lock_timeout` bypass。
-6. 渲染完成后，`controller_front_send_response_before` 检查版本没有变化，写入元数据、tag 索引和 HTML；版本在渲染期间变化时不保存，返回 `version_changed` bypass。
+6. 渲染完成后，`controller_front_send_response_before` 检查版本没有变化，写入元数据、HTML、原生实体 tag 和 URL 索引；版本在渲染期间变化时不保存，返回 `version_changed` bypass。
 7. HTML 超过 `page_cache/general/html_max_size` 时不缓存，返回 `html_too_large` bypass。
 
 `local` 响应是 `private`，浏览器每次回源重新验证，命中发生在 Maho 内部。
@@ -258,7 +260,7 @@ local 服务器端占位符：
 
 - 通用 observer 监听 `model_save_commit_after` 和 `model_delete_commit_after`。
 - 读取 `getCacheIdTags()`；product 使用 `getCacheIdTagsWithCategories()` 追加分类 tag。
-- 清理 tag 索引对应的页面。
+- 用原生实体 tag 清理相关页面，并从 URL 索引删除对应 URL。
 - stock item 保存时，只有 `is_in_stock` 变化或库存状态自动变化才失效，qty-only 更新不清理页面；可配置子商品同时失效父商品。
 - `catalog_product_attribute_update_after` 批量属性更新按 product tag 失效；超过 30 个商品时回退全量失效，避免管理请求过慢。
 
@@ -273,7 +275,7 @@ catalog rule：
 
 - sales rule、`core_config_data`、主题/design、layout、store 配置：全量失效。
 - 后台清缓存、`core_clean_cache`、`adminhtml_cache_flush_all`：全量失效。
-- 全量失效递增全局版本，并清空 tag 索引和 purge 队列。
+- 全量失效递增全局版本，清空 URL 索引和 purge 队列；旧缓存条目因版本不匹配不再命中，统计计数器保留。
 
 ## 4. 缓存存储
 
@@ -285,7 +287,7 @@ catalog rule：
         <types>
             <page_cache>
                 <label>Page Cache</label>
-                <description>HTTP page cache metadata, tag index and purge queue.</description>
+                <description>HTTP page cache metadata, URL index and purge queue.</description>
                 <tags>PAGE_CACHE</tags>
             </page_cache>
         </types>
@@ -297,8 +299,7 @@ catalog rule：
 
 | Key | 内容 | TTL |
 |---|---|---|
-| `PC_META_<urlhash>` | `{tags, version, mode, context, created_at, ttl}` | TTL + 1 小时 |
-| `PC_TAG_<tag>` | `{urlhash: true}` | 无，跟随缓存策略 |
+| `PC_META_<urlhash>` | `{url, tags, version, mode, context, created_at, ttl, store_id}` | TTL + 1 小时 |
 | `PC_VERSION_GLOBAL` | int | 无 |
 | `PC_VERSION_URL_<urlhash>` | int | TTL + 1 小时 |
 | `PC_ETAG_<urlhash>` | `{etag, last_modified}` | TTL + 1 小时 |
@@ -310,12 +311,14 @@ catalog rule：
 | `PC_STAT_<date>_<result>` | int | 7 天 |
 | `PC_WARMUP_LAST_RUN` | 最近一次预热汇总 | 7 天 |
 | `page_cache_warmup_queue` | 预热队列，`url_hash` 唯一 | 由 cron 和上限控制 |
+| `page_cache_url` | page URL hash、变体 URL、公共路径、store、版本 | 由 URL 索引清理 |
+| `page_cache_url_tag` | URL 到实体 tag 的映射 | 由 URL 索引清理 |
 
 注意：
 
-- 标签索引和版本 key 没有 TTL，和 Maho 的 `RedisTagAwareAdapter` 要求一致。Redis 必须使用 `noeviction` 或 `volatile-*`。
-- 索引丢失时无法知道哪些 URL 受影响，回退全量失效（递增全局版本并清空 page_cache 类型）。
-- tag registry 缺失视为索引可能丢失；下一次实体失效按全量处理，避免静默漏清。
+- 实体使用原生 cache tag `PAGE_CACHE_TAG_<tag>`，HTML、meta 和 ETag 都打 tag；`clean($tags)` 由缓存适配器原子执行。
+- URL 索引在 DB，不会因为缓存淘汰而丢失；DB 查询失败时全量失效。
+- `page_cache_url` 按 `ttl + 3600` 清理，和 meta TTL 对齐。
 - tag 值只允许 `[A-Za-z0-9_:.-]`，写入前过滤，避免 header 注入。
 - URL hash 和 context hash 使用 sha256，不保存原始 URL 或 cookie。
 - local HTML key 包含 URL、context、URL 版本、全局版本和模式；版本变化后旧 HTML 不再命中。
@@ -486,7 +489,7 @@ CLI：
 
 - Context 计算和 bypass 原因。
 - ETag 生成、304 匹配、TTL 时间桶。
-- TagIndex 添加、读取、丢失回退。
+- UrlIndex 添加、变体合并、tag 查询、removeTag、清理。
 - PurgeQueue 入队、去重、处理、失败保留。
 - Header 过滤和调试开关。
 - local HTML 存取、大小上限、元数据缺失和版本淘汰。

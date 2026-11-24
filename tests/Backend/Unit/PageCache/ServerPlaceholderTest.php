@@ -84,6 +84,7 @@ afterEach(function () {
     Mage::app()->getStore()->setConfig('page_cache/dynamic/server_side', '0');
     Mage::app()->getStore()->setConfig('page_cache/dynamic/server_types', '');
     Mage::unregister('page_cache_request_cacheable');
+    Mage::getModel('page_cache/urlIndex')->clear();
     Mage::unregister('page_cache_server_blocks');
     Mage::getSingleton('page_cache/staticCache')->flush();
     Mage::app()->getCache()->cleanType('page_cache');

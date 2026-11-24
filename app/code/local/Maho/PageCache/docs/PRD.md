@@ -60,7 +60,7 @@ Maho 目前有 Symfony Cache 对象缓存（file/redis），但没有内置的 H
 | FR-02 | 匿名 GET session skip：可缓存路由在没有 Maho session cookie 时跳过 session，不返回会话 `Set-Cookie` | P1 | 已交付@v0.2.0 |
 | FR-03 | 上下文与 HTTP 头：按 store、货币、客户组、税、query 参数生成 context hash；设置 `Cache-Control`、`Vary`、`X-Maho-Cache-*` | P1 | 已交付@v0.2.0 |
 | FR-04 | `revalidating` 模式：设置 `ETag`；请求带 `If-None-Match` 且版本未变时返回 304，不渲染页面；`Last-Modified` 仅作为响应头 | P1 | 已交付@v0.2.0 |
-| FR-05 | `proxy` 模式：设置反向代理可缓存的 `Cache-Control` 和 `X-Cache-Tags`；维护 tag 到 URL 的索引；tag 失效时写入 purge 队列 | P1 | 已交付@v0.2.0 |
+| FR-05 | `proxy` 模式：设置反向代理可缓存的 `Cache-Control` 和 `X-Cache-Tags`；维护持久化的 tag 到 URL 索引；tag 失效时写入 purge 队列 | P1 | 已交付@v0.2.0 |
 | FR-06 | 实体 tag 失效：product、category、CMS page、CMS block 的 save/delete 按 `getCacheIdTags()` 清理相关页面 | P1 | 已交付@v0.2.0 |
 | FR-07 | 规则和配置失效：catalog rule 按受影响产品和分类细粒度失效；stock 状态变化和批量属性更新按 product tag 失效；sales rule、配置、主题、layout、全量缓存清理时全量失效 | P1 | 已交付@v0.2.0 |
 | FR-08 | Bypass 策略与调试头：非 GET、admin、非白名单路由、未知 query 参数、路径过深、分层导航过深、有 session cookie、预览、维护模式、非默认上下文时 bypass，并输出原因 | P1 | 已交付@v0.2.0 |
@@ -143,7 +143,7 @@ Maho 目前有 Symfony Cache 对象缓存（file/redis），但没有内置的 H
 #### AC-05 proxy 模式与 purge
 
 - 第一次响应带 `Cache-Control` 和 `X-Cache-Tags`。
-- tag 失效时，tag 到 URL 的索引被读取，相关 URL 写入 purge 队列。
+- tag 失效时，原生 cache tag 清理页面，URL 索引提供相关 URL 写入 purge 队列。
 - `page-cache:purge --dry-run` 列出待处理 URL，不删除队列。
 - `page-cache:purge` 触发 `maho_page_cache_purge_urls` 事件，并写入 `var/page-cache/purge-<timestamp>.txt`。
 - purge 成功后队列条目删除；失败时保留并记录错误。
@@ -171,7 +171,7 @@ Maho 目前有 Symfony Cache 对象缓存（file/redis），但没有内置的 H
 
 - 非 GET、admin、非白名单路由、未知 query 参数、路径段数超过上限、分层导航深度超过上限、有 session cookie、预览、维护模式均 bypass。
 - 非默认 store/货币/客户组/税上下文按配置 bypass 或生成独立 context。
-- bypass 响应不被写入 tag 索引，也不产生 purge 条目。
+- bypass 响应不被写入 URL 索引，也不产生 purge 条目。
 - `X-Maho-Cache-Bypass` 原因码稳定、可搜索，不包含 PII。
 
 #### AC-09 CLI 与计数
@@ -249,7 +249,7 @@ Maho 目前有 Symfony Cache 对象缓存（file/redis），但没有内置的 H
 - 反向代理对自定义 `Vary` 的支持不一致。第一期在代理不遵守 `X-Maho-Cache-Context` 时 bypass 非默认上下文。
 - 代理侧命中数无法由 PHP 统计。第一期只统计 PHP 侧，代理统计留给外部监控或第三期。
 - 跳过 session 后页面里的 form key 没有绑定真实 session。第二期用占位符和动态请求替换 form key/SID；没有 JavaScript 的客户端无法提交这些表单。
-- tag 到 URL 的索引存缓存，可能被淘汰。淘汰时回退全量失效，不返回错误内容。
+- URL 索引存 DB，缓存淘汰不影响索引；DB 异常时回退全量失效，不返回错误内容。
 - catalog rule 的受影响商品计算可能很重。第一期在保存时计算，必要时异步化。
 - 多 store、多货币、客户组、税的 context 组合会降低命中率。第一期先保证正确性，再逐步放宽。
 - 许可证：只参考 RockSolid 和 Cm_Diehard 的设计，不复制 GPL 代码。
