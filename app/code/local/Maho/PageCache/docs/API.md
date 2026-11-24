@@ -246,7 +246,7 @@ var/page-cache/static/{store_code}/{public_path}.gz
 
 ### 3.8 统计面板
 
-一级菜单 `Page Cache`，ACL 保留 `admin/report/page_cache`。页面提供 `Warm Now`（处理一个预热队列批次）和 `Configuration` 按钮。统计内容使用四个标准报表 tab：Overview、Trend、Top Missed URLs、Recent Events，每个 tab 是一张 `Mage_Adminhtml_Block_Widget_Grid`。
+一级菜单 `Page Cache`，ACL 保留 `admin/report/page_cache`。页面提供 `Warm Now`（处理一个预热队列批次）和 `Configuration` 按钮。统计内容使用四个标准报表 tab：Overview、Trend、Top Missed URLs、Recent Events，每个 tab 是一张 `Mage_Adminhtml_Block_Widget_Grid`，带分页、列过滤和 CSV/Excel XML 导出。
 
 - 范围：24 小时、7 天、30 天；可按 store 过滤。
 - 指标：hit rate、PHP 平均耗时、miss、bypass、trend、top missed URL、最近 flush/purge/warmup。

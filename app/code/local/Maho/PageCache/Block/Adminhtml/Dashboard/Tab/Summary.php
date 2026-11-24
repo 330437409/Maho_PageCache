@@ -59,6 +59,8 @@ class Maho_PageCache_Block_Adminhtml_Dashboard_Tab_Summary extends Maho_PageCach
             'sortable' => false,
         ]);
 
+        $this->addExports('Summary');
+
         return parent::_prepareColumns();
     }
 }

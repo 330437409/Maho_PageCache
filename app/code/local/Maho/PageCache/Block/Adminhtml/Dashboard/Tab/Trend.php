@@ -47,6 +47,8 @@ class Maho_PageCache_Block_Adminhtml_Dashboard_Tab_Trend extends Maho_PageCache_
             ]);
         }
 
+        $this->addExports('Trend');
+
         return parent::_prepareColumns();
     }
 }

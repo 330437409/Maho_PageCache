@@ -47,6 +47,8 @@ class Maho_PageCache_Block_Adminhtml_Dashboard_Tab_Recent extends Maho_PageCache
             ]);
         }
 
+        $this->addExports('Recent');
+
         return parent::_prepareColumns();
     }
 }

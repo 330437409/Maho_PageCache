@@ -45,6 +45,8 @@ class Maho_PageCache_Block_Adminhtml_Dashboard_Tab_TopMissed extends Maho_PageCa
             'sortable' => false,
         ]);
 
+        $this->addExports('TopMissed');
+
         return parent::_prepareColumns();
     }
 }

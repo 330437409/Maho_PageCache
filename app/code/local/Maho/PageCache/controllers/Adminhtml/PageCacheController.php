@@ -22,6 +22,82 @@ class Maho_PageCache_Adminhtml_PageCacheController extends Mage_Adminhtml_Contro
         $this->renderLayout();
     }
 
+    #[\Maho\Config\Route('/admin/page_cache/exportSummaryCsv')]
+    public function exportSummaryCsvAction(): void
+    {
+        $this->exportGrid('summary', 'csv');
+    }
+
+    #[\Maho\Config\Route('/admin/page_cache/exportSummaryExcel')]
+    public function exportSummaryExcelAction(): void
+    {
+        $this->exportGrid('summary', 'excel');
+    }
+
+    #[\Maho\Config\Route('/admin/page_cache/exportTrendCsv')]
+    public function exportTrendCsvAction(): void
+    {
+        $this->exportGrid('trend', 'csv');
+    }
+
+    #[\Maho\Config\Route('/admin/page_cache/exportTrendExcel')]
+    public function exportTrendExcelAction(): void
+    {
+        $this->exportGrid('trend', 'excel');
+    }
+
+    #[\Maho\Config\Route('/admin/page_cache/exportTopMissedCsv')]
+    public function exportTopMissedCsvAction(): void
+    {
+        $this->exportGrid('top_missed', 'csv');
+    }
+
+    #[\Maho\Config\Route('/admin/page_cache/exportTopMissedExcel')]
+    public function exportTopMissedExcelAction(): void
+    {
+        $this->exportGrid('top_missed', 'excel');
+    }
+
+    #[\Maho\Config\Route('/admin/page_cache/exportRecentCsv')]
+    public function exportRecentCsvAction(): void
+    {
+        $this->exportGrid('recent', 'csv');
+    }
+
+    #[\Maho\Config\Route('/admin/page_cache/exportRecentExcel')]
+    public function exportRecentExcelAction(): void
+    {
+        $this->exportGrid('recent', 'excel');
+    }
+
+    private function exportGrid(string $key, string $format): void
+    {
+        $aliases = [
+            'summary' => 'page_cache/adminhtml_dashboard_tab_summary',
+            'trend' => 'page_cache/adminhtml_dashboard_tab_trend',
+            'top_missed' => 'page_cache/adminhtml_dashboard_tab_topMissed',
+            'recent' => 'page_cache/adminhtml_dashboard_tab_recent',
+        ];
+        if (!isset($aliases[$key])) {
+            $this->_forward('noroute');
+            return;
+        }
+
+        $grid = $this->getLayout()->createBlock($aliases[$key]);
+        if (!$grid instanceof Mage_Adminhtml_Block_Widget_Grid) {
+            $this->_forward('noroute');
+            return;
+        }
+
+        $fileName = 'page_cache_' . $key . ($format === 'excel' ? '.xml' : '.csv');
+        if ($format === 'excel') {
+            $this->_prepareDownloadResponse(...$grid->getExcelFile($fileName, -1));
+            return;
+        }
+
+        $this->_prepareDownloadResponse(...$grid->getCsvFile($fileName, -1));
+    }
+
     #[\Maho\Config\Route('/admin/page_cache/warm', methods: ['POST'])]
     public function warmAction(): void
     {

@@ -16,10 +16,17 @@ abstract class Maho_PageCache_Block_Adminhtml_Dashboard_Tab_Abstract extends Mag
     protected function _construct()
     {
         parent::_construct();
-        $this->setFilterVisibility(false);
-        $this->setPagerVisibility(false);
+        $this->setFilterVisibility(true);
+        $this->setPagerVisibility(true);
+        $this->setDefaultLimit(20);
         $this->setUseAjax(false);
         $this->setEmptyText($this->__('No records found for this period.'));
+    }
+
+    protected function addExports(string $action): void
+    {
+        $this->addExportType('*/*/export' . $action . 'Csv', $this->__('CSV'));
+        $this->addExportType('*/*/export' . $action . 'Excel', $this->__('Excel XML'));
     }
 
     protected function getDays(): int
