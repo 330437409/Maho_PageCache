@@ -1,6 +1,6 @@
 # 产品需求文档（PRD）：Maho 页面缓存
 
-> 状态：0.5.2 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付；0.5.1 cache integrity 修复和 0.5.2 tag 索引重构已交付
+> 状态：0.5.3 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付；0.5.1 cache integrity 修复、0.5.2 tag 索引重构和 0.5.3 P1 加固与性能优化已交付
 > 模块：`Maho_PageCache`
 > 代码路径：`app/code/local/Maho/PageCache`
 > 关联 spec：`docs/specs/page-cache.md`

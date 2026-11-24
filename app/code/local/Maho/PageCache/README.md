@@ -4,7 +4,7 @@ Maho 的 HTTP 页面缓存集成层。第一期支持 `proxy` 和 `revalidating`
 
 ## 状态
 
-0.5.2 已交付，累计包含第一期的 HTTP 集成层、proxy/revalidating 两种模式、session skip、tag 失效、purge 队列、配置和 CLI，第二期的 `local` 模式、Ajax/ESI 动态块和 `page-cache:warm`，第三期的静态文件导出、统计面板、定时预热和服务器端动态块占位符，以及 0.5.1 的 cache integrity 修复和 0.5.2 的 tag 索引重构。0.5.3 的 P1 缓存加固和性能优化开发中。
+0.5.3 已交付，累计包含第一期的 HTTP 集成层、proxy/revalidating 两种模式、session skip、tag 失效、purge 队列、配置和 CLI，第二期的 `local` 模式、Ajax/ESI 动态块和 `page-cache:warm`，第三期的静态文件导出、统计面板、定时预热和服务器端动态块占位符，以及 0.5.1 的 cache integrity 修复、0.5.2 的 tag 索引重构和 0.5.3 的 P1 加固与性能优化。
 
 - 第一期：HTTP 集成层，`proxy` + `revalidating`。0.2.0 已交付。
 - 第二期：`local` 模式、整页 HTML 缓存、Ajax/ESI 动态块、缓存预热。0.2.0 已交付。

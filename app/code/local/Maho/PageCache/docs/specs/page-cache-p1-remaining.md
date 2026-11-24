@@ -1,6 +1,6 @@
 # 功能规格：P1 剩余正确性项
 
-> 状态：实现完成，待发版 0.5.3
+> 状态：已交付@v0.5.3
 > 关联 ADR：ADR-0008、ADR-0017
 > 分支：`feat/page-cache-phase2`
 
@@ -57,4 +57,4 @@
 - 代码：`Model/Context.php`、`Service/Dynamic.php`、`Service/Request.php`、`Model/Observer.php`、`Helper/Data.php`、`etc/config.xml`、`etc/system.xml`、`sql/schema.php`。
 - 测试：`DynamicBlockTest`、`ProxyContextTest`、`ObserverTest`、`ContextTest`。
 - 测试结果：192 passed（533 assertions）。
-- 交叉验证：模块 CI run 45359260274 在 SQLite、MySQL、PostgreSQL 三个任务上全部通过（2026-11-24）。
+- 交叉验证：模块 CI run 45359859827 在 SQLite、MySQL、PostgreSQL 三个任务上全部通过（2026-11-24）。
