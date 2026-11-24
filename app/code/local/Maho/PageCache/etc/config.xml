@@ -2,7 +2,7 @@
 <config>
     <modules>
         <Maho_PageCache>
-            <version>0.5.3</version>
+            <version>0.5.4</version>
         </Maho_PageCache>
     </modules>
     <global>
@@ -84,6 +84,7 @@ catalog_product_view]]></session_skip_routes>
                 <max_path_segments>8</max_path_segments>
                 <respect_no_cache>1</respect_no_cache>
                 <debug_headers>0</debug_headers>
+                <stock_pending_warn_age>3600</stock_pending_warn_age>
             </general>
             <proxy>
                 <context_mode>cookie</context_mode>

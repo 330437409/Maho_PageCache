@@ -932,6 +932,19 @@ class Maho_PageCache_Model_Observer
         }
     }
 
+    #[\Maho\Config\CronJob('page_cache_stock_pending_alert', schedule: '20 * * * *')]
+    public function alertStockPending(): void
+    {
+        try {
+            $maxAge = Mage::helper('page_cache')->getStockPendingWarnAge();
+            if ($maxAge > 0) {
+                Mage::getService('page_cache/stockPending')->logIfStale($maxAge);
+            }
+        } catch (\Throwable $e) {
+            Mage::logException($e);
+        }
+    }
+
     #[\Maho\Config\CronJob('page_cache_stats_rollup', schedule: '5 * * * *')]
     public function rollupStats(): void
     {

@@ -23,6 +23,7 @@
 | `page_cache/general/mode` | select | `revalidating` | `proxy`、`revalidating` 或 `local` |
 | `page_cache/general/ttl` | text | 3600 | 缓存 TTL，秒 |
 | `page_cache/general/html_max_size` | text | 2097152 | local HTML 条目上限，字节 |
+| `page_cache/general/stock_pending_warn_age` | text | 3600 | stock pending 年龄告警阈值秒数，0 关闭 |
 | `page_cache/proxy/context_mode` | select | `cookie` | `cookie` 依赖代理遵守 `Vary: Cookie`；`default` 只缓存默认 store 或 URL 带 store code 的请求，`___store` cookie 切换 bypass |
 | `page_cache/dynamic/injection` | select | `ajax` | 动态块注入方式：`ajax` 或 `esi` |
 | `page_cache/dynamic/ttl` | text | 0 | 显式标记可缓存的动态块响应秒数，0 不缓存 |
@@ -264,6 +265,13 @@ var/page-cache/static/{store_code}/{public_path}.gz
 - 请求不发送 session cookie；配置 basic auth 后发送 `Authorization: Basic`。
 - 最近一次汇总保留 7 天，`page-cache:status` 读取。
 
+### 3.10 Stock pending 监控
+
+- stock 状态变化写入 `page_cache_stock_pending`，实时和 manual 索引结束后清空。
+- `page_cache_stock_pending_alert` cron 每小时第 20 分检查最老 pending 年龄。
+- 超过 `page_cache/general/stock_pending_warn_age` 时写 `var/log/page-cache-stock.log`，提示执行 `./maho index:reindex cataloginventory_stock`。
+- `page-cache:status` 同时显示 pending 数量和 oldest 年龄；阈值为 0 关闭告警。
+
 ## 5. CLI
 
 ### 5.1 `page-cache:status`
@@ -280,7 +288,8 @@ Enabled: yes
 TTL: 3600
 Global version: 12
 Purge queue: 3
-Stock pending: 0
+Stock pending: 2, oldest: 2h 5m
+Stock pending warning: oldest item is 2h 5m old. Run ./maho index:reindex cataloginventory_stock.
 Warmup: enabled, queue=12
 Last warmup: warmed=8 skipped=2 failed=1 dropped=0 remaining=12 at 2026-11-24 02:10:00
 PHP counters (today): hit=300 miss=120 bypass=45 revalidated=80

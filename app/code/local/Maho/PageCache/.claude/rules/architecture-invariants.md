@@ -18,6 +18,7 @@
 - dynamic token 的 URL 使用 store base URL 的 scheme/host，过期时间不短于页面 TTL。
 - dynamic 请求必须按客户端限流；超限返回 429，不注册 dynamic request。
 - stock 二次失效的 pending ID 必须持久化到 `page_cache_stock_pending`，不能只放进程内 registry。
+- pending 年龄超过 `page_cache/general/stock_pending_warn_age` 时，小时 cron 必须写 `page-cache-stock.log`；阈值为 0 时关闭。
 - catalog rule、import 和 stock 的失效必须发生在对应索引或导入完成之后。
 - 全量失效递增全局版本；tag 失效递增相关 URL 版本。
 - PHP 计数从统计表读取，不在命中热路径读写 cache。

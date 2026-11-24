@@ -4,7 +4,7 @@ Maho 的 HTTP 页面缓存集成层。第一期支持 `proxy` 和 `revalidating`
 
 ## 状态
 
-0.5.3 已交付，累计包含第一期的 HTTP 集成层、proxy/revalidating 两种模式、session skip、tag 失效、purge 队列、配置和 CLI，第二期的 `local` 模式、Ajax/ESI 动态块和 `page-cache:warm`，第三期的静态文件导出、统计面板、定时预热和服务器端动态块占位符，以及 0.5.1 的 cache integrity 修复、0.5.2 的 tag 索引重构和 0.5.3 的 P1 加固与性能优化。
+0.5.3 已交付，累计包含第一期的 HTTP 集成层、proxy/revalidating 两种模式、session skip、tag 失效、purge 队列、配置和 CLI，第二期的 `local` 模式、Ajax/ESI 动态块和 `page-cache:warm`，第三期的静态文件导出、统计面板、定时预热和服务器端动态块占位符，以及 0.5.1 的 cache integrity 修复、0.5.2 的 tag 索引重构和 0.5.3 的 P1 加固与性能优化。0.5.4 的 stock pending 监控开发中。
 
 - 第一期：HTTP 集成层，`proxy` + `revalidating`。0.2.0 已交付。
 - 第二期：`local` 模式、整页 HTML 缓存、Ajax/ESI 动态块、缓存预热。0.2.0 已交付。
@@ -27,6 +27,7 @@ Maho 的 HTTP 页面缓存集成层。第一期支持 `proxy` 和 `revalidating`
 - `docs/specs/page-cache-p1-hardening.md`：0.5.3 P1 缓存加固规格。
 - `docs/specs/page-cache-p1-performance.md`：0.5.3 P1 缓存性能规格。
 - `docs/specs/page-cache-p1-remaining.md`：0.5.3 P1 剩余正确性项规格。
+- `docs/specs/page-cache-stock-pending-monitor.md`：0.5.4 stock pending 监控规格。
 - `.claude/rules/`：模块级防漂移规则。
 
 ## 设计来源
@@ -57,7 +58,7 @@ Maho 的 HTTP 页面缓存集成层。第一期支持 `proxy` 和 `revalidating`
 System > Configuration > Page Cache
 ```
 
-主要字段：开关、模式（`proxy`、`revalidating`、`local`）、TTL、local HTML 大小上限、可缓存路由、允许的 query 参数、路径段数上限、分层导航标记和深度、是否遵守 no-cache、调试头、session skip 路由、proxy context 模式、动态块注入方式、动态块 TTL、动态请求限流和窗口、服务器端动态块开关和类型白名单、预热开关/批次/并发/间隔/重试/队列上限/basic auth、静态文件导出、统计开关和保留期。
+主要字段：开关、模式（`proxy`、`revalidating`、`local`）、TTL、local HTML 大小上限、可缓存路由、允许的 query 参数、路径段数上限、分层导航标记和深度、是否遵守 no-cache、调试头、session skip 路由、proxy context 模式、stock pending 告警阈值、动态块注入方式、动态块 TTL、动态请求限流和窗口、服务器端动态块开关和类型白名单、预热开关/批次/并发/间隔/重试/队列上限/basic auth、静态文件导出、统计开关和保留期。
 
 ## 静态文件导出
 
@@ -127,7 +128,7 @@ local 命中时，显式标记的 leaf block 可以在服务器端重建，不�
 vendor/bin/pest tests/Backend/Unit/PageCache
 ```
 
-当前 192 个测试通过。
+当前 195 个测试通过。
 
 ## 许可证
 

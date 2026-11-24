@@ -35,18 +35,8 @@ class PageCacheStatus extends BaseMahoCommand
         $version = Mage::getModel('page_cache/version');
         $queue = Mage::getModel('page_cache/purgeQueue');
         $counters = Mage::getModel('page_cache/counter')->getToday();
-        $stockPending = 0;
-        try {
-            $read = Mage::getSingleton('core/resource')->getConnection('core_read');
-            $stockPending = (int) $read->fetchOne(
-                $read->select()->from(
-                    Mage::getSingleton('core/resource')->getTableName('page_cache/stock_pending'),
-                    ['COUNT(*)'],
-                ),
-            );
-        } catch (\Throwable $e) {
-            Mage::logException($e);
-        }
+        $stockPending = Mage::getService('page_cache/stockPending');
+        $stock = $stockPending->getSummary();
 
         $output->writeln('<info>Page Cache</info>');
         $output->writeln('Enabled: ' . ($helper->isEnabled() ? 'yes' : 'no'));
@@ -54,7 +44,17 @@ class PageCacheStatus extends BaseMahoCommand
         $output->writeln('TTL: ' . $helper->getTtl());
         $output->writeln('Global version: ' . $version->getGlobal());
         $output->writeln('Purge queue: ' . $queue->count());
-        $output->writeln('Stock pending: ' . $stockPending);
+        $pendingLabel = (string) $stock['count'];
+        if ($stock['count'] > 0 && $stock['age'] !== null) {
+            $pendingLabel .= ', oldest ' . $this->formatAge($stock['age']);
+        }
+        $output->writeln('Stock pending: ' . $pendingLabel);
+        if ($stockPending->isStale($stock, $helper->getStockPendingWarnAge())) {
+            $output->writeln(sprintf(
+                '<comment>Stock pending warning: oldest item is %s old. Run ./maho index:reindex cataloginventory_stock.</comment>',
+                $this->formatAge((int) $stock['age']),
+            ));
+        }
         $warmQueue = Mage::getModel('page_cache/warmQueue');
         $lastRun = Mage::getService('page_cache/warm')->getLastRun();
         $output->writeln(sprintf(
@@ -84,5 +84,27 @@ class PageCacheStatus extends BaseMahoCommand
         }
 
         return Command::SUCCESS;
+    }
+
+    private function formatAge(int $seconds): string
+    {
+        $seconds = max(0, $seconds);
+        if ($seconds < 60) {
+            return $seconds . 's';
+        }
+
+        $minutes = intdiv($seconds, 60);
+        if ($minutes < 60) {
+            return $minutes . 'm';
+        }
+
+        $hours = intdiv($minutes, 60);
+        $minutes %= 60;
+        if ($hours < 24) {
+            return $hours . 'h ' . $minutes . 'm';
+        }
+
+        $days = intdiv($hours, 24);
+        return $days . 'd ' . ($hours % 24) . 'h';
     }
 }

@@ -126,6 +126,16 @@
                             <show_in_website>1</show_in_website>
                             <show_in_store>1</show_in_store>
                         </respect_no_cache>
+                        <stock_pending_warn_age translate="label comment">
+                            <label>Stock Pending Warning (seconds)</label>
+                            <comment>The hourly cron logs a warning when the oldest pending stock invalidation is older than this. 0 disables the warning.</comment>
+                            <frontend_type>text</frontend_type>
+                            <validate>validate-number</validate>
+                            <sort_order>75</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>1</show_in_website>
+                            <show_in_store>1</show_in_store>
+                        </stock_pending_warn_age>
                         <debug_headers translate="label comment">
                             <label>Debug Headers</label>
                             <comment>Output X-Maho-Cache-Tags, X-Maho-Cache-Version and detailed bypass reasons.</comment>
