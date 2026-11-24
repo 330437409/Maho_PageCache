@@ -53,6 +53,6 @@
 
 - 代码：`Model/PurgeQueue.php`、`Model/Counter.php`、`Model/Stat.php`、`Model/StaticCache.php`、`Model/HtmlCache.php`、`Model/Key.php`、`sql/schema.php`、`etc/config.xml`、`lib/MahoCLI/Commands/PageCacheStatus.php`。
 - 测试：`CounterTest`、`LocalCacheTest`、`StaticCacheTest`、`PurgeQueueTest`。
-- 测试结果：191 passed（531 assertions）。
+- 测试结果：192 passed（533 assertions）。
 - PHPStan、php-cs-fixer、Rector 通过。
 - 交叉验证：模块 CI run 45356300789 在 SQLite、MySQL、PostgreSQL 三个任务上全部通过（2026-11-24）。

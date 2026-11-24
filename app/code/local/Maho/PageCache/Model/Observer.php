@@ -754,6 +754,7 @@ class Maho_PageCache_Model_Observer
         $productIds = Mage::registry('page_cache_stock_pending');
         Mage::unregister('page_cache_stock_pending');
         $productIds = is_array($productIds) ? $productIds : [];
+        $snapshot = gmdate('Y-m-d H:i:s');
 
         try {
             $read = Mage::getSingleton('core/resource')->getConnection('core_read');
@@ -778,7 +779,8 @@ class Maho_PageCache_Model_Observer
             $write = Mage::getSingleton('core/resource')->getConnection('core_write');
             $write->delete(
                 $this->stockPendingTable(),
-                $write->quoteInto('product_id IN (?)', $productIds),
+                $write->quoteInto('product_id IN (?)', $productIds)
+                    . ' AND created_at <= ' . $write->quote($snapshot),
             );
         } catch (\Throwable $e) {
             Mage::logException($e);

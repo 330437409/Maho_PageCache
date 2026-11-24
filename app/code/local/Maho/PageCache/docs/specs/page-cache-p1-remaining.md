@@ -56,5 +56,5 @@
 
 - 代码：`Model/Context.php`、`Service/Dynamic.php`、`Service/Request.php`、`Model/Observer.php`、`Helper/Data.php`、`etc/config.xml`、`etc/system.xml`、`sql/schema.php`。
 - 测试：`DynamicBlockTest`、`ProxyContextTest`、`ObserverTest`、`ContextTest`。
-- 测试结果：191 passed（531 assertions）。
-- 交叉验证：模块 CI run 45358076133 在 SQLite、MySQL、PostgreSQL 三个任务上全部通过（2026-11-24）。
+- 测试结果：192 passed（533 assertions）。
+- 交叉验证：模块 CI run 45359260274 在 SQLite、MySQL、PostgreSQL 三个任务上全部通过（2026-11-24）。

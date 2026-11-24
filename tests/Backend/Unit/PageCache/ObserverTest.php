@@ -155,6 +155,34 @@ it('invalidates deleted products when a delete import finishes', function () {
         ->and(Mage::getModel('page_cache/urlIndex')->getByTag('catalog_product_123'))->toBe([]);
 });
 
+it('keeps a stock pending row written after the index snapshot', function () {
+    $context = observerStaticContext('/stock-race.html');
+    Mage::getModel('page_cache/urlIndex')->add($context, ['catalog_product_1'], 1);
+    $item = Mage::getModel('cataloginventory/stock_item');
+    $item->setProductId(1);
+    $item->setOrigData('is_in_stock', 1);
+    $item->setData('is_in_stock', 0);
+    $observer = new Maho_PageCache_Model_Observer();
+    $observer->invalidateOnStockSave(new Maho\Event\Observer(['item' => $item]));
+    $table = Mage::getSingleton('core/resource')->getTableName('page_cache/stock_pending');
+    $write = Mage::getSingleton('core/resource')->getConnection('core_write');
+    $read = Mage::getSingleton('core/resource')->getConnection('core_read');
+    $write->update(
+        $table,
+        ['created_at' => gmdate('Y-m-d H:i:s', time() + 60)],
+        ['product_id = ?' => 1],
+    );
+
+    $observer->flushPendingStockInvalidation(new Maho\Event\Observer([]));
+
+    expect($read->fetchCol($read->select()->from($table, ['product_id'])))->toBe([1]);
+
+    $write->update($table, ['created_at' => gmdate('Y-m-d H:i:s', time() - 10)], ['product_id = ?' => 1]);
+    $observer->flushPendingStockInvalidation(new Maho\Event\Observer([]));
+
+    expect($read->fetchCol($read->select()->from($table, ['product_id'])))->toBe([]);
+});
+
 it('clears static files when the page cache type is refreshed', function () {
     Mage::app()->getStore()->setConfig('page_cache/static/enabled', '1');
     $context = observerStaticContext();

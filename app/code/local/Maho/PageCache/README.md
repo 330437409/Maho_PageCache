@@ -127,7 +127,7 @@ local 命中时，显式标记的 leaf block 可以在服务器端重建，不�
 vendor/bin/pest tests/Backend/Unit/PageCache
 ```
 
-当前 191 个测试通过。
+当前 192 个测试通过。
 
 ## 许可证
 
