@@ -245,7 +245,7 @@ $cmsPage = $proxy->getCmsPage();
   - 第一次请求 MISS，匿名 fallback 显示商品名；第二次请求 HIT，两个 block 都渲染 live 商品名，且 `spl_object_id` 相同，说明同一请求复用一个实例。
   - 修改商品名后页面缓存按 `catalog_product_1` 失效，下一次请求 MISS 并显示新名称，随后再次 HIT。
   - 临时 CMS 页面、模板和配置已清理。
-- 跨库：由模块仓库 CI 在 SQLite、PostgreSQL、MySQL 上跑完整 PageCache 套件。
+- 跨库：模块 CI run 45404003036，SQLite、MySQL、PostgreSQL 全部通过。
 
 ## 5. 验收标准
 
