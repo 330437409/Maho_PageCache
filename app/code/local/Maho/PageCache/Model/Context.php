@@ -12,6 +12,7 @@ declare(strict_types=1);
 
 class Maho_PageCache_Model_Context
 {
+    /** @var array<string, mixed> */
     private array $data;
 
     /**

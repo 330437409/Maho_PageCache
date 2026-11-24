@@ -246,7 +246,7 @@ var/page-cache/static/{store_code}/{public_path}.gz
 
 ### 3.8 统计面板
 
-`Reports > Page Cache`，ACL `admin/report/page_cache`。
+一级菜单 `Page Cache`，ACL 保留 `admin/report/page_cache`。页面提供 `Warm Now`（处理一个预热队列批次）和 `Configuration` 按钮。统计内容使用四个标准报表 tab：Overview、Trend、Top Missed URLs、Recent Events，每个 tab 是一张 `Mage_Adminhtml_Block_Widget_Grid`，带分页、列过滤和 CSV/Excel XML 导出。
 
 - 范围：24 小时、7 天、30 天；可按 store 过滤。
 - 指标：hit rate、PHP 平均耗时、miss、bypass、trend、top missed URL、最近 flush/purge/warmup。
@@ -256,7 +256,7 @@ var/page-cache/static/{store_code}/{public_path}.gz
 
 ### 3.9 定时预热
 
-默认关闭。开启 `page_cache/warmup/enabled` 后：
+默认关闭。后台 `Warmup` 配置组只控制调度开关、队列和请求参数，不提供“立即预热”按钮；立即预热使用 `./maho page-cache:warm`。开启 `page_cache/warmup/enabled` 后：
 
 - tag 失效把受影响 URL 写入 `page_cache_warmup_queue`，按 URL sha256 去重。
 - `page_cache_warmup` cron 每分钟消费，批次大小、并发、间隔、重试和队列上限见配置。
@@ -360,6 +360,36 @@ purge entry 保留 24 小时，queue index 保留 25 小时。index 不会先于
 - 计数来自 `page_cache_stat`，需要开启统计；缓存类型清理不会重置当天计数。
 - `page_cache_context_variant` registry 由移动主题、A-B、geo-IP 等模块设置；proxy/revalidating 遇到非空 variant 会 bypass，local 会把它计入 context key。
 - 统计关闭时 `page-cache:status` 显示 counters unavailable。
+
+### 5.4 `page-cache:monitor`
+
+```bash
+./maho page-cache:monitor --format=prometheus
+./maho page-cache:monitor --format=json
+./maho page-cache:monitor --format=text --check
+```
+
+选项：
+
+| 选项 | 说明 |
+|---|---|
+| `--format=prometheus` | Prometheus 文本格式，默认 |
+| `--format=json` | JSON，适合 Zabbix、Nagios、脚本 |
+| `--format=text` | 一行 key=value，适合简单探针 |
+| `--check` | stock pending 超过告警阈值时返回退出码 1 |
+
+指标：
+
+- `maho_page_cache_stock_pending_count`
+- `maho_page_cache_stock_pending_oldest_seconds`
+- `maho_page_cache_stock_pending_stale`
+- `maho_page_cache_stock_pending_warn_age_seconds`
+- `maho_page_cache_purge_queue`
+- `maho_page_cache_warmup_queue`
+- `maho_page_cache_hit_today` / `miss` / `bypass` / `revalidated`
+- `maho_page_cache_enabled` / `stats_enabled` / `warmup_enabled`
+
+计数来自 `page_cache_stat`；统计关闭时 counter 为 0，`stats_enabled` 为 0。
 
 ## 6. Purge 事件
 

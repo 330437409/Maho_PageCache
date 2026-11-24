@@ -4,7 +4,7 @@ Maho 的 HTTP 页面缓存集成层。第一期支持 `proxy` 和 `revalidating`
 
 ## 状态
 
-0.5.4 已交付，累计包含第一期的 HTTP 集成层、proxy/revalidating 两种模式、session skip、tag 失效、purge 队列、配置和 CLI，第二期的 `local` 模式、Ajax/ESI 动态块和 `page-cache:warm`，第三期的静态文件导出、统计面板、定时预热和服务器端动态块占位符，以及 0.5.1 的 cache integrity 修复、0.5.2 的 tag 索引重构、0.5.3 的 P1 加固与性能优化和 0.5.4 的 stock pending 监控。
+0.5.4 已交付，累计包含第一期的 HTTP 集成层、proxy/revalidating 两种模式、session skip、tag 失效、purge 队列、配置和 CLI，第二期的 `local` 模式、Ajax/ESI 动态块和 `page-cache:warm`，第三期的静态文件导出、统计面板、定时预热和服务器端动态块占位符，以及 0.5.1 的 cache integrity 修复、0.5.2 的 tag 索引重构、0.5.3 的 P1 加固与性能优化和 0.5.4 的 stock pending 监控。0.5.5 的监控指标导出开发中。
 
 - 第一期：HTTP 集成层，`proxy` + `revalidating`。0.2.0 已交付。
 - 第二期：`local` 模式、整页 HTML 缓存、Ajax/ESI 动态块、缓存预热。0.2.0 已交付。
@@ -30,6 +30,9 @@ Maho 的 HTTP 页面缓存集成层。第一期支持 `proxy` 和 `revalidating`
 - `docs/specs/page-cache-stock-pending-monitor.md`：0.5.4 stock pending 监控规格。
 - `docs/adr/0019-session-cookie-policy.md`：session cookie 命中策略，FR-20 暂停。
 - `docs/specs/page-cache-fr20-session-spike.md`：FR-20 session 命中只读安全 spike。
+- `docs/OPERATIONS.md`：0.5.4 生产观察和监控接入 runbook。
+- `docs/specs/page-cache-monitor-export.md`：0.5.5 监控指标导出规格。
+- `docs/specs/page-cache-admin-menu.md`：0.5.5 Page Cache 一级菜单和 Warm Now 规格。
 - `.claude/rules/`：模块级防漂移规则。
 
 ## 设计来源
@@ -85,7 +88,7 @@ var/page-cache/static/{store_code}/{public_path}.gz
 
 ## 统计面板
 
-`Reports > Page Cache` 显示 PHP 侧 hit rate、平均耗时、trend、top missed URL 和最近 flush/purge/warmup。默认关闭；在 `System > Configuration > Page Cache > Statistics` 开启。
+一级菜单 `Page Cache` 用 Overview、Trend、Top Missed URLs、Recent Events 四个标准报表 grid 显示 PHP 侧 hit rate、平均耗时、趋势、top missed URL 和最近 flush/purge/warmup，并提供 `Warm Now`（一个预热队列批次）和 `Configuration` 按钮。默认关闭；在 `System > Configuration > Page Cache > Statistics` 开启。
 
 - 原始事件保留 30 天，小时 rollup 保留 365 天，均可配置。
 - `page_cache_stats_rollup` 每小时聚合，`page_cache_stats_cleanup` 每天清理。
@@ -115,6 +118,8 @@ local 命中时，显式标记的 leaf block 可以在服务器端重建，不�
 
 ```bash
 ./maho page-cache:status
+./maho page-cache:monitor --format=prometheus
+./maho page-cache:monitor --format=json --check
 ./maho page-cache:purge --dry-run
 ./maho page-cache:purge --limit=100
 ./maho page-cache:purge --tag=catalog_product_123
@@ -130,7 +135,7 @@ local 命中时，显式标记的 leaf block 可以在服务器端重建，不�
 vendor/bin/pest tests/Backend/Unit/PageCache
 ```
 
-当前 195 个测试通过。
+当前 201 个测试通过。
 
 ## 许可证
 

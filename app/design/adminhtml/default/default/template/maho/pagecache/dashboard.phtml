@@ -1,0 +1,79 @@
+<?php
+
+/**
+ * SPDX-FileCopyrightText: 2026 Maho <https://mahocommerce.com>
+ * SPDX-License-Identifier: AFL-3.0
+ * @package Maho_PageCache
+ */
+
+/** @var Maho_PageCache_Block_Adminhtml_Dashboard $this */
+?>
+<div class="content-header">
+    <?= $this->getHeaderHtml() ?>
+    <div class="content-buttons form-buttons">
+        <?php if ($this->isWarmupEnabled()): ?>
+            <form method="post" action="<?= $this->escapeHtml($this->getWarmUrl()) ?>" class="inline-block">
+                <input name="form_key" type="hidden" value="<?= $this->escapeHtml($this->getFormKey()) ?>">
+                <button type="submit"
+                        class="d-btn d-btn-primary"
+                        title="<?= $this->escapeHtml($this->__('Process one warmup queue batch now')) ?>">
+                    <?= $this->__('Warm Now') ?>
+                </button>
+            </form>
+        <?php endif; ?>
+        <?= $this->getButtonsHtml() ?>
+    </div>
+</div>
+<?php if (!$this->isStatsEnabled()): ?>
+    <div class="d-alert d-alert-warning mb-4">
+        <?= $this->__('Page cache statistics are disabled.') ?>
+        <a href="<?= $this->escapeHtml($this->getConfigUrl()) ?>" class="link">
+            <?= $this->__('Enable them in System > Configuration > Page Cache > Statistics.') ?>
+        </a>
+    </div>
+<?php endif; ?>
+<?php if (!$this->isWarmupEnabled()): ?>
+    <div class="d-alert d-alert-info mb-4">
+        <?= $this->__('Scheduled warmup is disabled. Enable it under System > Configuration > Page Cache > Warmup to use Warm Now.') ?>
+    </div>
+<?php endif; ?>
+
+<form id="filter_form" method="get" action="<?= $this->escapeHtml($this->getStatsUrl()) ?>" class="filter">
+    <div class="fieldset">
+        <label class="form-inline" for="page_cache_days">
+            <span><?= $this->__('Range') ?></span>
+            <select id="page_cache_days" name="days" class="select">
+                <?php foreach ($this->getRangeOptions() as $value => $label): ?>
+                    <option value="<?= (int) $value ?>"<?= $this->getDays() === $value ? ' selected' : '' ?>>
+                        <?= $this->escapeHtml($label) ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+        </label>
+        <label class="form-inline" for="page_cache_store_id">
+            <span><?= $this->__('Store') ?></span>
+            <select id="page_cache_store_id" name="store_id" class="select">
+                <?php foreach ($this->getStores() as $store): ?>
+                    <option value="<?= (int) $store['value'] ?>"<?= $this->getStoreId() === (int) $store['value'] ? ' selected' : '' ?>>
+                        <?= $this->escapeHtml($store['label']) ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+        </label>
+        <button type="submit" class="scalable"><?= $this->__('Show Report') ?></button>
+    </div>
+</form>
+
+<div class="flex flex-wrap gap-x-6 gap-y-1 text-sm opacity-80 mb-4">
+    <span><?= $this->__('Statistics') ?>: <?= $this->isStatsEnabled() ? $this->__('Enabled') : $this->__('Disabled') ?></span>
+    <span><?= $this->__('Raw retention') ?>: <?= $this->getRawRetentionDays() ?> <?= $this->__('days') ?></span>
+    <span><?= $this->__('Rollup retention') ?>: <?= $this->getRollupRetentionDays() ?> <?= $this->__('days') ?></span>
+    <span><?= $this->__('Last rollup') ?>: <?= $this->getLastRollupBucket() === null ? $this->__('n/a') : $this->escapeHtml($this->getLastRollupBucket()) ?></span>
+</div>
+
+<?= $this->getTabsHtml() ?>
+<div id="page_cache_tab_content"></div>
+
+<p class="text-xs opacity-70 mt-4">
+    <?= $this->__('Only PHP-side events are counted. Static file, reverse proxy and CDN hits do not run PHP and are not included.') ?>
+</p>
