@@ -28,6 +28,11 @@ function staticCacheContext(array $overrides = []): Maho_PageCache_Model_Context
     ], $overrides));
 }
 
+function staticIndexTable(): string
+{
+    return Mage::getSingleton('core/resource')->getTableName('page_cache/static_file');
+}
+
 beforeEach(function () {
     Mage::app()->getStore()->setConfig('page_cache/general/enabled', '1');
     Mage::app()->getStore()->setConfig('page_cache/general/mode', 'local');
@@ -88,6 +93,9 @@ it('writes plain and gzip files atomically', function () {
         ->and(is_file($path . '.gz'))->toBeTrue()
         ->and(gzdecode((string) file_get_contents($path . '.gz')))->toBe('<html>category</html>')
         ->and(glob(dirname($path) . '/*.tmp'))->toBe([]);
+
+    $read = Mage::getSingleton('core/resource')->getConnection('core_read');
+    expect($read->fetchOne($read->select()->from(staticIndexTable(), ['COUNT(*)'])))->toBe(1);
 });
 
 it('does not write when static export is disabled', function () {
@@ -107,8 +115,10 @@ it('removes a static file by url', function () {
 
     $cache->removeByUrl('https://example.com/category', 'default');
 
+    $read = Mage::getSingleton('core/resource')->getConnection('core_read');
     expect(file_exists($path))->toBeFalse()
-        ->and(file_exists($path . '.gz'))->toBeFalse();
+        ->and(file_exists($path . '.gz'))->toBeFalse()
+        ->and($read->fetchOne($read->select()->from(staticIndexTable(), ['COUNT(*)'])))->toBe(0);
 });
 
 it('removes the default static file for a query variant', function () {
@@ -151,8 +161,10 @@ it('flushes every static file but keeps the root', function () {
 
     $cache->flush();
 
+    $read = Mage::getSingleton('core/resource')->getConnection('core_read');
     expect(is_dir($cache->getRoot()))->toBeTrue()
-        ->and(glob($cache->getRoot() . '/*'))->toBe([]);
+        ->and(glob($cache->getRoot() . '/*'))->toBe([])
+        ->and($read->fetchOne($read->select()->from(staticIndexTable(), ['COUNT(*)'])))->toBe(0);
 });
 
 it('cleans files older than the max age and keeps fresh files', function () {
@@ -164,10 +176,29 @@ it('cleans files older than the max age and keeps fresh files', function () {
 
     $cache->save($oldContext, '<html>old</html>');
     $cache->save($freshContext, '<html>fresh</html>');
+    $write = Mage::getSingleton('core/resource')->getConnection('core_write');
+    $write->update(
+        staticIndexTable(),
+        ['expires_at' => gmdate('Y-m-d H:i:s', time() - 10)],
+        ['path = ?' => 'default/old/index.html'],
+    );
     touch($oldPath, time() - 4000);
     touch($oldPath . '.gz', time() - 4000);
 
+    $read = Mage::getSingleton('core/resource')->getConnection('core_read');
     expect($cache->cleanup(3600))->toBeGreaterThan(0)
         ->and(file_exists($oldPath))->toBeFalse()
-        ->and(file_exists($freshPath))->toBeTrue();
+        ->and(file_exists($freshPath))->toBeTrue()
+        ->and($read->fetchOne($read->select()->from(staticIndexTable(), ['COUNT(*)'])))->toBe(1);
+});
+
+it('cleans untracked legacy files when the index is empty', function () {
+    $cache = Mage::getSingleton('page_cache/staticCache');
+    $path = $cache->getRoot() . DS . 'default' . DS . 'legacy' . DS . 'index.html';
+    @mkdir(dirname($path), 0775, true);
+    file_put_contents($path, '<html>legacy</html>');
+    touch($path, time() - 4000);
+
+    expect($cache->cleanup(3600))->toBeGreaterThan(0)
+        ->and(file_exists($path))->toBeFalse();
 });

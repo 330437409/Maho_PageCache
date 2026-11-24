@@ -45,14 +45,24 @@ function localCacheLockName(Maho_PageCache_Model_Context $context, ?array $versi
     return 'page_cache_html_' . $cache->getHash($context, $versions);
 }
 
+function localStatClean(): void
+{
+    Mage::getSingleton('core/resource')->getConnection('core_write')->delete(
+        Mage::getSingleton('core/resource')->getTableName('page_cache/stat'),
+        '1=1',
+    );
+}
+
 beforeEach(function () {
     Mage::app()->getStore()->setConfig('page_cache/general/enabled', '1');
     Mage::app()->getStore()->setConfig('page_cache/general/mode', 'local');
     Mage::app()->getStore()->setConfig('page_cache/general/html_max_size', '2097152');
     Mage::app()->getStore()->setConfig('page_cache/general/allowed_params', 'p,limit');
     Mage::app()->getStore()->setConfig('page_cache/static/enabled', '0');
+    Mage::app()->getStore()->setConfig('page_cache/stats/enabled', '1');
     Mage::app()->getCache()->cleanType('page_cache');
     Mage::getSingleton('page_cache/staticCache')->flush();
+    localStatClean();
 
     $response = Mage::app()->getResponse();
     $response->clearHeaders();
@@ -83,6 +93,8 @@ afterEach(function () {
     Mage::unregister('page_cache_not_modified');
     unset($_GET['p']);
     Mage::getSingleton('page_cache/staticCache')->flush();
+    Mage::app()->getStore()->setConfig('page_cache/stats/enabled', '0');
+    localStatClean();
     Mage::app()->getCache()->cleanType('page_cache');
 });
 
@@ -166,6 +178,36 @@ it('stores and loads a local html entry', function () {
         ->and($entry['headers']['Content-Type'])->toBe('text/html; charset=UTF-8')
         ->and($entry['etag'])->toStartWith('W/"')
         ->and($cache->load($context)['html'])->toBe('<html>cached</html>');
+});
+
+it('compresses large local html entries', function () {
+    $context = localCacheContext();
+    $cache = new Maho_PageCache_Model_HtmlCache();
+    $key = new Maho_PageCache_Model_Key();
+    $versions = $cache->getVersions($context);
+    $html = '<html>' . str_repeat('compressible ', 500) . '</html>';
+
+    $entry = $cache->save($context, $html, [], 3600, [], $versions);
+    $stored = Mage::app()->getCache()->load($key->getHtmlKey($cache->getHash($context, $versions)));
+
+    expect($entry['html_encoding'])->toBe('gzip')
+        ->and($stored['html_encoding'])->toBe('gzip')
+        ->and($stored['html'])->not->toBe($html)
+        ->and($cache->load($context)['html'])->toBe($html);
+});
+
+it('keeps small local html entries uncompressed', function () {
+    $context = localCacheContext();
+    $cache = new Maho_PageCache_Model_HtmlCache();
+    $key = new Maho_PageCache_Model_Key();
+    $versions = $cache->getVersions($context);
+    $html = '<html>small</html>';
+
+    $entry = $cache->save($context, $html, [], 3600, [], $versions);
+    $stored = Mage::app()->getCache()->load($key->getHtmlKey($cache->getHash($context, $versions)));
+
+    expect($entry['html_encoding'])->toBe('plain')
+        ->and($stored['html'])->toBe($html);
 });
 
 it('indexes the stored context for observation', function () {

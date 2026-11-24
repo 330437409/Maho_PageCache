@@ -207,7 +207,7 @@ var/page-cache/static/{store_code}/{public_path}.gz
 - 静态文件由 nginx 或 Caddy 直接返回，PHP 不启动；Web 服务器示例见 `docs/specs/page-cache-static-export.md`。
 - 缓存目录必须 deny 直接访问。
 - Web 服务器必须在 `Cookie` 含 `maho_session` 或有 query 参数时回 PHP。
-- tag 失效和全量失效会删除静态文件；`page_cache_static_cleanup` cron 每 5 分钟删除超过 `ttl + 300` 的文件。
+- tag 失效和全量失效会删除静态文件；`page_cache_static_cleanup` cron 按 `page_cache_static_file` 索引删除到期文件，索引为空时回退目录扫描。
 - 静态命中不经过 PHP，不计入 PHP 侧计数；Caddy 示例可加 `X-Page-Cache: HIT-static`，nginx 以没有 `X-Maho-Cache` 和 PHP 不启动为准。
 - 第一版只支持单节点；多节点共享存储和广播见 FR-19。
 
@@ -280,6 +280,8 @@ Purge queue: 3
 Warmup: enabled, queue=12
 Last warmup: warmed=8 skipped=2 failed=1 dropped=0 remaining=12 at 2026-11-24 02:10:00
 PHP counters (today): hit=300 miss=120 bypass=45 revalidated=80
+# statistics disabled:
+PHP counters: unavailable (statistics disabled)
 ```
 
 ### 5.2 `page-cache:warm`
@@ -333,6 +335,8 @@ PHP counters (today): hit=300 miss=120 bypass=45 revalidated=80
 5. 成功后删除队列条目，失败保留并记录日志。
 6. URL 为 `*` 表示全量 purge，消费者必须清空该模式的全部缓存对象。
 
+purge entry 保留 24 小时，queue index 保留 25 小时。index 不会先于 entry 过期，避免待处理条目失去索引。
+
 计数契约：
 
 - `hit`：local 模式命中并直接返回 HTML。
@@ -340,7 +344,8 @@ PHP counters (today): hit=300 miss=120 bypass=45 revalidated=80
 - `bypass`：请求或响应被 bypass，未写入 page cache。
 - `revalidated`：条件请求命中，返回 304。
 - 代理直接命中的请求不经过 Maho，不计入 PHP 侧计数。
-- 计数是尽力而为，缓存类型清理会重置当天计数。
+- 计数来自 `page_cache_stat`，需要开启统计；缓存类型清理不会重置当天计数。
+- 统计关闭时 `page-cache:status` 显示 counters unavailable。
 
 ## 6. Purge 事件
 

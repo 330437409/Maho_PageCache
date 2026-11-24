@@ -7,6 +7,14 @@ All notable changes to `Maho_PageCache` are recorded here.
 ### Added
 
 - `page_cache/proxy/context_mode` with `cookie` (default) and `default` for URL-only proxies.
+- `page_cache_static_file` table that tracks static exports and their expiry for indexed cleanup.
+
+### Changed
+
+- Local HTML entries larger than 4 KB are stored gzip-compressed and decompressed on a local hit.
+- PHP-side counters read from the statistics table instead of a cache load and save on every hit; statistics must be enabled, and `page-cache:status` reports counters as unavailable otherwise.
+- Purge queue entries live for 24 hours and the queue index for 25 hours, so the index cannot expire before its entries.
+- Static cleanup deletes files from the static file index and falls back to a directory scan only when the index is empty.
 
 ### Fixed
 
@@ -29,6 +37,13 @@ All notable changes to `Maho_PageCache` are recorded here.
 - No user-visible behavior change.
 
 ## 0.5.1 (2026-11-24)
+
+### Changed
+
+- Local HTML entries larger than 4 KB are stored gzip-compressed and decompressed on a local hit.
+- PHP-side counters read from the statistics table instead of a cache load and save on every hit; statistics must be enabled, and `page-cache:status` reports counters as unavailable otherwise.
+- Purge queue entries live for 24 hours and the queue index for 25 hours, so the index cannot expire before its entries.
+- Static cleanup deletes files from the static file index and falls back to a directory scan only when the index is empty.
 
 ### Fixed
 
@@ -92,6 +107,13 @@ All notable changes to `Maho_PageCache` are recorded here.
 - Configuration section saves invalidate every page, including saves made through `config:set` and the configuration service.
 - Full invalidations keep a monotonic global version and enqueue a full proxy purge in proxy mode.
 - Dynamic block placeholders are HTML comments instead of `<div>` elements.
+
+### Changed
+
+- Local HTML entries larger than 4 KB are stored gzip-compressed and decompressed on a local hit.
+- PHP-side counters read from the statistics table instead of a cache load and save on every hit; statistics must be enabled, and `page-cache:status` reports counters as unavailable otherwise.
+- Purge queue entries live for 24 hours and the queue index for 25 hours, so the index cannot expire before its entries.
+- Static cleanup deletes files from the static file index and falls back to a directory scan only when the index is empty.
 
 ### Fixed
 

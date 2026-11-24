@@ -1,6 +1,6 @@
 # 功能规格：P1 缓存加固
 
-> 状态：实现完成，待跨库 CI 和发版 0.5.3
+> 状态：实现完成，待发版 0.5.3
 > 关联 ADR：ADR-0008、ADR-0017
 > 分支：`feat/page-cache-phase2`
 
@@ -63,5 +63,5 @@
 - 测试：`RequestPolicyTest`、`DynamicBlockTest`、`ObserverTest`、`ProxyContextTest`。
 - 测试结果：184 passed（508 assertions）。
 - PHPStan 全仓通过；php-cs-fixer 与 Rector 对模块和测试通过。
-- 交叉验证待补：SQLite 已通过；PostgreSQL、MySQL 待模块 CI。
+- 交叉验证：模块 CI run 45353222522 在 SQLite、MySQL、PostgreSQL 三个任务上全部通过（2026-11-24）。
 - 剩余：manual/异步 stock index 仍需要持久化 pending 队列；本轮只覆盖实时索引事件。

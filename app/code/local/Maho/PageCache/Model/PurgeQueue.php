@@ -12,6 +12,9 @@ declare(strict_types=1);
 
 class Maho_PageCache_Model_PurgeQueue
 {
+    private const int ENTRY_TTL = 86400;
+    private const int INDEX_TTL = 90000;
+
     /**
      * @param list<string> $urls
      * @param list<string> $tags
@@ -25,13 +28,13 @@ class Maho_PageCache_Model_PurgeQueue
             'mode' => $mode,
             'created_at' => time(),
         ];
-        Mage::app()->getCache()->save($entry, $this->key()->getPurgeEntryKey($id), ['PAGE_CACHE'], 86400);
+        Mage::app()->getCache()->save($entry, $this->key()->getPurgeEntryKey($id), ['PAGE_CACHE'], self::ENTRY_TTL);
 
         $index = $this->getIndex();
         if (!in_array($id, $index, true)) {
             $index[] = $id;
         }
-        Mage::app()->getCache()->save($index, $this->key()->getPurgeIndexKey(), ['PAGE_CACHE']);
+        Mage::app()->getCache()->save($index, $this->key()->getPurgeIndexKey(), ['PAGE_CACHE'], self::INDEX_TTL);
 
         return $id;
     }
@@ -71,7 +74,7 @@ class Maho_PageCache_Model_PurgeQueue
         Mage::app()->getCache()->remove($this->key()->getPurgeEntryKey($id));
         $index = $this->getIndex();
         $index = array_values(array_filter($index, static fn(string $value): bool => $value !== $id));
-        Mage::app()->getCache()->save($index, $this->key()->getPurgeIndexKey(), ['PAGE_CACHE']);
+        Mage::app()->getCache()->save($index, $this->key()->getPurgeIndexKey(), ['PAGE_CACHE'], self::INDEX_TTL);
     }
 
     public function clear(): void

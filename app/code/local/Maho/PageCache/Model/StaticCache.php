@@ -61,6 +61,7 @@ class Maho_PageCache_Model_StaticCache
                 }
             }
 
+            $this->remember($path);
             return true;
         } catch (\Throwable $e) {
             Mage::logException($e);
@@ -105,8 +106,11 @@ class Maho_PageCache_Model_StaticCache
                 return;
             }
 
-            $this->removeFile($file);
-            $this->removeFile($file . '.gz');
+            $removed = $this->removeFile($file);
+            $removed = $this->removeFile($file . '.gz') && $removed;
+            if ($removed) {
+                $this->forget($file);
+            }
             $this->removeEmptyParents(dirname($file), $this->getRoot() . DS . $storeCode);
         } catch (\Throwable $e) {
             Mage::logException($e);
@@ -115,6 +119,12 @@ class Maho_PageCache_Model_StaticCache
 
     public function flush(): int
     {
+        try {
+            $this->write()->delete($this->table(), '1=1');
+        } catch (\Throwable $e) {
+            Mage::logException($e);
+        }
+
         $root = $this->getRoot();
         if (is_link($root) || !is_dir($root)) {
             return 0;
@@ -149,6 +159,69 @@ class Maho_PageCache_Model_StaticCache
             return 0;
         }
 
+        try {
+            $read = $this->read();
+            $rows = $read->fetchAll(
+                $read->select()
+                    ->from($this->table(), ['static_id', 'path'])
+                    ->where('expires_at < ?', gmdate('Y-m-d H:i:s'))
+                    ->limit(1000),
+            );
+        } catch (\Throwable $e) {
+            Mage::logException($e);
+            return $this->cleanupTree($maxAge);
+        }
+
+        if ($rows === []) {
+            return $this->cleanupTree($maxAge);
+        }
+
+        $deletedIds = [];
+        $deleted = 0;
+        foreach ($rows as $row) {
+            $relative = (string) ($row['path'] ?? '');
+            $file = $this->fileForRelative($relative);
+            if ($file === null) {
+                $deletedIds[] = (int) ($row['static_id'] ?? 0);
+                continue;
+            }
+
+            $removed = $this->removeFile($file);
+            $removed = $this->removeFile($file . '.gz') && $removed;
+            if (!$removed) {
+                continue;
+            }
+
+            $deletedIds[] = (int) ($row['static_id'] ?? 0);
+            $deleted++;
+            $storeCode = explode('/', $relative)[0] ?? '';
+            if ($storeCode !== '') {
+                $this->removeEmptyParents(dirname($file), $this->getRoot() . DS . $storeCode);
+            }
+        }
+
+        $deletedIds = array_values(array_filter($deletedIds));
+        if ($deletedIds !== []) {
+            try {
+                $this->write()->delete(
+                    $this->table(),
+                    $this->write()->quoteInto('static_id IN (?)', $deletedIds),
+                );
+            } catch (\Throwable $e) {
+                Mage::logException($e);
+            }
+        }
+
+        return $deleted;
+    }
+
+    private function cleanupTree(int $maxAge): int
+    {
+        $root = $this->getRoot();
+        if (is_link($root) || !is_dir($root)) {
+            return 0;
+        }
+
         $cutoff = time() - max(0, $maxAge);
         $deleted = 0;
         try {
@@ -176,6 +249,79 @@ class Maho_PageCache_Model_StaticCache
         }
 
         return $deleted;
+    }
+
+    private function remember(string $file): void
+    {
+        $relative = $this->relativeFromFile($file);
+        if ($relative === null) {
+            return;
+        }
+
+        try {
+            $now = gmdate('Y-m-d H:i:s');
+            $this->write()->insertOnDuplicate($this->table(), [
+                'path_hash' => hash('sha256', $relative),
+                'path' => $relative,
+                'expires_at' => gmdate('Y-m-d H:i:s', time() + $this->helper()->getTtl() + 300),
+                'created_at' => $now,
+                'updated_at' => $now,
+            ], ['path', 'expires_at', 'updated_at']);
+        } catch (\Throwable $e) {
+            Mage::logException($e);
+        }
+    }
+
+    private function forget(string $file): void
+    {
+        $relative = $this->relativeFromFile($file);
+        if ($relative === null) {
+            return;
+        }
+
+        try {
+            $this->write()->delete($this->table(), ['path_hash = ?' => hash('sha256', $relative)]);
+        } catch (\Throwable $e) {
+            Mage::logException($e);
+        }
+    }
+
+    private function relativeFromFile(string $file): ?string
+    {
+        $root = rtrim(str_replace('\\', '/', $this->getRoot()), '/');
+        $file = str_replace('\\', '/', $file);
+        if (!str_starts_with($file, $root . '/')) {
+            return null;
+        }
+
+        $relative = substr($file, strlen($root) + 1);
+        return $relative !== '' && !str_contains($relative, '..') ? $relative : null;
+    }
+
+    private function fileForRelative(string $relative): ?string
+    {
+        $root = $this->getRoot();
+        $file = $root . DS . str_replace('/', DS, $relative);
+        if ($relative === '' || str_contains($relative, '..') || !str_starts_with($file, $root . DS)) {
+            return null;
+        }
+
+        return $file;
+    }
+
+    private function table(): string
+    {
+        return Mage::getSingleton('core/resource')->getTableName('page_cache/static_file');
+    }
+
+    private function read(): Maho\Db\Adapter\AdapterInterface
+    {
+        return Mage::getSingleton('core/resource')->getConnection('core_read');
+    }
+
+    private function write(): Maho\Db\Adapter\AdapterInterface
+    {
+        return Mage::getSingleton('core/resource')->getConnection('core_write');
     }
 
     private function getStoreCode(Maho_PageCache_Model_Context $context): string
@@ -246,11 +392,13 @@ class Maho_PageCache_Model_StaticCache
         return true;
     }
 
-    private function removeFile(string $file): void
+    private function removeFile(string $file): bool
     {
-        if (is_file($file) || is_link($file)) {
-            @unlink($file);
+        if (!is_file($file) && !is_link($file)) {
+            return true;
         }
+
+        return @unlink($file);
     }
 
     private function removeEmptyParents(string $directory, string $stop): void

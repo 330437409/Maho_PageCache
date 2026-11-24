@@ -16,6 +16,9 @@
 - proxy 默认按 `Vary: Cookie` 隔离；`context_mode=default` 时，带 `___store` cookie 的请求必须 bypass。
 - catalog rule、import 和 stock 的失效必须发生在对应索引或导入完成之后。
 - 全量失效递增全局版本；tag 失效递增相关 URL 版本。
+- PHP 计数从统计表读取，不在命中热路径读写 cache。
+- 静态清理先查 `page_cache_static_file` 索引；索引为空才允许目录扫描。
+- local HTML 大于 4 KB 时 gzip 存储，读取时按 `html_encoding` 解压。
 - 304 必须在渲染前决定，不能先渲染再比较。
 - purge 不执行任意 shell 命令；默认触发事件或写 `var/page-cache` 文件。
 - 不复制 RockSolid、Cm_Diehard 或其他 GPL 代码。

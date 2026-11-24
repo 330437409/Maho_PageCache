@@ -31,9 +31,6 @@ class Maho_PageCache_Model_Counter
         }
 
         try {
-            $key = $this->key()->getStatKey(date('Ymd'), $result);
-            $value = (int) Mage::app()->getCache()->load($key);
-            Mage::app()->getCache()->save($value + 1, $key, ['PAGE_CACHE'], 604800);
             Mage::getSingleton('page_cache/stat')->record($result, null, null, null, $reason);
         } catch (\Throwable $e) {
             Mage::logException($e);
@@ -43,18 +40,11 @@ class Maho_PageCache_Model_Counter
     /**
      * @return array<string, int>
      */
+    /**
+     * @return array<string, int>
+     */
     public function getToday(): array
     {
-        $values = [];
-        foreach (self::RESULTS as $result) {
-            $value = Mage::app()->getCache()->load($this->key()->getStatKey(date('Ymd'), $result));
-            $values[$result] = is_numeric($value) ? (int) $value : 0;
-        }
-        return $values;
-    }
-
-    private function key(): Maho_PageCache_Model_Key
-    {
-        return Mage::getSingleton('page_cache/key');
+        return Mage::getSingleton('page_cache/stat')->getTodayCounts();
     }
 }

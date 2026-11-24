@@ -28,7 +28,10 @@
 - Dynamic：cacheable route 通过，非 cacheable route bypass。
 - Proxy context：`cookie` 和 `default` 两种模式，`___store` cookie 的 bypass。
 - CLI：status 输出、purge 选项、事件/文件输出。
-- 计数：不阻塞请求、结果 key 正确、代理命中不统计的说明。
+- 计数：统计表来源、统计关闭时 unavailable、代理命中不统计的说明。
+- 静态索引：save/remove/flush/cleanup 行同步，空索引回退扫描。
+- HTML 压缩：大页面 gzip、小页面明文、加载还原原文。
+- purge TTL：entry 24 小时、index 25 小时。
 
 ## 证据
 

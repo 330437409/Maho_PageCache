@@ -39,7 +39,7 @@ app/code/local/Maho/PageCache/
 │   ├── UrlIndex.php                # 持久化 tag 到 URL 的索引
 │   ├── PurgeQueue.php              # purge 队列
 │   ├── WarmQueue.php               # 预热队列，入队、去重、重试和上限
-│   ├── Counter.php                 # PHP 侧 hit/miss/bypass 计数
+│   ├── Counter.php                 # PHP 侧计数，写统计表
 │   ├── Backend/
 │   │   ├── Abstract.php            # 模式接口
 │   │   ├── Proxy.php               # proxy 模式
@@ -178,6 +178,7 @@ tag 失效时：
 5. 未命中时用 core named lock `page_cache_html_<hash>` 保护回源。等待的请求在锁释放后重新读缓存；等待超时则正常渲染但不保存，返回 `lock_timeout` bypass。
 6. 渲染完成后，`controller_front_send_response_before` 检查版本没有变化，写入元数据、HTML、原生实体 tag 和 URL 索引；版本在渲染期间变化时不保存，返回 `version_changed` bypass。
 7. HTML 超过 `page_cache/general/html_max_size` 时不缓存，返回 `html_too_large` bypass。
+8. 大于 4 KB 的 HTML 在缓存中 gzip 存储；`html_encoding` 标记编码，命中时解压后再输出。
 
 `local` 响应是 `private`，浏览器每次回源重新验证，命中发生在 Maho 内部。
 
@@ -215,7 +216,8 @@ local 服务器端占位符：
 - 写入顺序：local 元数据/HTML 保存，静态文件写入，最终版本检查；版本变化会同时删除 local 和静态。
 - 静态写入失败只记录日志，不影响页面响应。
 - tag 失效删除对应静态文件；全量失效清空静态目录；后台刷新 `page_cache` 类型也清空。
-- `page_cache_static_cleanup` cron 每 5 分钟删除超过 `ttl + 300` 的文件。
+- 静态文件写入时在 `page_cache_static_file` 记录相对路径和 `expires_at`；删除时同步删除记录。
+- `page_cache_static_cleanup` cron 先按索引删除到期文件；索引为空时回退到一次目录扫描，清理升级前遗留的文件。
 - Web 服务器直出时 PHP 不启动；带 `maho_session` 或 query 参数的请求必须回 PHP。
 - 静态缓存目录必须 deny 直接访问；第一版只支持单节点。
 
@@ -305,22 +307,25 @@ catalog rule：
 | `PC_VERSION_GLOBAL` | int | 无 |
 | `PC_VERSION_URL_<urlhash>` | int | TTL + 1 小时 |
 | `PC_ETAG_<urlhash>` | `{etag, last_modified}` | TTL + 1 小时 |
-| `PC_HTML_<hash>` | `{html, headers, tags, version, global_version, context, etag, last_modified, created_at, dynamic_blocks}` | TTL |
+| `PC_HTML_<hash>` | `{html, html_encoding, headers, tags, version, global_version, context, etag, last_modified, created_at, dynamic_blocks}` | TTL |
 | `PC_HTML_INDEX_<urlhash>` | context hash 列表，仅用于观察和后续清理 | TTL + 1 小时 |
 | `PC_DYNAMIC_<hash>` | `{blocks: {name: html}}`，仅显式标记 `page_cache_dynamic_cacheable` 的 block | `page_cache/dynamic/ttl` |
 | 静态文件 | `var/page-cache/static/{store}/{path}` + `.gz`，匿名默认页 | `page_cache_static_cleanup` |
 | `PC_PURGE_<timestamp>_<rand>` | `{urls: []}` | 24 小时 |
-| `PC_STAT_<date>_<result>` | int | 7 天 |
+| `PC_PURGE_INDEX` | 待处理 purge entry id 列表 | 25 小时 |
 | `PC_WARMUP_LAST_RUN` | 最近一次预热汇总 | 7 天 |
 | `page_cache_warmup_queue` | 预热队列，`url_hash` 唯一 | 由 cron 和上限控制 |
 | `page_cache_url` | page URL hash、变体 URL、公共路径、store、版本 | 由 URL 索引清理 |
 | `page_cache_url_tag` | URL 到实体 tag 的映射 | 由 URL 索引清理 |
+| `page_cache_static_file` | 静态文件相对路径、到期时间 | 由静态清理 cron 删除 |
 
 注意：
 
 - 实体使用原生 cache tag `PAGE_CACHE_TAG_<tag>`，HTML、meta 和 ETag 都打 tag；`clean($tags)` 由缓存适配器原子执行。
 - URL 索引在 DB，不会因为缓存淘汰而丢失；DB 查询失败时全量失效。
 - `page_cache_url` 按 `ttl + 3600` 清理，和 meta TTL 对齐。
+- purge entry 24 小时，index 25 小时，避免 index 先过期留下无法处理的 entry。
+- PHP 侧计数从 `page_cache_stat` 读取，统计关闭时不计数；缓存类型清理不会重置计数。
 - tag 值只允许 `[A-Za-z0-9_:.-]`，写入前过滤，避免 header 注入。
 - URL hash 和 context hash 使用 sha256，不保存原始 URL 或 cookie。
 - local HTML key 包含 URL、context、URL 版本、全局版本和模式；版本变化后旧 HTML 不再命中。

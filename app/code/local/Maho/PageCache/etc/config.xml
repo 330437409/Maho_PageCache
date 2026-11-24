@@ -34,6 +34,9 @@
                     <url_tag>
                         <table>page_cache_url_tag</table>
                     </url_tag>
+                    <static_file>
+                        <table>page_cache_static_file</table>
+                    </static_file>
                 </entities>
             </page_cache_resource>
         </models>
