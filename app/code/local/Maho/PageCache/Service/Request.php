@@ -17,6 +17,25 @@ class Maho_PageCache_Service_Request
      */
     public function evaluate(array $input): ?string
     {
+        return $this->evaluateRequest($input, false);
+    }
+
+    /**
+     * A dynamic block request is not cached, so it does not need a safe proxy context,
+     * a no-cache decision, or an Ajax exclusion. It still needs a cacheable route.
+     *
+     * @param array<string, mixed> $input
+     */
+    public function evaluateDynamic(array $input): ?string
+    {
+        return $this->evaluateRequest($input, true);
+    }
+
+    /**
+     * @param array<string, mixed> $input
+     */
+    private function evaluateRequest(array $input, bool $dynamic): ?string
+    {
         if (empty($input['enabled'])) {
             return 'disabled';
         }
@@ -52,7 +71,7 @@ class Maho_PageCache_Service_Request
             return 'filter_depth';
         }
 
-        if (!empty($input['session_cookie'])) {
+        if (!$dynamic && !empty($input['session_cookie'])) {
             return 'session_cookie';
         }
 
@@ -65,10 +84,10 @@ class Maho_PageCache_Service_Request
             }
         }
 
-        if (!empty($input['respect_no_cache']) && !empty($input['no_cache'])) {
+        if (!$dynamic && !empty($input['respect_no_cache']) && !empty($input['no_cache'])) {
             return 'no_cache';
         }
-        if (!empty($input['ajax'])) {
+        if (!$dynamic && !empty($input['ajax'])) {
             return 'ajax';
         }
         if (!empty($input['preview'])) {
@@ -77,7 +96,7 @@ class Maho_PageCache_Service_Request
         if (!empty($input['maintenance'])) {
             return 'maintenance';
         }
-        if (empty($input['context_safe'])) {
+        if (!$dynamic && empty($input['context_safe'])) {
             return 'context';
         }
 
@@ -109,6 +128,34 @@ class Maho_PageCache_Service_Request
     public function getContext(): Maho_PageCache_Model_Context
     {
         return Mage::getModel('page_cache/context');
+    }
+
+    private function isContextSafe(Mage_Core_Controller_Varien_Action $controller): bool
+    {
+        $helper = Mage::helper('page_cache');
+        if (!in_array($helper->getMode(), [
+            Maho_PageCache_Helper_Data::MODE_PROXY,
+            Maho_PageCache_Helper_Data::MODE_REVALIDATING,
+        ], true)
+            || $helper->getProxyContextMode() !== Maho_PageCache_Helper_Data::PROXY_CONTEXT_DEFAULT
+        ) {
+            return true;
+        }
+
+        $request = $controller->getRequest();
+        if ($request->getCookie('___store')) {
+            return false;
+        }
+
+        $path = (string) ($request->getOriginalPathInfo() ?: $request->getPathInfo());
+        $storeCode = explode('/', trim($path, '/'))[0] ?? '';
+        if ($storeCode !== '' && isset(Mage::app()->getStores(true, true)[$storeCode])) {
+            return true;
+        }
+
+        $defaultStore = Mage::app()->getDefaultStoreView();
+        return $defaultStore !== null
+            && (int) $defaultStore->getId() === (int) Mage::app()->getStore()->getId();
     }
 
     /**
@@ -152,6 +199,7 @@ class Maho_PageCache_Service_Request
         $sessionName = Mage_Core_Controller_Front_Action::SESSION_NAMESPACE;
         $query = $request->getQuery();
         $query = is_array($query) ? $query : [];
+        unset($query[Maho_PageCache_Service_Dynamic::PARAM_ESI]);
         $preview = (bool) $request->getParam('preview') || (bool) Mage::registry('page_cache_preview');
 
         return [
@@ -175,7 +223,7 @@ class Maho_PageCache_Service_Request
             'ajax' => strtolower((string) $request->getHeader('X-Requested-With')) === 'xmlhttprequest',
             'preview' => $preview,
             'maintenance' => file_exists(Mage::getBaseDir() . '/maintenance.flag'),
-            'context_safe' => true,
+            'context_safe' => $this->isContextSafe($controller),
         ];
     }
 }

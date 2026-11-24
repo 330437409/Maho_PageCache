@@ -23,6 +23,7 @@
 | `page_cache/general/mode` | select | `revalidating` | `proxy`、`revalidating` 或 `local` |
 | `page_cache/general/ttl` | text | 3600 | 缓存 TTL，秒 |
 | `page_cache/general/html_max_size` | text | 2097152 | local HTML 条目上限，字节 |
+| `page_cache/proxy/context_mode` | select | `cookie` | `cookie` 依赖代理遵守 `Vary: Cookie`；`default` 只缓存默认 store 或 URL 带 store code 的请求，`___store` cookie 切换 bypass |
 | `page_cache/dynamic/injection` | select | `ajax` | 动态块注入方式：`ajax` 或 `esi` |
 | `page_cache/dynamic/ttl` | text | 0 | 显式标记可缓存的动态块响应秒数，0 不缓存 |
 | `page_cache/dynamic/server_side` | yes/no | 0 | local 命中服务器端重建开关 |
@@ -164,7 +165,7 @@ X-Maho-Page-Cache-Blocks: <token>[,<token>...]
 }
 ```
 
-响应头 `Cache-Control: private, no-store`、`X-Maho-Cache: DYNAMIC`。token 绑定 block、页面 URL、store、context，默认 1 小时过期；签名错误、过期、跨 URL/store/context 或请求未标记的 block 返回 400。没有 block token 的 dynamic 请求只返回 `form_key`/`sid`，供表单占位符替换。
+响应头 `Cache-Control: private, no-store`、`X-Maho-Cache: DYNAMIC`。token 绑定 block、页面 URL、store、context，默认 1 小时过期；签名错误、过期、跨 URL/store/context 或请求未标记的 block 返回 400。dynamic 请求只允许 `cacheable_routes` 中的路由和 GET，其他路由按正常 bypass 处理；dynamic 请求不缓存，因此不受 session cookie、`Cache-Control: no-cache` 或 AJAX 排除影响。没有 block token 的 dynamic 请求只返回 `form_key`/`sid`，供表单占位符替换。
 
 `local` 模式缓存无 session 时的匿名渲染。local 命中只发生在没有 session cookie 的请求上，因此不会把用户数据写进 HTML 缓存。显式 opt-in 的 leaf block 可以在 local 命中时服务器端重建；其余动态块保留匿名渲染。form key/SID 仍替换为占位符；local 模式的前端脚本只在用户聚焦或提交 POST 表单时请求新的 form key，被动浏览不会建立 session。
 
@@ -227,7 +228,7 @@ var/page-cache/static/{store_code}/{public_path}.gz
 | `ajax` | AJAX 请求 |
 | `preview` | 预览模式 |
 | `maintenance` | 维护模式 |
-| `context` | context 无法安全确定或代理不支持 |
+| `context` | `context_mode=default` 时请求用 `___store` cookie 切换 store，或 context 无法安全确定 |
 | `response` | 响应不是 200 或包含 `Set-Cookie` |
 | `empty_body` | 响应体为空 |
 | `html_too_large` | local HTML 超过大小上限 |

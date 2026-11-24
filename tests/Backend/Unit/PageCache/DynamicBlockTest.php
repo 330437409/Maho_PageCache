@@ -60,6 +60,7 @@ beforeEach(function () {
     Mage::unregister('page_cache_local_lock_name');
     Mage::unregister('page_cache_local_versions');
     Mage::unregister('page_cache_tags');
+    Mage::unregister('page_cache_bypass_reason');
 
     Mage::app()->getRequest()->getSymfonyRequest()->headers->remove('X-Maho-Page-Cache');
     Mage::app()->getRequest()->getSymfonyRequest()->headers->remove('X-Maho-Page-Cache-Blocks');
@@ -230,7 +231,13 @@ it('captures a requested marked block on a dynamic request', function () {
 });
 
 it('does not skip session for a dynamic request', function () {
+    Mage::app()->getStore()->setConfig('page_cache/general/cacheable_routes', 'catalog_product_view');
     Mage::app()->getRequest()->getSymfonyRequest()->headers->set('X-Maho-Page-Cache', 'dynamic');
+    Mage::app()->getRequest()->setRoutingInfo([
+        'requested_route' => 'catalog',
+        'requested_controller' => 'product',
+        'requested_action' => 'view',
+    ]);
     $controller = new class (Mage::app()->getRequest(), Mage::app()->getResponse()) extends Mage_Core_Controller_Varien_Action {};
 
     (new Maho_PageCache_Model_Observer())->skipSession(
@@ -239,6 +246,25 @@ it('does not skip session for a dynamic request', function () {
 
     expect(Mage::registry('page_cache_dynamic_request'))->toBeTrue()
         ->and($controller->getFlag('', Mage_Core_Controller_Varien_Action::FLAG_NO_START_SESSION))->toBeFalse()
+        ->and(Mage::registry('page_cache_request_cacheable'))->toBeNull();
+});
+
+it('rejects a dynamic request on a non-cacheable route', function () {
+    Mage::app()->getStore()->setConfig('page_cache/general/cacheable_routes', 'catalog_product_view');
+    Mage::app()->getRequest()->getSymfonyRequest()->headers->set('X-Maho-Page-Cache', 'dynamic');
+    Mage::app()->getRequest()->setRoutingInfo([
+        'requested_route' => 'checkout',
+        'requested_controller' => 'cart',
+        'requested_action' => 'add',
+    ]);
+    $controller = new class (Mage::app()->getRequest(), Mage::app()->getResponse()) extends Mage_Core_Controller_Varien_Action {};
+
+    (new Maho_PageCache_Model_Observer())->skipSession(
+        new Maho\Event\Observer(['controller_action' => $controller]),
+    );
+
+    expect(Mage::registry('page_cache_dynamic_request'))->toBeNull()
+        ->and(Mage::registry('page_cache_bypass_reason'))->toBe('route')
         ->and(Mage::registry('page_cache_request_cacheable'))->toBeNull();
 });
 

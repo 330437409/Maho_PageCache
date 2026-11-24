@@ -2,6 +2,20 @@
 
 All notable changes to `Maho_PageCache` are recorded here.
 
+## Unreleased
+
+### Added
+
+- `page_cache/proxy/context_mode` with `cookie` (default) and `default` for URL-only proxies.
+
+### Fixed
+
+- Dynamic block requests are limited to cacheable routes; a request to any other route bypasses instead of skipping the normal cacheability policy.
+- Catalog rule pages are invalidated again after the rule index is applied, so a page cannot re-cache with the previous price.
+- Product imports invalidate the affected products when the import finishes.
+- Stock item changes invalidate the affected products again after the stock index is processed.
+- A proxy that cannot honor `Vary: Cookie` can set `page_cache/proxy/context_mode=default`; store cookie switches then bypass instead of sharing a URL cache object.
+
 ## 0.5.2 (2026-11-24)
 
 ### Added

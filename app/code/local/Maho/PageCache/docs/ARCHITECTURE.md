@@ -189,7 +189,7 @@ block 在 layout 里显式设置 `page_cache_dynamic=1`。渲染时：
 2. `proxy`/`revalidating` 的可缓存请求把 block HTML 换成签名注释占位符，不把用户数据写进缓存。注释在 `<ul>`、`<tbody>` 等父级里也是合法节点，不会破坏外层结构。
 3. `local` 模式缓存无 session 时的匿名渲染；local 命中只面向无 session cookie 的请求。显式 opt-in 的 leaf block 在 local 命中时按下一节做服务器端重建，其余动态块保留匿名渲染。
 4. form key/SID 在所有模式都替换为占位符。local 模式的前端脚本只在用户聚焦或提交 POST 表单时请求 form key，避免被动浏览建立 session；proxy 模式在页面加载时请求动态块和 form key。
-5. 动态请求（`X-Maho-Page-Cache: dynamic` 或 `_page_cache_dynamic` 参数）启动 session，正常生成 layout，只捕获当前页面标记过且被请求的 block。
+5. 动态请求（`X-Maho-Page-Cache: dynamic` 或 `_page_cache_dynamic` 参数）只允许 GET 和 `cacheable_routes` 中的路由；其他路由记录 bypass 原因，不进入动态路径。允许的动态请求启动 session，正常生成 layout，只捕获当前页面标记过且被请求的 block。
 6. Ajax 响应返回 `{blocks, form_key, sid}`；ESI 响应返回单个 block 的 HTML。
 7. 动态响应 `Cache-Control: private, no-store`、`X-Maho-Cache: DYNAMIC`，代理不得缓存。
 8. block 显式标记 `page_cache_dynamic_cacheable=1` 且 `page_cache/dynamic/ttl>0` 时，动态响应按 block 集合写入 `PC_DYNAMIC_<hash>`；key 包含 block 列表、URL、context、customer group、store 和版本。命中时在 layout 前直接返回，form key/SID 仍从当前 session 生成。
@@ -261,14 +261,16 @@ local 服务器端占位符：
 - 通用 observer 监听 `model_save_commit_after` 和 `model_delete_commit_after`。
 - 读取 `getCacheIdTags()`；product 使用 `getCacheIdTagsWithCategories()` 追加分类 tag。
 - 用原生实体 tag 清理相关页面，并从 URL 索引删除对应 URL。
-- stock item 保存时，只有 `is_in_stock` 变化或库存状态自动变化才失效，qty-only 更新不清理页面；可配置子商品同时失效父商品。
+- stock item 保存时，只有 `is_in_stock` 变化或库存状态自动变化才失效，qty-only 更新不清理页面；可配置子商品同时失效父商品。保存后记录受影响 product ID，`end_process_event_cataloginventory_stock_item_save` 或 `end_index_events_cataloginventory_stock_item_save` 时再次失效，覆盖索引处理前回填的页面。
 - `catalog_product_attribute_update_after` 批量属性更新按 product tag 失效；超过 30 个商品时回退全量失效，避免管理请求过慢。
+- `catalog_product_import_finish_before` 读取导入 adapter 的 affected product IDs，导入结束后统一失效；超过 30 个商品时回退全量失效。
 
 catalog rule：
 
 - 监听 catalog rule 的保存/删除。
 - 用 `getMatchingProductIds()` 得到产品 ID，转换为 `catalog_product_<id>`。
 - 同时失效这些产品所属分类的 tag。
+- `catalogrule_after_apply` 在索引刷新后读取 `product` 或 `affected_product`，再次失效受影响产品，避免页面在索引前回填旧价格。
 - 计算失败或结果为空时回退全量失效。
 
 其他规则和配置：
@@ -345,7 +347,7 @@ Vary: Accept-Encoding, Cookie
 ```
 
 - 代理必须按 URL 和 `Cookie` 缓存，并遵守 `Vary: Accept-Encoding, Cookie`。
-- 代理不支持自定义 `Vary` 时，只缓存默认 context；非默认 context 直接 bypass。
+- `page_cache/proxy/context_mode` 默认 `cookie`；代理只按 URL 缓存时设为 `default`，此时只缓存默认 store 或 URL 带 store code 的请求，带 `___store` cookie 的切换请求 bypass。
 - 第一期不缓存登录用户、购物车、checkout、customer account，因此客户组固定为 guest。
 - 无 session 时可缓存请求的货币取 store 默认货币；切换货币会写入 session，从而带 session cookie 并 bypass。
 - 货币和 store 如果通过 cookie/URL 切换，会进入 context；无法确定时 bypass。

@@ -35,8 +35,16 @@ class Maho_PageCache_Model_Observer
             Mage::unregister('page_cache_not_modified');
             Mage::unregister('page_cache_tags');
             Mage::unregister('page_cache_server_blocks');
+            Mage::unregister('page_cache_stock_pending');
+            $service = Mage::getService('page_cache/request');
+            $input = $service->getInput($controller);
             $dynamic = Mage::getService('page_cache/dynamic');
             if ($dynamic->isRequest()) {
+                $reason = $service->evaluateDynamic($input);
+                if ($reason !== null) {
+                    Mage::register('page_cache_bypass_reason', $reason);
+                    return;
+                }
                 Mage::register('page_cache_dynamic_request', true);
                 try {
                     Mage::register(
@@ -49,8 +57,6 @@ class Maho_PageCache_Model_Observer
                 return;
             }
 
-            $service = Mage::getService('page_cache/request');
-            $input = $service->getInput($controller);
             $reason = $service->evaluate($input);
 
             if ($reason !== null) {
@@ -706,11 +712,37 @@ class Maho_PageCache_Model_Observer
             return;
         }
 
+        $productId = (int) $item->getProductId();
+        if ($productId <= 0
+            || (!$item->getStockStatusChangedAuto() && !$item->dataHasChangedFor('is_in_stock'))
+        ) {
+            return;
+        }
+
         try {
             Mage::getService('page_cache/invalidator')->invalidateStockItem($item);
+            $this->markPendingStockInvalidation($productId);
         } catch (\Throwable $e) {
             Mage::logException($e);
             $this->invalidateAll();
+        }
+    }
+
+    #[\Maho\Config\Observer('end_process_event_cataloginventory_stock_item_save')]
+    #[\Maho\Config\Observer('end_index_events_cataloginventory_stock_item_save')]
+    public function flushPendingStockInvalidation(Maho\Event\Observer $observer): void
+    {
+        $productIds = Mage::registry('page_cache_stock_pending');
+        Mage::unregister('page_cache_stock_pending');
+        if (!is_array($productIds) || $productIds === []) {
+            return;
+        }
+
+        try {
+            Mage::getService('page_cache/invalidator')->invalidateProductIds($productIds);
+        } catch (\Throwable $e) {
+            Mage::logException($e);
+            $this->invalidateAll('stock_index');
         }
     }
 
@@ -731,6 +763,76 @@ class Maho_PageCache_Model_Observer
         } catch (\Throwable $e) {
             Mage::logException($e);
             $this->invalidateAll();
+        }
+    }
+
+    #[\Maho\Config\Observer('catalogrule_after_apply')]
+    public function invalidateAfterCatalogRuleApply(Maho\Event\Observer $observer): void
+    {
+        if (!Mage::helper('page_cache')->isEnabled()) {
+            return;
+        }
+
+        try {
+            $product = $observer->getProduct();
+            if (is_numeric($product)) {
+                Mage::getService('page_cache/invalidator')->invalidateProductIds([(int) $product]);
+                return;
+            }
+            if ($product instanceof Mage_Catalog_Model_Product) {
+                Mage::getService('page_cache/invalidator')->invalidateProductIds([(int) $product->getId()]);
+                return;
+            }
+
+            $condition = $observer->getProductCondition();
+            if (!$condition instanceof Mage_Catalog_Model_Product_Condition_Interface) {
+                return;
+            }
+            $read = Mage::getSingleton('core/resource')->getConnection('core_read');
+            $select = $condition->getIdsSelect($read);
+            if (!$select instanceof Maho\Db\Select) {
+                return;
+            }
+            $productIds = $read->fetchCol($select);
+            if (is_array($productIds) && $productIds !== []) {
+                Mage::getService('page_cache/invalidator')->invalidateProductIds($productIds);
+            }
+        } catch (\Throwable $e) {
+            Mage::logException($e);
+            $this->invalidateAll('catalog_rule_apply');
+        }
+    }
+
+    #[\Maho\Config\Observer('catalog_product_import_finish_before')]
+    public function invalidateImportedProducts(Maho\Event\Observer $observer): void
+    {
+        if (!Mage::helper('page_cache')->isEnabled()) {
+            return;
+        }
+
+        $adapter = $observer->getAdapter();
+        if (!is_object($adapter) || !method_exists($adapter, 'getAffectedEntityIds')) {
+            return;
+        }
+
+        try {
+            $productIds = $adapter->getAffectedEntityIds();
+            if ((!is_array($productIds) || $productIds === [])
+                && method_exists($adapter, 'getBehavior')
+                && method_exists($adapter, 'getOldSku')
+                && $adapter->getBehavior() === Mage_ImportExport_Model_Import::BEHAVIOR_DELETE
+            ) {
+                $productIds = array_map(
+                    static fn(array $row): int => (int) ($row['entity_id'] ?? 0),
+                    $adapter->getOldSku(),
+                );
+            }
+            if (is_array($productIds) && $productIds !== []) {
+                Mage::getService('page_cache/invalidator')->invalidateProductIds($productIds);
+            }
+        } catch (\Throwable $e) {
+            Mage::logException($e);
+            $this->invalidateAll('import');
         }
     }
 
@@ -816,6 +918,17 @@ class Maho_PageCache_Model_Observer
         } catch (\Throwable $e) {
             Mage::logException($e);
         }
+    }
+
+    private function markPendingStockInvalidation(int $productId): void
+    {
+        if ($productId <= 0) {
+            return;
+        }
+        $productIds = Mage::registry('page_cache_stock_pending');
+        $productIds = is_array($productIds) ? $productIds : [];
+        $productIds[$productId] = $productId;
+        Mage::register('page_cache_stock_pending', array_values($productIds));
     }
 
     private function invalidateObject(mixed $object): void

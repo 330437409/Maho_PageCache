@@ -24,7 +24,9 @@
 - ETag：匹配 304、版本变化 200、context 变化 200、TTL 变化 200、元数据丢失 200。
 - UrlIndex：添加、变体合并与截断、tag 查询、removeTag、清理、DB 异常回退全量。
 - PurgeQueue：入队、去重、dry-run、limit、tag 过滤、成功删除、失败保留。
-- 失效：product/category/CMS、catalog rule 细粒度、sales rule/config 全量。
+- 失效：product/category/CMS、catalog rule 细粒度、import finish、stock index end、sales rule/config 全量。
+- Dynamic：cacheable route 通过，非 cacheable route bypass。
+- Proxy context：`cookie` 和 `default` 两种模式，`___store` cookie 的 bypass。
 - CLI：status 输出、purge 选项、事件/文件输出。
 - 计数：不阻塞请求、结果 key 正确、代理命中不统计的说明。
 

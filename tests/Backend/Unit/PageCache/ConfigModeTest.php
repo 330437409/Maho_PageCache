@@ -19,3 +19,9 @@ it('accepts the supported page cache modes', function () {
         ->and($model->isValidMode('local'))->toBeTrue()
         ->and($model->isValidMode(''))->toBeFalse();
 });
+
+it('offers the proxy context modes', function () {
+    $model = new Maho_PageCache_Model_System_Config_Source_Proxy_Context();
+
+    expect(array_column($model->toOptionArray(), 'value'))->toBe(['cookie', 'default']);
+});

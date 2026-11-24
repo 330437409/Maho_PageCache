@@ -113,3 +113,8 @@
 "Warmup","Warmup"
 "When enabled, a request with Cache-Control: no-cache bypasses the cache.","When enabled, a request with Cache-Control: no-cache bypasses the cache."
 "Writes anonymous default pages to var/page-cache/static for nginx or Caddy. Requires web server configuration, a deny rule for the cache directory, and the cleanup cron. The first version supports one node.","Writes anonymous default pages to var/page-cache/static for nginx or Caddy. Requires web server configuration, a deny rule for the cache directory, and the cleanup cron. The first version supports one node."
+"Proxy Context","Proxy Context"
+"Proxy Context Mode","Proxy Context Mode"
+"Cookie (proxy honors Vary: Cookie)","Cookie (proxy honors Vary: Cookie)"
+"Default context only (URL-only proxy)","Default context only (URL-only proxy)"
+"Cookie works when the proxy honors Vary: Cookie. Default context only is a fallback for URL-only proxies; requests that switch store with a cookie then bypass.","Cookie works when the proxy honors Vary: Cookie. Default context only is a fallback for URL-only proxies; requests that switch store with a cookie then bypass."
