@@ -94,6 +94,7 @@ class Maho_PageCache_Model_HtmlCache
      * @param list<string> $tags
      * @param array<string, string> $headers
      * @param array{global: int, url: int} $versions
+     * @param array<string, array<string, mixed>> $dynamicBlocks
      * @return array<string, mixed>|null
      */
     public function save(
