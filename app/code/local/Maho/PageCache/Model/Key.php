@@ -67,6 +67,11 @@ class Maho_PageCache_Model_Key
         return 'PC_STAT_' . $date . '_' . $result;
     }
 
+    public function getWarmupLastRunKey(): string
+    {
+        return 'PC_WARMUP_LAST_RUN';
+    }
+
     public function sanitizeTag(string $tag): string
     {
         return (string) preg_replace('/[^A-Za-z0-9_.:-]/', '_', $tag);

@@ -129,6 +129,7 @@ class Maho_PageCache_Model_HtmlCache
                 'ttl' => $ttl,
                 'version' => $versions['url'],
                 'store_code' => $this->getStoreCode($context),
+                'store_id' => $context->getStoreId(),
             ],
             $key->getMetaKey($urlHash),
             ['PAGE_CACHE'],

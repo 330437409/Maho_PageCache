@@ -18,7 +18,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 #[AsCommand(
     name: 'page-cache:status',
-    description: 'Show the page cache mode, versions, purge queue and PHP side counters',
+    description: 'Show the page cache mode, versions, purge and warmup queues, and PHP side counters',
 )]
 class PageCacheStatus extends BaseMahoCommand
 {
@@ -42,6 +42,22 @@ class PageCacheStatus extends BaseMahoCommand
         $output->writeln('TTL: ' . $helper->getTtl());
         $output->writeln('Global version: ' . $version->getGlobal());
         $output->writeln('Purge queue: ' . $queue->count());
+        $warmQueue = Mage::getModel('page_cache/warmQueue');
+        $lastRun = Mage::getService('page_cache/warm')->getLastRun();
+        $output->writeln(sprintf(
+            'Warmup: %s, queue=%d',
+            $helper->getWarmupEnabled() ? 'enabled' : 'disabled',
+            $warmQueue->count(),
+        ));
+        $output->writeln($lastRun === null ? 'Last warmup: n/a' : sprintf(
+            'Last warmup: warmed=%d skipped=%d failed=%d dropped=%d remaining=%d at %s',
+            $lastRun['warmed'],
+            $lastRun['skipped'],
+            $lastRun['failed'],
+            $lastRun['dropped'],
+            $lastRun['remaining'],
+            gmdate('Y-m-d H:i:s', $lastRun['at']),
+        ));
         $output->writeln(sprintf(
             'PHP counters (today): hit=%d miss=%d bypass=%d revalidated=%d',
             $counters['hit'] ?? 0,

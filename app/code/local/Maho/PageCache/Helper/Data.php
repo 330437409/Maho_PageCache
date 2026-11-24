@@ -23,7 +23,15 @@ class Maho_PageCache_Helper_Data extends Mage_Core_Helper_Abstract
     public const XML_PATH_HTML_MAX_SIZE = 'page_cache/general/html_max_size';
     public const XML_PATH_DYNAMIC_INJECTION = 'page_cache/dynamic/injection';
     public const XML_PATH_DYNAMIC_TTL = 'page_cache/dynamic/ttl';
+    public const XML_PATH_WARMUP_ENABLED = 'page_cache/warmup/enabled';
     public const XML_PATH_WARMUP_CONCURRENCY = 'page_cache/warmup/concurrency';
+    public const XML_PATH_WARMUP_BATCH_SIZE = 'page_cache/warmup/batch_size';
+    public const XML_PATH_WARMUP_DELAY_MS = 'page_cache/warmup/delay_ms';
+    public const XML_PATH_WARMUP_MAX_ATTEMPTS = 'page_cache/warmup/max_attempts';
+    public const XML_PATH_WARMUP_RETRY_DELAY = 'page_cache/warmup/retry_delay';
+    public const XML_PATH_WARMUP_QUEUE_LIMIT = 'page_cache/warmup/queue_limit';
+    public const XML_PATH_WARMUP_AUTH_USER = 'page_cache/warmup/auth_user';
+    public const XML_PATH_WARMUP_AUTH_PASSWORD = 'page_cache/warmup/auth_password';
     public const XML_PATH_FILTER_PATH_MARKER = 'page_cache/general/filter_path_marker';
     public const XML_PATH_MAX_FILTER_DEPTH = 'page_cache/general/max_filter_depth';
     public const XML_PATH_MAX_PATH_SEGMENTS = 'page_cache/general/max_path_segments';
@@ -110,10 +118,62 @@ class Maho_PageCache_Helper_Data extends Mage_Core_Helper_Abstract
         return max(0, (int) Mage::getStoreConfig(self::XML_PATH_DYNAMIC_TTL));
     }
 
+    public function getWarmupEnabled(): bool
+    {
+        return Mage::getStoreConfigFlag(self::XML_PATH_WARMUP_ENABLED);
+    }
+
     public function getWarmupConcurrency(): int
     {
         $concurrency = (int) Mage::getStoreConfig(self::XML_PATH_WARMUP_CONCURRENCY);
         return $concurrency > 0 ? $concurrency : 4;
+    }
+
+    public function getWarmupBatchSize(): int
+    {
+        $size = (int) Mage::getStoreConfig(self::XML_PATH_WARMUP_BATCH_SIZE);
+        return $size > 0 ? $size : 50;
+    }
+
+    public function getWarmupDelayMs(): int
+    {
+        return max(0, (int) Mage::getStoreConfig(self::XML_PATH_WARMUP_DELAY_MS));
+    }
+
+    public function getWarmupMaxAttempts(): int
+    {
+        $attempts = (int) Mage::getStoreConfig(self::XML_PATH_WARMUP_MAX_ATTEMPTS);
+        return $attempts > 0 ? $attempts : 3;
+    }
+
+    public function getWarmupRetryDelay(): int
+    {
+        $delay = (int) Mage::getStoreConfig(self::XML_PATH_WARMUP_RETRY_DELAY);
+        return $delay > 0 ? $delay : 300;
+    }
+
+    public function getWarmupQueueLimit(): int
+    {
+        $limit = (int) Mage::getStoreConfig(self::XML_PATH_WARMUP_QUEUE_LIMIT);
+        return $limit > 0 ? $limit : 10000;
+    }
+
+    /**
+     * @return array{user: string, password: string}|null
+     */
+    public function getWarmupAuth(): ?array
+    {
+        $user = trim((string) Mage::getStoreConfig(self::XML_PATH_WARMUP_AUTH_USER));
+        if ($user === '') {
+            return null;
+        }
+
+        $password = (string) Mage::getStoreConfig(self::XML_PATH_WARMUP_AUTH_PASSWORD);
+        if ($password !== '') {
+            $password = Mage::helper('core')->tryDecrypt($password) ?? $password;
+        }
+
+        return ['user' => $user, 'password' => $password];
     }
 
     public function getFilterPathMarker(): string

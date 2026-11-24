@@ -63,4 +63,32 @@ return function (SchemaEditor $schema): void {
             ->setComment('Page Cache Hourly Statistics')
             ->create(),
     );
+
+    $schema->addTable(
+        Table::editor()
+            ->setUnquotedName('page_cache_warmup_queue')
+            ->addColumn(Schema::column('queue_id', Types::INTEGER, unsigned: true, autoincrement: true))
+            ->addColumn(Schema::column('url_hash', Types::STRING, length: 64))
+            ->addColumn(Schema::column('url', Types::STRING, length: 2048))
+            ->addColumn(Schema::column('store_id', Types::SMALLINT, unsigned: true, default: 0))
+            ->addColumn(Schema::column('reason', Types::STRING, length: 64, notNull: false))
+            ->addColumn(Schema::column('attempts', Types::SMALLINT, unsigned: true, default: 0))
+            ->addColumn(Schema::column('available_at', Types::DATETIME_IMMUTABLE))
+            ->addColumn(Schema::column('last_error', Types::STRING, length: 255, notNull: false))
+            ->addColumn(Schema::column('created_at', Types::DATETIME_IMMUTABLE))
+            ->addColumn(Schema::column('updated_at', Types::DATETIME_IMMUTABLE))
+            ->addPrimaryKeyConstraint(
+                PrimaryKeyConstraint::editor()->setUnquotedColumnNames('queue_id')->create(),
+            )
+            ->addIndex(
+                Index::editor()
+                    ->setType(IndexType::UNIQUE)
+                    ->setUnquotedColumnNames('url_hash'),
+            )
+            ->addIndex(Index::editor()->setUnquotedColumnNames('available_at', 'queue_id'))
+            ->addIndex(Index::editor()->setUnquotedColumnNames('store_id'))
+            ->addIndex(Index::editor()->setUnquotedColumnNames('created_at'))
+            ->setComment('Page Cache Warmup Queue')
+            ->create(),
+    );
 };

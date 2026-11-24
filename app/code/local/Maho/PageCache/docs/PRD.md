@@ -83,10 +83,10 @@ Maho 目前有 Symfony Cache 对象缓存（file/redis），但没有内置的 H
 | FR-15 | 代理模型：product、category、CMS 的懒加载代理，减少动态块渲染成本 | P3 | 计划 |
 | FR-16 | 统计面板：DB 事件表、小时 rollup、后台面板，按路由/store/mode 统计 hit/miss/bypass/revalidated、PHP 耗时、top missed URL 和 flush 记录 | P3 | 已交付@v0.3.0 |
 | FR-17 | 静态文件导出：把匿名默认页的 local HTML 额外写成 path-based `.html`/`.gz`，由 Web 服务器直接返回；公共路径映射；允许参数变体继续走 PHP；严格 session cookie bypass；默认关闭，必须 deny 缓存目录 | P3 | 已交付@v0.3.0 |
-| FR-18 | 定时预热：purge 后 requeue、cron 分批预热、sitemap/URL、并发、限速、basic auth、重试和失败汇总 | P3 | 计划 |
+| FR-18 | 定时预热：purge 后 requeue、cron 分批预热、sitemap/URL、并发、限速、basic auth、重试和失败汇总 | P3 | 开发中 |
 | FR-19 | 多节点：purge 广播、Redis 共享版本、静态文件共享存储 | P3 | 计划 |
 
-> 状态取值：计划 / 开发中 / 已交付@vX.Y.Z / 暂停。第一期和第二期已交付 0.2.0；第三期静态导出和统计面板已交付 0.3.0，其余只登记。静态文件导出、统计面板和定时预热分别见 ADR-0012、ADR-0013、ADR-0014。第三期拆解见 `.tmp/brainstorm-phase3-2026-11-23.md`。
+> 状态取值：计划 / 开发中 / 已交付@vX.Y.Z / 暂停。第一期和第二期已交付 0.2.0；第三期静态导出和统计面板已交付 0.3.0；定时预热开发中；其余只登记。静态文件导出、统计面板和定时预热分别见 ADR-0012、ADR-0013、ADR-0014。第三期拆解见 `.tmp/brainstorm-phase3-2026-11-23.md`。
 
 ## 5. 非功能需求（NFR）
 

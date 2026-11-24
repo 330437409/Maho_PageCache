@@ -425,6 +425,7 @@ class Maho_PageCache_Model_Observer
                     'mode' => $context->getMode(),
                     'ttl' => $ttl,
                     'version' => $urlVersion,
+                    'store_id' => $context->getStoreId(),
                 ],
                 $key->getMetaKey($urlHash),
                 ['PAGE_CACHE'],
@@ -775,6 +776,16 @@ class Maho_PageCache_Model_Observer
     {
         try {
             Mage::getSingleton('page_cache/stat')->cleanup();
+        } catch (\Throwable $e) {
+            Mage::logException($e);
+        }
+    }
+
+    #[\Maho\Config\CronJob('page_cache_warmup', schedule: '* * * * *')]
+    public function warmQueue(): void
+    {
+        try {
+            Mage::getService('page_cache/warm')->consumeQueue();
         } catch (\Throwable $e) {
             Mage::logException($e);
         }

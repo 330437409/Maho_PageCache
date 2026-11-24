@@ -2,7 +2,7 @@
 <config>
     <modules>
         <Maho_PageCache>
-            <version>0.3.0</version>
+            <version>0.4.0</version>
         </Maho_PageCache>
     </modules>
     <global>
@@ -25,6 +25,9 @@
                     <stat_hourly>
                         <table>page_cache_stat_hourly</table>
                     </stat_hourly>
+                    <warmup_queue>
+                        <table>page_cache_warmup_queue</table>
+                    </warmup_queue>
                 </entities>
             </page_cache_resource>
         </models>
@@ -75,7 +78,15 @@ catalog_product_view]]></session_skip_routes>
                 <ttl>0</ttl>
             </dynamic>
             <warmup>
+                <enabled>0</enabled>
                 <concurrency>4</concurrency>
+                <batch_size>50</batch_size>
+                <delay_ms>500</delay_ms>
+                <max_attempts>3</max_attempts>
+                <retry_delay>300</retry_delay>
+                <queue_limit>10000</queue_limit>
+                <auth_user></auth_user>
+                <auth_password></auth_password>
             </warmup>
             <static>
                 <enabled>0</enabled>

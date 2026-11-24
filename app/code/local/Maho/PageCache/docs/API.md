@@ -1,6 +1,6 @@
 # 接口文档：Maho 页面缓存
 
-> 状态：0.3.0 已交付，第一期和第二期完成；第三期静态导出和统计面板已交付，其余只登记
+> 状态：0.3.0 已交付，第一期和第二期完成；第三期静态导出和统计面板已交付；定时预热 0.4.0 开发中
 > 关联 PRD：`docs/PRD.md`
 > 关联架构：`docs/ARCHITECTURE.md`
 
@@ -25,7 +25,15 @@
 | `page_cache/general/html_max_size` | text | 2097152 | local HTML 条目上限，字节 |
 | `page_cache/dynamic/injection` | select | `ajax` | 动态块注入方式：`ajax` 或 `esi` |
 | `page_cache/dynamic/ttl` | text | 0 | 显式标记可缓存的动态块响应秒数，0 不缓存 |
-| `page_cache/warmup/concurrency` | text | 4 | `page-cache:warm` 默认并发 |
+| `page_cache/warmup/enabled` | yes/no | 0 | 调度预热开关 |
+| `page_cache/warmup/concurrency` | text | 4 | `page-cache:warm` 和预热队列默认并发 |
+| `page_cache/warmup/batch_size` | text | 50 | 单次 cron 最大 URL 数 |
+| `page_cache/warmup/delay_ms` | text | 500 | 并发批次之间的等待毫秒数，0 关闭 |
+| `page_cache/warmup/max_attempts` | text | 3 | 最大失败次数 |
+| `page_cache/warmup/retry_delay` | text | 300 | 重试基础间隔秒，乘以 attempts |
+| `page_cache/warmup/queue_limit` | text | 10000 | 预热队列上限 |
+| `page_cache/warmup/auth_user` | text | 空 | basic auth 用户 |
+| `page_cache/warmup/auth_password` | obscure | 空 | basic auth 密码，加密存储 |
 | `page_cache/general/cacheable_routes` | textarea | 见下 | 每行一个 full action name |
 | `page_cache/general/allowed_params` | text | `p,limit,order,dir,mode` | 允许的 query 参数，逗号分隔 |
 | `page_cache/general/respect_no_cache` | yes/no | 1 | 请求带 `Cache-Control: no-cache` 时 bypass |
@@ -229,6 +237,17 @@ var/page-cache/static/{store_code}/{public_path}.gz
 - 原始事件保留 30 天，小时 rollup 保留 365 天，均可配置。
 - admin 前台请求不记录，避免 secret key 进入统计。
 
+### 3.9 定时预热
+
+默认关闭。开启 `page_cache/warmup/enabled` 后：
+
+- tag 失效把受影响 URL 写入 `page_cache_warmup_queue`，按 URL sha256 去重。
+- `page_cache_warmup` cron 每分钟消费，批次大小、并发、间隔、重试和队列上限见配置。
+- 404、410、3xx、bypass、401、403 和其他永久 4xx 跳过并移出；429、5xx 和网络错误重试，达到 `max_attempts` 后移出。
+- 全量失效清空队列，不自动全站预热。
+- 请求不发送 session cookie；配置 basic auth 后发送 `Authorization: Basic`。
+- 最近一次汇总保留 7 天，`page-cache:status` 读取。
+
 ## 5. CLI
 
 ### 5.1 `page-cache:status`
@@ -245,6 +264,8 @@ Enabled: yes
 TTL: 3600
 Global version: 12
 Purge queue: 3
+Warmup: enabled, queue=12
+Last warmup: warmed=8 skipped=2 failed=1 dropped=0 remaining=12 at 2026-11-24 02:10:00
 PHP counters (today): hit=300 miss=120 bypass=45 revalidated=80
 ```
 
@@ -255,6 +276,9 @@ PHP counters (today): hit=300 miss=120 bypass=45 revalidated=80
 ./maho page-cache:warm --url=https://example.com/ --url=https://example.com/category.html
 ./maho page-cache:warm --sitemap --limit=100 --concurrency=4
 ./maho page-cache:warm --sitemap --dry-run
+./maho page-cache:warm --queue
+./maho page-cache:warm --queue --dry-run
+./maho page-cache:warm --queue --limit=100
 ```
 
 选项：
@@ -265,9 +289,11 @@ PHP counters (today): hit=300 miss=120 bypass=45 revalidated=80
 | `--url=URL` | 显式 URL，可重复 |
 | `--limit=N` | 最多预热 N 个 URL，默认 100 |
 | `--concurrency=N` | 并发数，0 使用配置 |
-| `--dry-run` | 只列出 URL，不发请求 |
+| `--delay=N` | 批次间隔毫秒，仅手工 sitemap/URL 预热；默认取配置 |
+| `--queue` | 消费预热队列；不能和 `--sitemap` 或 `--url` 同时使用 |
+| `--dry-run` | 只列出 URL，不发请求；`--queue` 时列出队列中的 URL |
 
-`X-Maho-Cache: BYPASS`、3xx 和 404 记为 skipped；网络错误和其他非 200 记为 failed。有 failed 时命令返回非零。
+`X-Maho-Cache: BYPASS`、3xx、404/410、401/403 和其他永久 4xx 记为 skipped；429、5xx 和网络错误记为 failed。有 failed 时手工 sitemap/URL 命令返回非零；`--queue` 输出汇总并返回成功，失败行由 cron 继续重试。
 
 ### 5.3 `page-cache:purge`
 

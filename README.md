@@ -1,6 +1,6 @@
 # Maho_PageCache
 
-Standalone distribution of the Maho page cache module, version 0.3.0.
+Standalone distribution of the Maho page cache module, version 0.4.0.
 
 The repository mirrors the paths the module owns in a Maho installation:
 
@@ -13,7 +13,7 @@ lib/MahoCLI/Commands/PageCache*.php
 tests/Backend/Unit/PageCache/
 ```
 
-The Maho repository is the source of truth. This repository is a release snapshot.
+The Maho repository is the source of truth. This repository is a release snapshot. GitHub Actions runs the page cache test suite and linters against the Maho main branch on every push.
 
 ## Installation
 

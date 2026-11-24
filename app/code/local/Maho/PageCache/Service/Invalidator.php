@@ -68,7 +68,10 @@ class Maho_PageCache_Service_Invalidator
      */
     public function invalidateProductIds(array $productIds): void
     {
-        $productIds = array_values(array_unique(array_filter(array_map(intval(...), $productIds))));
+        $productIds = array_values(array_unique(array_filter(
+            array_map(intval(...), $productIds),
+            static fn(int $productId): bool => $productId > 0,
+        )));
         if ($productIds === []) {
             return;
         }
@@ -94,6 +97,7 @@ class Maho_PageCache_Service_Invalidator
         }
 
         $urls = [];
+        $warmUrls = [];
         foreach ($tags as $tag) {
             $urlHashes = $this->tagIndex()->getUrls($tag);
             if ($urlHashes === false) {
@@ -126,12 +130,20 @@ class Maho_PageCache_Service_Invalidator
                     (string) ($meta['store_code'] ?? ''),
                 );
                 $urls[] = (string) $meta['url'];
+                $warmUrls[(int) ($meta['store_id'] ?? 0)][] = (string) $meta['url'];
             }
             $this->tagIndex()->remove($tag);
         }
 
         if ($urls !== [] && $this->helper()->getMode() === Maho_PageCache_Helper_Data::MODE_PROXY) {
             $this->queue()->enqueue($urls, $tags, Maho_PageCache_Helper_Data::MODE_PROXY);
+        }
+
+        if ($warmUrls !== [] && $this->helper()->getWarmupEnabled()) {
+            $reason = implode(',', array_slice($tags, 0, 3));
+            foreach ($warmUrls as $storeId => $storeUrls) {
+                $this->warmQueue()->enqueue($storeUrls, (int) $storeId, $reason);
+            }
         }
     }
 
@@ -150,7 +162,10 @@ class Maho_PageCache_Service_Invalidator
             return;
         }
 
-        $productIds = array_values(array_filter(array_map(intval(...), array_keys($productIds))));
+        $productIds = array_values(array_filter(
+            array_map(intval(...), array_keys($productIds)),
+            static fn(int $productId): bool => $productId > 0,
+        ));
         if ($productIds === []) {
             $this->invalidateAll('catalog_rule_empty');
             return;
@@ -176,6 +191,7 @@ class Maho_PageCache_Service_Invalidator
             $this->version()->setGlobal($nextGlobalVersion);
         }
         $this->queue()->clear();
+        $this->warmQueue()->clear();
 
         if ($this->helper()->getMode() === Maho_PageCache_Helper_Data::MODE_PROXY) {
             $this->queue()->enqueueFullPurge();
@@ -229,6 +245,11 @@ class Maho_PageCache_Service_Invalidator
     private function staticCache(): Maho_PageCache_Model_StaticCache
     {
         return Mage::getSingleton('page_cache/staticCache');
+    }
+
+    private function warmQueue(): Maho_PageCache_Model_WarmQueue
+    {
+        return Mage::getSingleton('page_cache/warmQueue');
     }
 
     private function key(): Maho_PageCache_Model_Key

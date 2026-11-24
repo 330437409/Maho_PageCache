@@ -1,6 +1,6 @@
 # 架构文档：Maho 页面缓存
 
-> 状态：0.3.0 已交付，第一期和第二期完成；第三期静态导出和统计面板已交付，其余只登记
+> 状态：0.3.0 已交付，第一期和第二期完成；第三期静态导出和统计面板已交付；定时预热 0.4.0 开发中
 > 模块：`Maho_PageCache`
 > 关联 PRD：`docs/PRD.md`
 > 关联 spec：`docs/specs/page-cache.md`
@@ -17,7 +17,7 @@
 
 第一期不缓存 HTML。第二期增加 `local` 模式、Ajax/ESI 动态块和 `page-cache:warm`；服务器端占位符和代理模型留在第三期。
 
-模块不替换 `Mage_Core_Model_Cache`，不引入 `Zend_Cache`，不新增 Composer 依赖，不建新表。缓存数据使用 Maho 现有的 Symfony Cache（file/redis）。
+模块不替换 `Mage_Core_Model_Cache`，不引入 `Zend_Cache`，不新增 Composer 依赖，不修改 Maho 核心表。缓存数据使用 Maho 现有的 Symfony Cache（file/redis）；统计和预热队列使用模块自有表。
 
 ## 2. 模块结构
 
@@ -38,6 +38,7 @@ app/code/local/Maho/PageCache/
 │   ├── Resource.php                # 统计表资源模型
 │   ├── TagIndex.php                # tag 到 URL hash 的索引
 │   ├── PurgeQueue.php              # purge 队列
+│   ├── WarmQueue.php               # 预热队列，入队、去重、重试和上限
 │   ├── Counter.php                 # PHP 侧 hit/miss/bypass 计数
 │   ├── Backend/
 │   │   ├── Abstract.php            # 模式接口
@@ -53,7 +54,7 @@ app/code/local/Maho/PageCache/
 │   ├── Dynamic.php                 # 动态块 token、占位符、前端替换
 │   ├── Invalidator.php             # 实体/规则/配置失效
 │   ├── Purge.php                   # 队列处理和事件
-│   └── Warm.php                    # sitemap/URL 预热
+│   └── Warm.php                    # sitemap/URL 预热、队列消费和退避
 ├── etc/
 │   ├── config.xml                  # 模块、cache type、events
 │   └── system.xml                  # System > Configuration > Page Cache
@@ -210,13 +211,26 @@ block 在 layout 里显式设置 `page_cache_dynamic=1`。渲染时：
 
 ### 3.8 预热
 
-`page-cache:warm`：
+手工 CLI：
 
 - 从已生成的 sitemap、显式 `--url` 或两者合并取 URL。
 - 去重、过滤非 HTTP(S)、按 `--limit` 截断。
-- 用 Symfony HttpClient 并发请求，默认并发取 `page_cache/warmup/concurrency`。
-- 不发送 cookie；`X-Maho-Cache: BYPASS`、3xx、404 记为 skipped，网络错误和其他非 200 记为 failed。
+- 用 Symfony HttpClient 并发请求，默认并发取 `page_cache/warmup/concurrency`，批次之间等待 `page_cache/warmup/delay_ms`。
+- 不发送 cookie；basic auth 从配置读取。
+- `X-Maho-Cache: BYPASS`、3xx、404/410、401/403 和其他永久 4xx 记为 skipped；429、5xx 和网络错误记为 failed。
 - `--dry-run` 只列出 URL；有 failed 时命令返回非零。
+
+调度预热：
+
+- `page_cache/warmup/enabled=0` 时不入队、不消费。
+- tag 失效成功后，受影响 URL 按 store 写入 `page_cache_warmup_queue`；URL 使用 meta 里的绝对 URL，按 sha256 去重。
+- 重复入队把 `available_at` 提前到当前时间，不新增行。
+- 队列超过 `queue_limit` 时删除最旧行。
+- `page_cache_warmup` cron 每分钟消费，用 `core/lock` 保护。
+- 每个批次最多 `batch_size` 条，按 `available_at` 和 `queue_id` 排序。
+- 成功和永久跳过删除；失败写 `attempts`、`last_error` 和 `available_at = now + retry_delay * attempts`；达到 `max_attempts` 后删除。
+- 最近一次汇总存 `PC_WARMUP_LAST_RUN`，保留 7 天；`page-cache:status` 读取它。
+- 全量失效清空队列，不自动全站预热。
 
 ### 3.9 统计
 
@@ -284,6 +298,8 @@ catalog rule：
 | 静态文件 | `var/page-cache/static/{store}/{path}` + `.gz`，匿名默认页 | `page_cache_static_cleanup` |
 | `PC_PURGE_<timestamp>_<rand>` | `{urls: []}` | 24 小时 |
 | `PC_STAT_<date>_<result>` | int | 7 天 |
+| `PC_WARMUP_LAST_RUN` | 最近一次预热汇总 | 7 天 |
+| `page_cache_warmup_queue` | 预热队列，`url_hash` 唯一 | 由 cron 和上限控制 |
 
 注意：
 
@@ -370,7 +386,15 @@ ETag = W/"<version>"
 | `page_cache/general/html_max_size` | local HTML 条目上限，字节 | 2097152 |
 | `page_cache/dynamic/injection` | 动态块注入方式 `ajax` 或 `esi` | `ajax` |
 | `page_cache/dynamic/ttl` | 显式标记可缓存的动态块响应秒数，0 不缓存 | 0 |
+| `page_cache/warmup/enabled` | 调度预热开关 | 0 |
 | `page_cache/warmup/concurrency` | 预热默认并发 | 4 |
+| `page_cache/warmup/batch_size` | 单次 cron 最大 URL 数 | 50 |
+| `page_cache/warmup/delay_ms` | 批次间隔毫秒 | 500 |
+| `page_cache/warmup/max_attempts` | 最大失败次数 | 3 |
+| `page_cache/warmup/retry_delay` | 重试基础间隔秒 | 300 |
+| `page_cache/warmup/queue_limit` | 预热队列上限 | 10000 |
+| `page_cache/warmup/auth_user` | basic auth 用户 | 空 |
+| `page_cache/warmup/auth_password` | basic auth 密码，加密 | 空 |
 | `page_cache/general/filter_path_marker` | 分层导航路径标记，空表示关闭深度检查 | 空 |
 | `page_cache/general/max_filter_depth` | 分层导航最大深度 | 2 |
 | `page_cache/general/max_path_segments` | 最大路径段数 | 8 |
@@ -441,8 +465,7 @@ CLI：
 - Symfony Cache file/redis。
 - 不依赖 Zend_Cache、Zend_Locale、Varien 新代码。
 - 不新增 Composer 包。
-- 不新增数据库表。
-- 不修改 Maho 核心表结构。
+- 统计和预热队列使用模块自有表，不修改 Maho 核心表结构。
 - 不复制 RockSolid、Cm_Diehard 或其他 GPL 代码。
 
 ## 12. 测试策略
@@ -464,6 +487,7 @@ CLI：
 - local 命中设置 `FLAG_NO_DISPATCH` 并直接输出 HTML。
 - 动态块 token 校验、占位符替换、Ajax/ESI 响应。
 - 预热 sitemap 解析、去重、limit、skip 和失败汇总。
+- 预热队列入队、去重、上限、claim、重试、锁和 basic auth。
 - 静态路径映射、原子写、gzip、TTL 清理、失效删除和目录 deny。
 - 统计记录、admin 事件过滤、rollup、cleanup 和面板查询。
 - stock 状态变化、qty-only 更新、批量属性更新和阈值回退。
