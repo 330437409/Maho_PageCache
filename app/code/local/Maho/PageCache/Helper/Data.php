@@ -23,6 +23,8 @@ class Maho_PageCache_Helper_Data extends Mage_Core_Helper_Abstract
     public const XML_PATH_HTML_MAX_SIZE = 'page_cache/general/html_max_size';
     public const XML_PATH_DYNAMIC_INJECTION = 'page_cache/dynamic/injection';
     public const XML_PATH_DYNAMIC_TTL = 'page_cache/dynamic/ttl';
+    public const XML_PATH_DYNAMIC_SERVER_SIDE = 'page_cache/dynamic/server_side';
+    public const XML_PATH_DYNAMIC_SERVER_TYPES = 'page_cache/dynamic/server_types';
     public const XML_PATH_WARMUP_ENABLED = 'page_cache/warmup/enabled';
     public const XML_PATH_WARMUP_CONCURRENCY = 'page_cache/warmup/concurrency';
     public const XML_PATH_WARMUP_BATCH_SIZE = 'page_cache/warmup/batch_size';
@@ -116,6 +118,25 @@ class Maho_PageCache_Helper_Data extends Mage_Core_Helper_Abstract
     public function getDynamicTtl(): int
     {
         return max(0, (int) Mage::getStoreConfig(self::XML_PATH_DYNAMIC_TTL));
+    }
+
+    public function getDynamicServerSide(): bool
+    {
+        return Mage::getStoreConfigFlag(self::XML_PATH_DYNAMIC_SERVER_SIDE);
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function getDynamicServerTypes(): array
+    {
+        $value = (string) Mage::getStoreConfig(self::XML_PATH_DYNAMIC_SERVER_TYPES);
+        if (trim($value) === '') {
+            return [];
+        }
+
+        $types = preg_split('/[\s,]+/', $value, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        return array_values(array_unique(array_map(trim(...), $types)));
     }
 
     public function getWarmupEnabled(): bool

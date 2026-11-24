@@ -1,6 +1,6 @@
 # 接口文档：Maho 页面缓存
 
-> 状态：0.4.0 已交付，第一期和第二期完成；第三期静态导出、统计面板和定时预热已交付，其余只登记
+> 状态：0.4.0 已交付，第一期和第二期完成；第三期静态导出、统计面板和定时预热已交付；服务器端动态块占位符 0.5.0 开发中
 > 关联 PRD：`docs/PRD.md`
 > 关联架构：`docs/ARCHITECTURE.md`
 
@@ -25,6 +25,8 @@
 | `page_cache/general/html_max_size` | text | 2097152 | local HTML 条目上限，字节 |
 | `page_cache/dynamic/injection` | select | `ajax` | 动态块注入方式：`ajax` 或 `esi` |
 | `page_cache/dynamic/ttl` | text | 0 | 显式标记可缓存的动态块响应秒数，0 不缓存 |
+| `page_cache/dynamic/server_side` | yes/no | 0 | local 命中服务器端重建开关 |
+| `page_cache/dynamic/server_types` | text | 空 | 允许重建的 block type 别名，逗号分隔 |
 | `page_cache/warmup/enabled` | yes/no | 0 | 调度预热开关 |
 | `page_cache/warmup/concurrency` | text | 4 | `page-cache:warm` 和预热队列默认并发 |
 | `page_cache/warmup/batch_size` | text | 50 | 单次 cron 最大 URL 数 |
@@ -71,6 +73,7 @@ catalog_product_view
 | `X-Maho-Cache-Bypass` | 原因码 | 仅 bypass 时 |
 | `X-Maho-Cache-Tags` | 逗号分隔 tag | 仅调试开启时 |
 | `X-Maho-Cache-Version` | hash | 仅调试开启时 |
+| `X-Maho-Cache-Dynamic` | `server; rendered=N; failed=M` | 服务器端动态块重建，仅调试开启时 |
 
 ### 3.2 `proxy` 模式
 
@@ -163,7 +166,16 @@ X-Maho-Page-Cache-Blocks: <token>[,<token>...]
 
 响应头 `Cache-Control: private, no-store`、`X-Maho-Cache: DYNAMIC`。token 绑定 block、页面 URL、store、context，默认 1 小时过期；签名错误、过期、跨 URL/store/context 或请求未标记的 block 返回 400。没有 block token 的 dynamic 请求只返回 `form_key`/`sid`，供表单占位符替换。
 
-`local` 模式不替换动态 block，而是缓存无 session 时的匿名渲染。local 命中只发生在没有 session cookie 的请求上，因此不会把用户数据写进 HTML 缓存。form key/SID 仍替换为占位符；local 模式的前端脚本只在用户聚焦或提交 POST 表单时请求新的 form key，被动浏览不会建立 session。
+`local` 模式缓存无 session 时的匿名渲染。local 命中只发生在没有 session cookie 的请求上，因此不会把用户数据写进 HTML 缓存。显式 opt-in 的 leaf block 可以在 local 命中时服务器端重建；其余动态块保留匿名渲染。form key/SID 仍替换为占位符；local 模式的前端脚本只在用户聚焦或提交 POST 表单时请求新的 form key，被动浏览不会建立 session。
+
+local 服务器端占位符：
+
+- `page_cache/dynamic/server_side=1` 且 block type 在 `server_types` 中。
+- block 同时设置 `page_cache_dynamic=1` 和 `page_cache_dynamic_server=1`。
+- 缓存 HTML 用 `PC_DYNAMIC_SERVER` 注释包住匿名 fallback；entry 保存 block 定义。
+- local 命中只重建标记段，token 绑定 URL、store、context 和过期时间；不生成完整 layout。
+- token 无效、定义缺失、block 异常或出现 `Set-Cookie` 时保留匿名 fallback。
+- static 文件写入前剥离标记，只保留匿名 fallback。
 
 block 标记 `page_cache_dynamic_cacheable=1` 且 `page_cache/dynamic/ttl>0` 时，模块按 block 集合缓存动态响应；命中时跳过 layout，form key/SID 仍从当前 session 生成。key 包含 block 列表、页面 URL、context、customer group、store 和页面版本。
 

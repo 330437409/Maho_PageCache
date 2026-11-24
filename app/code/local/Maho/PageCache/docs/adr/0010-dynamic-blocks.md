@@ -2,7 +2,7 @@
 
 ## 状态
 
-已接受，随 Phase 2 实现。
+已接受，随 Phase 2 实现。ADR-0015 补充 local 模式的服务器端占位符。
 
 ## 背景
 
@@ -20,7 +20,7 @@ RockSolid 式服务器端占位符会序列化 block 定义并在命中时重建
 - 不接受客户端指定任意 block 类型；block 必须来自当前页面 layout。
 - 动态响应 `Cache-Control: private, no-store`，代理不得缓存。
 - 第二期默认不缓存动态 block HTML；可选 TTL 只对显式标记 `page_cache_dynamic_cacheable` 的 block 生效。
-- `local` 模式不替换动态 block，而是缓存无 session 时的匿名渲染；local 命中只面向无 session cookie 的请求。form key/SID 仍用占位符，前端在用户提交 POST 表单时才请求。
+- `local` 模式不替换动态 block，而是缓存无 session 时的匿名渲染；local 命中只面向无 session cookie 的请求。form key/SID 仍用占位符，前端在用户提交 POST 表单时才请求。ADR-0015 允许 local 模式下显式 opt-in 的 leaf block 在命中时服务器端重建；其余 local 动态块仍按本 ADR 缓存匿名渲染。
 
 ## 理由
 

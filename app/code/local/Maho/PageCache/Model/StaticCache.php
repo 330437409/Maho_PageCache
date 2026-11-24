@@ -48,6 +48,7 @@ class Maho_PageCache_Model_StaticCache
                 return false;
             }
 
+            $html = Mage::getService('page_cache/dynamic')->stripServerBlockMarkers($html);
             $path = $this->getFilePath($context);
             if ($path === null || !$this->writeAtomic($path, $html)) {
                 return false;

@@ -167,6 +167,25 @@
                             <show_in_website>1</show_in_website>
                             <show_in_store>1</show_in_store>
                         </ttl>
+                        <server_side translate="label comment">
+                            <label>Render Server-side Blocks on Local Hits</label>
+                            <comment>Rebuild explicitly marked leaf blocks during local mode hits. Proxy and static hits keep the anonymous fallback.</comment>
+                            <frontend_type>select</frontend_type>
+                            <source_model>adminhtml/system_config_source_yesno</source_model>
+                            <sort_order>15</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>0</show_in_website>
+                            <show_in_store>0</show_in_store>
+                        </server_side>
+                        <server_types translate="label comment">
+                            <label>Server-side Block Types</label>
+                            <comment>Comma-separated block type aliases allowed to rebuild, for example core/template. Empty disables server-side rendering.</comment>
+                            <frontend_type>text</frontend_type>
+                            <sort_order>16</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>0</show_in_website>
+                            <show_in_store>0</show_in_store>
+                        </server_types>
                     </fields>
                 </dynamic>
                 <warmup translate="label">

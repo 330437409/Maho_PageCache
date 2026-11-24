@@ -34,6 +34,7 @@ class Maho_PageCache_Model_Observer
             Mage::unregister('page_cache_local_bypass_reason');
             Mage::unregister('page_cache_not_modified');
             Mage::unregister('page_cache_tags');
+            Mage::unregister('page_cache_server_blocks');
             $dynamic = Mage::getService('page_cache/dynamic');
             if ($dynamic->isRequest()) {
                 Mage::register('page_cache_dynamic_request', true);
@@ -300,6 +301,30 @@ class Maho_PageCache_Model_Observer
         }
 
         if (Mage::helper('page_cache')->getMode() === Maho_PageCache_Helper_Data::MODE_LOCAL) {
+            if (!Mage::helper('page_cache')->getDynamicServerSide()
+                || !$block->getData('page_cache_dynamic_server')
+            ) {
+                return;
+            }
+
+            try {
+                $marker = Mage::getService('page_cache/dynamic')->createServerMarker(
+                    $block,
+                    (string) $transport->getHtml(),
+                    Mage::getModel('page_cache/context'),
+                    Mage::helper('page_cache')->getTtl(),
+                );
+                if ($marker !== null) {
+                    $transport->setHtml($marker['html']);
+                    $blocks = Mage::registry('page_cache_server_blocks');
+                    $blocks = is_array($blocks) ? $blocks : [];
+                    $blocks[$marker['id']] = $marker['definition'];
+                    Mage::unregister('page_cache_server_blocks');
+                    Mage::register('page_cache_server_blocks', $blocks);
+                }
+            } catch (\Throwable $e) {
+                Mage::logException($e);
+            }
             return;
         }
 
@@ -589,6 +614,7 @@ class Maho_PageCache_Model_Observer
             return;
         }
 
+        $dynamicBlocks = Mage::registry('page_cache_server_blocks');
         $entry = $cache->save(
             $context,
             $body,
@@ -596,6 +622,7 @@ class Maho_PageCache_Model_Observer
             $ttl,
             $cache->collectHeaders(Mage::app()->getResponse()),
             $versions,
+            is_array($dynamicBlocks) ? $dynamicBlocks : [],
         );
         if ($entry === null) {
             $service->applyBypass('cache_write', $debug);

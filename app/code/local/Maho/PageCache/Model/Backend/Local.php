@@ -50,7 +50,9 @@ class Maho_PageCache_Model_Backend_Local extends Maho_PageCache_Model_Backend_Ab
     ): void {
         $response = $this->response();
         $response->setHttpResponseCode(200);
-        $response->setBody((string) ($entry['html'] ?? ''));
+        $html = (string) ($entry['html'] ?? '');
+        $html = Mage::getService('page_cache/dynamic')->renderServerBlocks($html, $entry, $context);
+        $response->setBody($html);
         $this->applyEntryHeaders($context, $entry, $debug, 'HIT', (int) ($entry['ttl'] ?? 0));
     }
 
