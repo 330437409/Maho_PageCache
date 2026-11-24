@@ -88,7 +88,7 @@ var/page-cache/static/{store_code}/{public_path}.gz
 
 ## 统计面板
 
-一级菜单 `Page Cache` 显示 PHP 侧 hit rate、平均耗时、trend、top missed URL 和最近 flush/purge/warmup，并提供 `Warm Now`（一个预热队列批次）和 `Configuration` 按钮。默认关闭；在 `System > Configuration > Page Cache > Statistics` 开启。
+一级菜单 `Page Cache` 用 Overview、Trend、Top Missed URLs、Recent Events 四个标准报表 grid 显示 PHP 侧 hit rate、平均耗时、趋势、top missed URL 和最近 flush/purge/warmup，并提供 `Warm Now`（一个预热队列批次）和 `Configuration` 按钮。默认关闭；在 `System > Configuration > Page Cache > Statistics` 开启。
 
 - 原始事件保留 30 天，小时 rollup 保留 365 天，均可配置。
 - `page_cache_stats_rollup` 每小时聚合，`page_cache_stats_cleanup` 每天清理。

@@ -216,7 +216,7 @@ Maho 目前有 Symfony Cache 对象缓存（file/redis），但没有内置的 H
 
 - 统计表记录 hit/miss/bypass/revalidated、route、store、mode、PHP 耗时、flush/purge/warmup 原因。
 - 小时 rollup 生效，原始数据按保留天数清理。
-- 一级菜单 `Page Cache` 显示 hit rate、PHP 耗时、趋势、top missed URL 和最近 flush，ACL 保留 `admin/report/page_cache`；页面提供 `Warm Now` 和 `Configuration` 按钮。
+- 一级菜单 `Page Cache` 使用 Overview、Trend、Top Missed URLs、Recent Events 四个标准报表 grid，显示 hit rate、PHP 耗时、趋势、top missed URL 和最近 flush；ACL 保留 `admin/report/page_cache`，页面提供 `Warm Now` 和 `Configuration` 按钮。
 - admin 前台请求不记录，避免 secret key 进入统计。
 - 统计写入失败不影响页面响应，不记录完整 query 或 PII。
 

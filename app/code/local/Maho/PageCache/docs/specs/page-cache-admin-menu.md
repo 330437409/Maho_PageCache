@@ -1,13 +1,13 @@
 # 功能规格：Page Cache 一级菜单和 Warm Now
 
-> 状态：实现完成，待跨库 CI 和发版 0.5.5
+> 状态：实现完成，待发版 0.5.5
 > 关联 PRD：FR-13、FR-16、FR-18
 > 分支：`feat/page-cache-phase2`
 
 ## 1. 范围
 
 - Page Cache 从 `Reports > Page Cache` 移到后台一级菜单 `Page Cache`。
-- 统计面板继续使用现有数据，但外层改成标准后台 `content-header` 和 `content-buttons`。
+- 统计面板改成标准后台 `content-header` 和 `content-buttons`，内容使用四个标准报表 tab 和 grid。
 - 页面新增 `Warm Now`，处理一个预热队列批次。
 - 页面新增 `Configuration`，跳转 `System > Configuration > Page Cache`。
 - ACL 保留 `admin/report/page_cache`，避免升级后现有角色失去权限。
@@ -44,7 +44,7 @@
 ## 3. 验收标准
 
 - 后台一级菜单出现 `Page Cache`，`Reports` 下不再出现。
-- 打开页面显示标准 content header 和按钮。
+- 打开页面显示标准 content header、按钮、过滤器和 Overview/Trend/Top Missed/Recent Events 四个 grid tab。
 - 有配置权限时显示 `Configuration`，点击进入 Page Cache 配置。
 - scheduled warmup 开启时显示 `Warm Now`；关闭时显示说明并隐藏按钮。
 - `Warm Now` 是 POST，缺 form key 被拒绝；队列为空显示 notice。
@@ -56,4 +56,4 @@
 - 代码：`etc/adminhtml.xml`、`controllers/Adminhtml/PageCacheController.php`、`Block/Adminhtml/Dashboard.php`、`template/maho/pagecache/dashboard.phtml`。
 - 测试：`AdminMenuTest`；手工验证一级菜单、content header、Warm Now POST 和空队列提示。
 - 测试结果：199 passed（568 assertions）。
-- 交叉验证待补：SQLite 已通过；PostgreSQL、MySQL 待模块 CI。
+- 交叉验证：模块 CI run 45376447529 在 SQLite、MySQL、PostgreSQL 三个任务上全部通过（2026-11-24）。

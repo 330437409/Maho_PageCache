@@ -6,7 +6,7 @@ All notable changes to `Maho_PageCache` are recorded here.
 
 ### Added
 
-- A top-level `Page Cache` admin menu with the statistics dashboard, a `Warm Now` button that processes one warmup queue batch, and a `Configuration` button. The existing `admin/report/page_cache` ACL path is kept for role compatibility.
+- A top-level `Page Cache` admin menu with four standard report grid tabs, a `Warm Now` button that processes one warmup queue batch, and a `Configuration` button. The existing `admin/report/page_cache` ACL path is kept for role compatibility.
 - `page-cache:monitor` exports stock pending, queue and PHP counter metrics as Prometheus, JSON or text for an external monitoring system.
 - `--check` exits non-zero when the oldest pending stock invalidation crossed `page_cache/general/stock_pending_warn_age`.
 

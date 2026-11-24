@@ -1,6 +1,6 @@
 # 功能规格：Maho 页面缓存统计面板
 
-> 状态：已交付@v0.3.0；0.5.5 菜单移至一级 Page Cache，并新增 Warm Now
+> 状态：已交付@v0.3.0；0.5.5 菜单移至一级 Page Cache，内容改为四个标准报表 grid，并新增 Warm Now
 > 关联 PRD：FR-16
 > 关联 ADR：ADR-0013
 > 分支：`feat/page-cache-stats`（待创建）

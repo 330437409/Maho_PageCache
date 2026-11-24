@@ -46,7 +46,8 @@ app/code/local/Maho/PageCache/
 │   │   ├── Revalidating.php        # revalidating 模式
 │   │   └── Local.php               # local 模式命中、304 和响应头
 │   └── System/Config/              # 模式和注入方式选项
-├── Block/Adminhtml/Stats.php       # 统计面板 block
+├── Block/Adminhtml/Dashboard.php   # 报表容器、过滤器和按钮
+├── Block/Adminhtml/Dashboard/      # tab 和四张报表 grid
 ├── controllers/Adminhtml/PageCacheController.php  # 统计面板控制器
 ├── Service/
 │   ├── Request.php                 # bypass 判定和可缓存路由
@@ -66,7 +67,7 @@ app/etc/modules/Maho_PageCache.xml
 lib/MahoCLI/Commands/PageCacheStatus.php
 lib/MahoCLI/Commands/PageCachePurge.php
 lib/MahoCLI/Commands/PageCacheWarm.php
-app/design/adminhtml/default/default/template/maho/pagecache/stats.phtml
+app/design/adminhtml/default/default/template/maho/pagecache/dashboard.phtml
 tests/Backend/Unit/PageCache/*
 ```
 
@@ -253,7 +254,7 @@ local 服务器端占位符：
 - 响应后批量写入，失败只记录日志。
 - admin 前台请求不记录，避免 admin secret key 进入统计；flush/purge/warmup 系统事件不带 admin 路径。
 - `page_cache_stats_rollup` 每小时聚合，`page_cache_stats_cleanup` 每天清理。
-- 一级菜单 `Page Cache` 面板读取原始表或 rollup 表，显示 hit rate、PHP duration、trend、top missed 和最近系统事件；`Warm Now` 处理一个预热队列批次。
+- 一级菜单 `Page Cache` 使用四个报表 tab：Overview、Trend、Top Missed URLs、Recent Events；每个 tab 是标准 `Mage_Adminhtml_Block_Widget_Grid`，读取原始表或 rollup 表。`Warm Now` 处理一个预热队列批次。
 - 静态、代理和 CDN 命中不经过 PHP，不计入。
 
 ### 3.10 失效
