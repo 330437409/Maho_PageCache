@@ -1,0 +1,41 @@
+<?xml version="1.0"?>
+<config>
+    <menu>
+        <report>
+            <children>
+                <page_cache translate="title" module="page_cache">
+                    <title>Page Cache</title>
+                    <sort_order>100</sort_order>
+                    <action>adminhtml/page_cache/stats</action>
+                </page_cache>
+            </children>
+        </report>
+    </menu>
+    <acl>
+        <resources>
+            <admin>
+                <children>
+                    <report>
+                        <children>
+                            <page_cache translate="title" module="page_cache">
+                                <title>Page Cache</title>
+                            </page_cache>
+                        </children>
+                    </report>
+                    <system>
+                        <children>
+                            <config>
+                                <children>
+                                    <page_cache translate="title" module="page_cache">
+                                        <title>Page Cache</title>
+                                        <sort_order>900</sort_order>
+                                    </page_cache>
+                                </children>
+                            </config>
+                        </children>
+                    </system>
+                </children>
+            </admin>
+        </resources>
+    </acl>
+</config>

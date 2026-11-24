@@ -1,0 +1,193 @@
+<?php
+
+/**
+ * SPDX-FileCopyrightText: 2026 Maho <https://mahocommerce.com>
+ * SPDX-License-Identifier: AFL-3.0
+ * @package Maho_PageCache
+ */
+
+/** @var Maho_PageCache_Block_Adminhtml_Stats $this */
+
+$summary = $this->getSummary();
+$trend = $this->getTrend();
+$topMissed = $this->getTopMissed();
+$recentEvents = $this->getRecentEvents();
+$days = $this->getDays();
+$storeId = $this->getStoreId();
+?>
+<div class="page-cache-stats">
+    <?php if (!$this->isStatsEnabled()): ?>
+        <div class="d-alert d-alert-warning mb-4">
+            <?= $this->__('Page cache statistics are disabled.') ?>
+            <a href="<?= $this->escapeHtml($this->getConfigUrl()) ?>" class="link">
+                <?= $this->__('Enable them in System > Configuration > Page Cache > Statistics.') ?>
+            </a>
+        </div>
+    <?php endif; ?>
+
+    <form method="get" action="<?= $this->escapeHtml($this->getStatsUrl()) ?>" class="flex flex-wrap items-end gap-3 mb-6">
+        <label class="form-inline">
+            <span class="d-label"><?= $this->__('Range') ?></span>
+            <select name="days" class="d-select d-select-bordered">
+                <?php foreach ($this->getRangeOptions() as $value => $label): ?>
+                    <option value="<?= (int) $value ?>"<?= $days === $value ? ' selected' : '' ?>>
+                        <?= $this->escapeHtml($label) ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+        </label>
+        <label class="form-inline">
+            <span class="d-label"><?= $this->__('Store') ?></span>
+            <select name="store_id" class="d-select d-select-bordered">
+                <?php foreach ($this->getStores() as $store): ?>
+                    <option value="<?= (int) $store['value'] ?>"<?= $storeId === (int) $store['value'] ? ' selected' : '' ?>>
+                        <?= $this->escapeHtml($store['label']) ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+        </label>
+        <button type="submit" class="d-btn d-btn-primary"><?= $this->__('Apply') ?></button>
+    </form>
+
+    <div class="flex flex-wrap gap-x-6 gap-y-1 text-sm opacity-80 mb-6">
+        <span><?= $this->__('Statistics') ?>: <?= $this->isStatsEnabled() ? $this->__('Enabled') : $this->__('Disabled') ?></span>
+        <span><?= $this->__('Raw retention') ?>: <?= $this->getRawRetentionDays() ?> <?= $this->__('days') ?></span>
+        <span><?= $this->__('Rollup retention') ?>: <?= $this->getRollupRetentionDays() ?> <?= $this->__('days') ?></span>
+        <span><?= $this->__('Last rollup') ?>: <?= $this->getLastRollupBucket() === null ? $this->__('n/a') : $this->escapeHtml($this->getLastRollupBucket()) ?></span>
+    </div>
+
+    <div class="flex flex-wrap gap-4 mb-6">
+        <div class="d-card d-card-border bg-base-100 flex-1 min-w-[220px]">
+            <div class="d-card-body">
+                <div class="text-sm opacity-70"><?= $this->__('Hit rate') ?></div>
+                <div class="text-3xl font-semibold"><?= number_format((float) $summary['hit_rate'], 1) ?>%</div>
+                <div class="text-xs opacity-70"><?= $this->__('Hit + revalidated over hit + miss + revalidated') ?></div>
+            </div>
+        </div>
+        <div class="d-card d-card-border bg-base-100 flex-1 min-w-[220px]">
+            <div class="d-card-body">
+                <div class="text-sm opacity-70"><?= $this->__('PHP duration') ?></div>
+                <div class="text-3xl font-semibold">
+                    <?= $summary['avg_duration_ms'] === null ? $this->__('n/a') : number_format((float) $summary['avg_duration_ms'], 1) . ' ms' ?>
+                </div>
+                <div class="text-xs opacity-70"><?= $this->__('Hit, miss, revalidated and dynamic requests') ?></div>
+            </div>
+        </div>
+        <div class="d-card d-card-border bg-base-100 flex-1 min-w-[220px]">
+            <div class="d-card-body">
+                <div class="text-sm opacity-70"><?= $this->__('Misses') ?></div>
+                <div class="text-3xl font-semibold"><?= (int) $summary['miss'] ?></div>
+                <div class="text-xs opacity-70"><?= $this->__('Cache misses handled by PHP') ?></div>
+            </div>
+        </div>
+        <div class="d-card d-card-border bg-base-100 flex-1 min-w-[220px]">
+            <div class="d-card-body">
+                <div class="text-sm opacity-70"><?= $this->__('Bypasses') ?></div>
+                <div class="text-3xl font-semibold"><?= (int) $summary['bypass'] ?></div>
+                <div class="text-xs opacity-70"><?= $this->__('Requests that skipped the cache') ?></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="d-card d-card-border bg-base-100 mb-6">
+        <div class="d-card-body">
+            <h2 class="text-lg font-semibold mb-2"><?= $this->__('Trend') ?></h2>
+            <div class="overflow-x-auto">
+                <table class="d-table">
+                    <thead>
+                        <tr>
+                            <th><?= $this->__('Bucket') ?></th>
+                            <th><?= $this->__('Hit') ?></th>
+                            <th><?= $this->__('Miss') ?></th>
+                            <th><?= $this->__('Bypass') ?></th>
+                            <th><?= $this->__('Revalidated') ?></th>
+                            <th><?= $this->__('Dynamic') ?></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if ($trend === []): ?>
+                            <tr><td colspan="6"><?= $this->__('No statistics yet.') ?></td></tr>
+                        <?php else: ?>
+                            <?php foreach ($trend as $row): ?>
+                                <tr>
+                                    <td><?= $this->escapeHtml((string) $row['bucket']) ?></td>
+                                    <td><?= (int) $row['hit'] ?></td>
+                                    <td><?= (int) $row['miss'] ?></td>
+                                    <td><?= (int) $row['bypass'] ?></td>
+                                    <td><?= (int) $row['revalidated'] ?></td>
+                                    <td><?= (int) $row['dynamic'] ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="flex flex-col xl:flex-row gap-6">
+        <div class="d-card d-card-border bg-base-100 flex-1 min-w-0">
+            <div class="d-card-body">
+                <h2 class="text-lg font-semibold mb-2"><?= $this->__('Top missed URLs') ?></h2>
+                <div class="overflow-x-auto">
+                    <table class="d-table">
+                        <thead>
+                            <tr>
+                                <th><?= $this->__('Path') ?></th>
+                                <th><?= $this->__('Misses') ?></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if ($topMissed === []): ?>
+                                <tr><td colspan="2"><?= $this->__('No misses recorded.') ?></td></tr>
+                            <?php else: ?>
+                                <?php foreach ($topMissed as $row): ?>
+                                    <tr>
+                                        <td><?= $this->escapeHtml($row['url_path']) ?></td>
+                                        <td><?= (int) $row['miss_count'] ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="d-card d-card-border bg-base-100 flex-1 min-w-0">
+            <div class="d-card-body">
+                <h2 class="text-lg font-semibold mb-2"><?= $this->__('Recent flush, purge and warmup events') ?></h2>
+                <div class="overflow-x-auto">
+                    <table class="d-table">
+                        <thead>
+                            <tr>
+                                <th><?= $this->__('Time') ?></th>
+                                <th><?= $this->__('Type') ?></th>
+                                <th><?= $this->__('Route') ?></th>
+                                <th><?= $this->__('Reason') ?></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if ($recentEvents === []): ?>
+                                <tr><td colspan="4"><?= $this->__('No events recorded.') ?></td></tr>
+                            <?php else: ?>
+                                <?php foreach ($recentEvents as $event): ?>
+                                    <tr>
+                                        <td><?= $this->escapeHtml((string) $event['created_at']) ?></td>
+                                        <td><?= $this->escapeHtml((string) $event['event_type']) ?></td>
+                                        <td><?= $this->escapeHtml((string) ($event['route'] ?? '')) ?></td>
+                                        <td><?= $this->escapeHtml((string) ($event['reason'] ?? '')) ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <p class="text-xs opacity-70 mt-4">
+        <?= $this->__('Only PHP-side events are counted. Static file, reverse proxy and CDN hits do not run PHP and are not included.') ?>
+    </p>
+</div>

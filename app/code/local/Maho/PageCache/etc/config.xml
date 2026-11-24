@@ -1,0 +1,91 @@
+<?xml version="1.0"?>
+<config>
+    <modules>
+        <Maho_PageCache>
+            <version>0.3.0</version>
+        </Maho_PageCache>
+    </modules>
+    <global>
+        <helpers>
+            <page_cache>
+                <class>Maho_PageCache_Helper</class>
+            </page_cache>
+        </helpers>
+        <models>
+            <page_cache>
+                <class>Maho_PageCache_Model</class>
+                <resourceModel>page_cache_resource</resourceModel>
+            </page_cache>
+            <page_cache_resource>
+                <class>Maho_PageCache_Model_Resource</class>
+                <entities>
+                    <stat>
+                        <table>page_cache_stat</table>
+                    </stat>
+                    <stat_hourly>
+                        <table>page_cache_stat_hourly</table>
+                    </stat_hourly>
+                </entities>
+            </page_cache_resource>
+        </models>
+        <blocks>
+            <page_cache>
+                <class>Maho_PageCache_Block</class>
+            </page_cache>
+        </blocks>
+        <services>
+            <page_cache>
+                <class>Maho_PageCache_Service</class>
+            </page_cache>
+        </services>
+        <cache>
+            <types>
+                <page_cache>
+                    <label>Page Cache</label>
+                    <description>HTTP page cache metadata, tag index and purge queue.</description>
+                    <tags>PAGE_CACHE</tags>
+                </page_cache>
+            </types>
+        </cache>
+    </global>
+    <default>
+        <page_cache>
+            <general>
+                <enabled>0</enabled>
+                <mode>revalidating</mode>
+                <ttl>3600</ttl>
+                <html_max_size>2097152</html_max_size>
+                <cacheable_routes><![CDATA[cms_index_index
+cms_page_view
+catalog_category_view
+catalog_product_view]]></cacheable_routes>
+                <session_skip_routes><![CDATA[cms_index_index
+cms_page_view
+catalog_category_view
+catalog_product_view]]></session_skip_routes>
+                <allowed_params>p,limit,order,dir,mode</allowed_params>
+                <filter_path_marker></filter_path_marker>
+                <max_filter_depth>2</max_filter_depth>
+                <max_path_segments>8</max_path_segments>
+                <respect_no_cache>1</respect_no_cache>
+                <debug_headers>0</debug_headers>
+            </general>
+            <dynamic>
+                <injection>ajax</injection>
+                <ttl>0</ttl>
+            </dynamic>
+            <warmup>
+                <concurrency>4</concurrency>
+            </warmup>
+            <static>
+                <enabled>0</enabled>
+            </static>
+            <stats>
+                <enabled>0</enabled>
+                <raw_retention_days>30</raw_retention_days>
+                <rollup_retention_days>365</rollup_retention_days>
+                <max_duration_ms>60000</max_duration_ms>
+            </stats>
+        </page_cache>
+    </default>
+</config>

@@ -1,0 +1,482 @@
+# 架构文档：Maho 页面缓存
+
+> 状态：0.3.0 已交付，第一期和第二期完成；第三期静态导出和统计面板已交付，其余只登记
+> 模块：`Maho_PageCache`
+> 关联 PRD：`docs/PRD.md`
+> 关联 spec：`docs/specs/page-cache.md`
+
+## 1. 定位与边界
+
+本模块是 Maho 的 HTTP 页面缓存集成层，复用 Maho 现有的 Symfony Cache，不引入新的缓存后端。
+
+第一期只做三件事：
+
+1. 判断一个匿名 GET 是否适合缓存，跳过 session，并设置正确的 HTTP 头。
+2. 用 `revalidating` 或 `proxy` 模式让反向代理/CDN 缓存 HTML。
+3. 在实体、规则和配置变化时按 tag 或全量失效，并维护 purge 队列。
+
+第一期不缓存 HTML。第二期增加 `local` 模式、Ajax/ESI 动态块和 `page-cache:warm`；服务器端占位符和代理模型留在第三期。
+
+模块不替换 `Mage_Core_Model_Cache`，不引入 `Zend_Cache`，不新增 Composer 依赖，不建新表。缓存数据使用 Maho 现有的 Symfony Cache（file/redis）。
+
+## 2. 模块结构
+
+目录：
+
+```text
+app/code/local/Maho/PageCache/
+├── .claude/rules/                  # 模块级 SDD 规则
+├── Helper/Data.php                 # 配置读取和稳定原因码
+├── Model/
+│   ├── Observer.php                # session skip、304、响应头、失效
+│   ├── Context.php                 # store/货币/客户组/税/参数 hash
+│   ├── Key.php                     # URL/context/版本/HTML key
+│   ├── Version.php                 # 全局版本和 URL 版本
+│   ├── HtmlCache.php               # local 模式整页 HTML 存储
+│   ├── StaticCache.php             # 匿名默认页静态 HTML 导出
+│   ├── Stat.php                    # 统计记录、rollup、面板数据
+│   ├── Resource.php                # 统计表资源模型
+│   ├── TagIndex.php                # tag 到 URL hash 的索引
+│   ├── PurgeQueue.php              # purge 队列
+│   ├── Counter.php                 # PHP 侧 hit/miss/bypass 计数
+│   ├── Backend/
+│   │   ├── Abstract.php            # 模式接口
+│   │   ├── Proxy.php               # proxy 模式
+│   │   ├── Revalidating.php        # revalidating 模式
+│   │   └── Local.php               # local 模式命中、304 和响应头
+│   └── System/Config/              # 模式和注入方式选项
+├── Block/Adminhtml/Stats.php       # 统计面板 block
+├── controllers/Adminhtml/PageCacheController.php  # 统计面板控制器
+├── Service/
+│   ├── Request.php                 # bypass 判定和可缓存路由
+│   ├── Response.php                # 头、ETag、tag 收集
+│   ├── Dynamic.php                 # 动态块 token、占位符、前端替换
+│   ├── Invalidator.php             # 实体/规则/配置失效
+│   ├── Purge.php                   # 队列处理和事件
+│   └── Warm.php                    # sitemap/URL 预热
+├── etc/
+│   ├── config.xml                  # 模块、cache type、events
+│   └── system.xml                  # System > Configuration > Page Cache
+├── docs/                           # PRD、架构、API、ADR、spec
+├── CHANGELOG.md
+└── README.md
+
+app/etc/modules/Maho_PageCache.xml
+lib/MahoCLI/Commands/PageCacheStatus.php
+lib/MahoCLI/Commands/PageCachePurge.php
+lib/MahoCLI/Commands/PageCacheWarm.php
+app/design/adminhtml/default/default/template/maho/pagecache/stats.phtml
+tests/Backend/Unit/PageCache/*
+```
+
+说明：
+
+- 模块放 `app/code/local`，和 `Maho_Translations` 一致。稳定后再考虑上游到 `app/code/core/Maho`。
+- CLI 命令放 `lib/MahoCLI/Commands`，因为 Maho 的 CLI 发现器只扫描这个目录。
+- 后台只增加一个配置段，不增加菜单、网格或控制器。
+- 配置段使用 `page_cache`，不添加 `maho_` 或 `mage_` 前缀。
+- 不新增表，第一期所有索引和队列走 Symfony Cache。
+
+## 3. 运行时流程
+
+### 3.1 请求开始
+
+`controller_action_predispatch_session_start` 事件：
+
+1. `Service\Request` 判断请求是否可缓存。
+2. 可缓存时设置 `FLAG_NO_START_SESSION`，跳过 session。
+3. 不可缓存时保持现有行为，并记录 bypass 原因。
+
+判定顺序（任一不通过即 bypass）：
+
+1. 模块已开启，模式是 `proxy` 或 `revalidating`。
+2. 请求方法为 GET。
+3. 不是 admin、install、API、checkout、customer account、preview、维护模式。
+4. 当前 full action name 在 `page_cache/general/cacheable_routes` 中。
+5. 路径段数不超过 `page_cache/general/max_path_segments`；配置了 `filter_path_marker` 时，分层导航深度不超过 `max_filter_depth`。
+6. 请求没有 Maho session cookie。
+7. query 参数都在允许列表，或为空。
+8. 没有 `no-cache` 请求头，或配置允许忽略。
+9. 不是 AJAX 请求。
+10. context 可以安全确定（store、货币、客户组、税均为默认或可独立缓存）。
+
+这里不读取 `customer/session`、`checkout/session` 或 `core/session`，因为读取本身会启动 session。登录、购物车、消息等状态用 session cookie 是否存在来判断。这是保守策略：有 session cookie 就不缓存。
+
+### 3.2 revalidating 304
+
+`controller_action_predispatch` 事件：
+
+1. 读取请求的 `If-None-Match` 和 `If-Modified-Since`。
+2. 如果 `If-None-Match` 存在，计算当前 ETag：
+   - 全局版本
+   - URL 版本
+   - URL hash
+   - context hash
+   - TTL 时间桶
+   - 模式
+3. 如果 ETag 匹配，设置 304、清空 body、设置缓存头、设置 `FLAG_NO_DISPATCH = true`。
+4. 不生成 layout，不渲染 block。
+
+这里使用版本 token，而不是响应体 hash。原因是 304 必须在渲染前决定，不能先渲染再比较。版本由失效逻辑递增，因此内容变化时 ETag 一定变化。
+
+### 3.3 正常响应
+
+`controller_front_send_response_before` 事件：
+
+1. 如果请求不是本次可缓存的，设置 bypass 头，不写索引。
+2. 如果响应不是 200，或 body 为空，不写索引。
+3. 收集页面 tag：
+   - `core_block_abstract_to_html_after` 中缓存块的 `getCacheTags()`。
+   - 本次请求加载的实体，通过 `getCacheIdTags()` 收集。
+   - 至少包含 `PAGE_CACHE`。
+4. 计算 URL hash、context hash 和 ETag。
+5. 写入 URL 元数据：
+   - tags
+   - 版本
+   - 模式
+   - 创建时间
+   - TTL
+6. 更新 tag 到 URL 的索引。
+7. 设置响应头。
+8. 递增 PHP 侧计数。
+
+`local` 模式在写元数据后，还把整页 HTML 写入 `PC_HTML_<hash>`，并同时打 `PAGE_CACHE` 和 `PAGE_CACHE_HTML` tag。
+
+### 3.4 proxy 模式
+
+响应头：
+
+```text
+Cache-Control: public, s-maxage=<ttl>, max-age=0
+Vary: Accept-Encoding, Cookie
+X-Maho-Cache: MISS
+X-Maho-Cache-Mode: proxy
+X-Maho-Cache-Context: <hash>
+X-Cache-Tags: <tag1>,<tag2>
+```
+
+代理命中时 PHP 不参与，因此 PHP 侧只统计 miss/bypass。代理命中率由代理或 CDN 自己的监控提供。
+
+tag 失效时：
+
+1. 从 tag 索引读出 URL hash 列表。
+2. 递增每个 URL 的版本。
+3. 把 URL 写入 purge 队列。
+4. `page-cache:purge` 处理队列，触发 `maho_page_cache_purge_urls` 事件，或写 purge 文件。
+
+### 3.5 local 模式
+
+请求进入 `controller_action_predispatch` 时：
+
+1. 如果请求可缓存、模式为 `local`，先读 `PC_HTML_<hash>`。
+2. 元数据缺失时不命中，避免版本 key 被淘汰后复活旧 HTML。
+3. 命中时设置 200、body、`Cache-Control: private, max-age=0, must-revalidate`、`ETag`、`X-Maho-Cache: HIT`，设置 `FLAG_NO_DISPATCH`，不生成 layout。
+4. `If-None-Match` 或 `If-Modified-Since` 命中时返回 304，body 为空。
+5. 未命中时用 core named lock `page_cache_html_<hash>` 保护回源。等待的请求在锁释放后重新读缓存；等待超时则正常渲染但不保存，返回 `lock_timeout` bypass。
+6. 渲染完成后，`controller_front_send_response_before` 检查版本没有变化，写入元数据、tag 索引和 HTML；版本在渲染期间变化时不保存，返回 `version_changed` bypass。
+7. HTML 超过 `page_cache/general/html_max_size` 时不缓存，返回 `html_too_large` bypass。
+
+`local` 响应是 `private`，浏览器每次回源重新验证，命中发生在 Maho 内部。
+
+### 3.6 动态块
+
+block 在 layout 里显式设置 `page_cache_dynamic=1`。渲染时：
+
+1. `core_block_abstract_to_html_after` 只处理标记过的 block。
+2. `proxy`/`revalidating` 的可缓存请求把 block HTML 换成签名注释占位符，不把用户数据写进缓存。注释在 `<ul>`、`<tbody>` 等父级里也是合法节点，不会破坏外层结构。
+3. `local` 模式不替换动态 block，而是缓存无 session 时的匿名渲染；local 命中只面向无 session cookie 的请求，所以缓存里没有用户数据。
+4. form key/SID 在所有模式都替换为占位符。local 模式的前端脚本只在用户聚焦或提交 POST 表单时请求 form key，避免被动浏览建立 session；proxy 模式在页面加载时请求动态块和 form key。
+5. 动态请求（`X-Maho-Page-Cache: dynamic` 或 `_page_cache_dynamic` 参数）启动 session，正常生成 layout，只捕获当前页面标记过且被请求的 block。
+6. Ajax 响应返回 `{blocks, form_key, sid}`；ESI 响应返回单个 block 的 HTML。
+7. 动态响应 `Cache-Control: private, no-store`、`X-Maho-Cache: DYNAMIC`，代理不得缓存。
+8. block 显式标记 `page_cache_dynamic_cacheable=1` 且 `page_cache/dynamic/ttl>0` 时，动态响应按 block 集合写入 `PC_DYNAMIC_<hash>`；key 包含 block 列表、URL、context、customer group、store 和版本。命中时在 layout 前直接返回，form key/SID 仍从当前 session 生成。
+
+占位符 token 是 base64url JSON 加 HMAC，绑定 block、页面 URL、store、context 和过期时间。注释里用 hex 编码 token 和 block name，避免 HTML 注释中的 `--` 和属性转义。缓存页面里的 form key/SID 换成 `{{PAGE_CACHE_FORM_KEY}}` / `{{PAGE_CACHE_SID}}`，由注入的脚本用动态请求结果替换。
+
+### 3.7 静态文件导出
+
+`local` 模式可选地把匿名默认页额外写成路径型静态文件：
+
+- 根目录 `var/page-cache/static/{store}/{public-path}`；目录式 URL 补 `index.html`，`.html` 文件式 URL 保持原路径；同名 `.gz`。
+- 只处理无 session cookie、无 query 参数的匿名默认页。
+- 写入顺序：local 元数据/HTML 保存，静态文件写入，最终版本检查；版本变化会同时删除 local 和静态。
+- 静态写入失败只记录日志，不影响页面响应。
+- tag 失效删除对应静态文件；全量失效清空静态目录；后台刷新 `page_cache` 类型也清空。
+- `page_cache_static_cleanup` cron 每 5 分钟删除超过 `ttl + 300` 的文件。
+- Web 服务器直出时 PHP 不启动；带 `maho_session` 或 query 参数的请求必须回 PHP。
+- 静态缓存目录必须 deny 直接访问；第一版只支持单节点。
+
+`Context` 的静态/local key 使用浏览器公共路径：优先 `getOriginalPathInfo()`，再按 `web/url/use_store` 去掉 store code 前缀，避免 URL 改写后把内部路由写进静态路径。
+
+### 3.8 预热
+
+`page-cache:warm`：
+
+- 从已生成的 sitemap、显式 `--url` 或两者合并取 URL。
+- 去重、过滤非 HTTP(S)、按 `--limit` 截断。
+- 用 Symfony HttpClient 并发请求，默认并发取 `page_cache/warmup/concurrency`。
+- 不发送 cookie；`X-Maho-Cache: BYPASS`、3xx、404 记为 skipped，网络错误和其他非 200 记为 failed。
+- `--dry-run` 只列出 URL；有 failed 时命令返回非零。
+
+### 3.9 统计
+
+- `page_cache_stat` 保存原始事件，`page_cache_stat_hourly` 保存小时聚合。
+- 记录 hit/miss/bypass/revalidated/dynamic/purge/flush/warmup，字段包括 route、公共路径、store、mode、服务端耗时和原因码。
+- 响应后批量写入，失败只记录日志。
+- admin 前台请求不记录，避免 admin secret key 进入统计；flush/purge/warmup 系统事件不带 admin 路径。
+- `page_cache_stats_rollup` 每小时聚合，`page_cache_stats_cleanup` 每天清理。
+- `Reports > Page Cache` 面板读取原始表或 rollup 表，显示 hit rate、PHP duration、trend、top missed 和最近系统事件。
+- 静态、代理和 CDN 命中不经过 PHP，不计入。
+
+### 3.10 失效
+
+实体保存/删除：
+
+- 通用 observer 监听 `model_save_commit_after` 和 `model_delete_commit_after`。
+- 读取 `getCacheIdTags()`；product 使用 `getCacheIdTagsWithCategories()` 追加分类 tag。
+- 清理 tag 索引对应的页面。
+- stock item 保存时，只有 `is_in_stock` 变化或库存状态自动变化才失效，qty-only 更新不清理页面；可配置子商品同时失效父商品。
+- `catalog_product_attribute_update_after` 批量属性更新按 product tag 失效；超过 30 个商品时回退全量失效，避免管理请求过慢。
+
+catalog rule：
+
+- 监听 catalog rule 的保存/删除。
+- 用 `getMatchingProductIds()` 得到产品 ID，转换为 `catalog_product_<id>`。
+- 同时失效这些产品所属分类的 tag。
+- 计算失败或结果为空时回退全量失效。
+
+其他规则和配置：
+
+- sales rule、`core_config_data`、主题/design、layout、store 配置：全量失效。
+- 后台清缓存、`core_clean_cache`、`adminhtml_cache_flush_all`：全量失效。
+- 全量失效递增全局版本，并清空 tag 索引和 purge 队列。
+
+## 4. 缓存存储
+
+第一期使用 `Mage_Core_Model_Cache`，声明一个缓存类型：
+
+```xml
+<global>
+    <cache>
+        <types>
+            <page_cache>
+                <label>Page Cache</label>
+                <description>HTTP page cache metadata, tag index and purge queue.</description>
+                <tags>PAGE_CACHE</tags>
+            </page_cache>
+        </types>
+    </cache>
+</global>
+```
+
+缓存 key（都会带 `Mage_Core_Model_Cache` 的前缀）：
+
+| Key | 内容 | TTL |
+|---|---|---|
+| `PC_META_<urlhash>` | `{tags, version, mode, context, created_at, ttl}` | TTL + 1 小时 |
+| `PC_TAG_<tag>` | `{urlhash: true}` | 无，跟随缓存策略 |
+| `PC_VERSION_GLOBAL` | int | 无 |
+| `PC_VERSION_URL_<urlhash>` | int | TTL + 1 小时 |
+| `PC_ETAG_<urlhash>` | `{etag, last_modified}` | TTL + 1 小时 |
+| `PC_HTML_<hash>` | `{html, headers, tags, version, global_version, context, etag, last_modified, created_at}` | TTL |
+| `PC_HTML_INDEX_<urlhash>` | context hash 列表，仅用于观察和后续清理 | TTL + 1 小时 |
+| `PC_DYNAMIC_<hash>` | `{blocks: {name: html}}`，仅显式标记 `page_cache_dynamic_cacheable` 的 block | `page_cache/dynamic/ttl` |
+| 静态文件 | `var/page-cache/static/{store}/{path}` + `.gz`，匿名默认页 | `page_cache_static_cleanup` |
+| `PC_PURGE_<timestamp>_<rand>` | `{urls: []}` | 24 小时 |
+| `PC_STAT_<date>_<result>` | int | 7 天 |
+
+注意：
+
+- 标签索引和版本 key 没有 TTL，和 Maho 的 `RedisTagAwareAdapter` 要求一致。Redis 必须使用 `noeviction` 或 `volatile-*`。
+- 索引丢失时无法知道哪些 URL 受影响，回退全量失效（递增全局版本并清空 page_cache 类型）。
+- tag registry 缺失视为索引可能丢失；下一次实体失效按全量处理，避免静默漏清。
+- tag 值只允许 `[A-Za-z0-9_:.-]`，写入前过滤，避免 header 注入。
+- URL hash 和 context hash 使用 sha256，不保存原始 URL 或 cookie。
+- local HTML key 包含 URL、context、URL 版本、全局版本和模式；版本变化后旧 HTML 不再命中。
+- `PC_META_<urlhash>` 是 local 命中的前置条件。元数据被淘汰时不命中，避免旧 HTML 复活。
+
+## 5. Context 和缓存键
+
+`Model\Context` 计算：
+
+- website ID、store ID
+- 当前货币
+- 客户组（无 session 时为 guest）
+- 税国家/税率（无 session 时使用默认）
+- 允许的 query 参数（排序后）
+- scheme + host + path
+- 模式
+
+`contextHash = sha256(json_encode(context))`。
+
+`Vary`：
+
+```text
+Vary: Accept-Encoding, Cookie
+```
+
+- 代理必须按 URL 和 `Cookie` 缓存，并遵守 `Vary: Accept-Encoding, Cookie`。
+- 代理不支持自定义 `Vary` 时，只缓存默认 context；非默认 context 直接 bypass。
+- 第一期不缓存登录用户、购物车、checkout、customer account，因此客户组固定为 guest。
+- 无 session 时可缓存请求的货币取 store 默认货币；切换货币会写入 session，从而带 session cookie 并 bypass。
+- 货币和 store 如果通过 cookie/URL 切换，会进入 context；无法确定时 bypass。
+
+## 6. ETag 和 Last-Modified
+
+ETag 由版本 token 生成：
+
+```text
+version = sha256(
+    globalVersion
+    . '|' . urlVersion
+    . '|' . urlHash
+    . '|' . contextHash
+    . '|' . ttlBucket
+    . '|' . mode
+)
+ETag = W/"<version>"
+```
+
+- 使用弱 ETag，因为不做 byte-range。
+- `ttlBucket = floor(time() / ttl)`，避免永久 ETag。
+- 304 只依赖版本，不依赖 body。
+- 实体失效时递增 URL 版本，ETag 立即变化。
+- 全量失效时递增全局版本，所有 ETag 变化。
+- URL 版本缺失时按 1 处理，不返回错误的 304。
+- `Last-Modified` 作为 ETag 不可用时的 fallback，使用缓存元数据的 `created_at`。
+
+## 7. Purge 契约
+
+第一期不绑定具体反向代理。`Service\Purge` 提供：
+
+- `page-cache:purge --dry-run`：列出队列中的 URL。
+- `page-cache:purge --limit=N`：处理最多 N 条。
+- `page-cache:purge --tag=tag`：只处理指定 tag 相关的 URL。
+- 事件 `maho_page_cache_purge_urls`，payload `{urls, tags, mode}`。
+- 同时写 `var/page-cache/purge-<timestamp>.txt`，每行一个 URL，供外部消费者读取。
+- 成功后删除队列条目；失败保留并记录日志。
+
+站点自己的模块可以监听事件，调用 Varnish、Cloudflare、Fastly 或自建脚本。这样核心模块不依赖任何代理 SDK。
+
+## 8. 配置与 CLI
+
+后台配置段：`System > Configuration > Page Cache`。
+
+| 字段 | 说明 | 默认 |
+|---|---|---|
+| `page_cache/general/enabled` | 总开关 | 0 |
+| `page_cache/general/mode` | `proxy`、`revalidating` 或 `local` | `revalidating` |
+| `page_cache/general/ttl` | TTL 秒 | 3600 |
+| `page_cache/general/html_max_size` | local HTML 条目上限，字节 | 2097152 |
+| `page_cache/dynamic/injection` | 动态块注入方式 `ajax` 或 `esi` | `ajax` |
+| `page_cache/dynamic/ttl` | 显式标记可缓存的动态块响应秒数，0 不缓存 | 0 |
+| `page_cache/warmup/concurrency` | 预热默认并发 | 4 |
+| `page_cache/general/filter_path_marker` | 分层导航路径标记，空表示关闭深度检查 | 空 |
+| `page_cache/general/max_filter_depth` | 分层导航最大深度 | 2 |
+| `page_cache/general/max_path_segments` | 最大路径段数 | 8 |
+| `page_cache/static/enabled` | 静态文件导出开关 | 0 |
+| `page_cache/stats/enabled` | 统计开关 | 0 |
+| `page_cache/stats/raw_retention_days` | 原始事件保留天数 | 30 |
+| `page_cache/stats/rollup_retention_days` | 小时聚合保留天数 | 365 |
+| `page_cache/stats/max_duration_ms` | 单事件耗时上限 | 60000 |
+| `page_cache/general/cacheable_routes` | 每行一个 full action name | CMS、分类、商品 |
+| `page_cache/general/allowed_params` | 允许的 query 参数 | `p,limit,order,dir,mode` |
+| `page_cache/general/respect_no_cache` | 遵守请求的 `no-cache` | 1 |
+| `page_cache/general/debug_headers` | 输出详细调试头 | 0 |
+| `page_cache/general/session_skip_routes` | 可跳过 session 的路由 | 同 cacheable_routes |
+
+CLI：
+
+```bash
+./maho page-cache:status
+./maho page-cache:purge --dry-run
+./maho page-cache:purge --limit=100
+./maho page-cache:purge --tag=catalog_product_123
+```
+
+## 9. 安全
+
+- 默认只缓存匿名 GET；任何 session cookie、登录、购物车、checkout、admin、preview、维护模式都 bypass。
+- 不缓存包含 `Set-Cookie` 的响应。
+- 不缓存非 200 响应。
+- local HTML 只保存匿名默认 context；session cookie 请求 bypass。
+- local HTML 有条目大小上限，避免缓存超大页面。
+- local HTML 只保存 `Content-Type`、`Content-Language` 和 `Content-Disposition` 响应头，不保存 `Set-Cookie`。
+- 动态块只渲染当前页面 layout 里显式标记的 block，token 必须通过 HMAC 和 context 校验。
+- 动态响应 `private, no-store`，不进入 local HTML 或代理缓存。
+- 预热不发送 session cookie，只请求公开 URL。
+- 路径段数和分层导航深度有上限，防止爬虫用 URL 变体撑爆缓存。
+- 动态块占位符是 HTML 注释，不破坏 `<ul>`/`<tbody>` 等父级结构。
+- 静态文件只导出匿名默认页；Web 服务器必须对 `maho_session` 和 query 参数回 PHP。
+- 静态缓存目录必须 deny 直接访问；路径和 store code 有白名单，拒绝目录穿越。
+- 响应头中的 tag、context、bypass 原因必须过滤，不能直接回显用户输入。
+- purge 文件不能放在 public 目录。
+- CLI 命令只读缓存和写 purge 文件，不执行任意 shell 命令。
+- 日志不记录完整 URL 的 query 值，只记录 hash 和原因码。
+- 缓存 key 不包含 PII。
+
+## 10. 第二期和第三期扩展点
+
+### 第二期
+
+- `Backend\Local` 和 `Model\HtmlCache` 0.2.0 已交付，使用 Symfony Cache 保存 HTML。
+- `local` 模式在 `controller_action_predispatch` 检查 key，命中时直接输出 HTML。
+- 动态块：
+  - Ajax：页面里输出占位符，前端请求同一页面 URL 的 dynamic 响应。
+  - ESI：页面里输出 `<esi:include>`，由代理拼接。
+  - 白名单：只对明确标记的 block 打孔，默认不打孔。
+  - form key 和 SID 使用占位符替换。
+- 预热：`page-cache:warm` 读取 sitemap 或 URL 列表，并发请求并填充缓存。
+
+### 第三期
+
+- 服务器端占位符：缓存页面保存 block 定义，命中时只渲染动态块。
+- 代理模型：product/category/CMS 懒加载，减少动态块的 DB 查询。
+- 面板：按路由、模式、结果统计 hit/miss/bypass、队列长度和失效次数。
+- 多节点：全局版本存 Redis，purge 事件广播到所有节点。
+
+## 11. 兼容性和依赖
+
+- PHP 8.5，Maho 26.11+。
+- Symfony Cache file/redis。
+- 不依赖 Zend_Cache、Zend_Locale、Varien 新代码。
+- 不新增 Composer 包。
+- 不新增数据库表。
+- 不修改 Maho 核心表结构。
+- 不复制 RockSolid、Cm_Diehard 或其他 GPL 代码。
+
+## 12. 测试策略
+
+单元测试：
+
+- Context 计算和 bypass 原因。
+- ETag 生成、304 匹配、TTL 时间桶。
+- TagIndex 添加、读取、丢失回退。
+- PurgeQueue 入队、去重、处理、失败保留。
+- Header 过滤和调试开关。
+- local HTML 存取、大小上限、元数据缺失和版本淘汰。
+- local 命中、304、锁超时、版本变化和锁释放。
+
+集成测试：
+
+- session skip 事件在匿名 GET 上设置 flag。
+- `If-None-Match` 返回 304 且不生成 layout。
+- local 命中设置 `FLAG_NO_DISPATCH` 并直接输出 HTML。
+- 动态块 token 校验、占位符替换、Ajax/ESI 响应。
+- 预热 sitemap 解析、去重、limit、skip 和失败汇总。
+- 静态路径映射、原子写、gzip、TTL 清理、失效删除和目录 deny。
+- 统计记录、admin 事件过滤、rollup、cleanup 和面板查询。
+- stock 状态变化、qty-only 更新、批量属性更新和阈值回退。
+- 路径段数、分层导航深度和注释占位符。
+- product/category/CMS 保存触发 tag 清理。
+- catalog rule 保存触发产品和分类 tag；其他规则/配置触发全量。
+- CLI purge 的 dry-run、limit、tag 和事件。
+- 缓存类型在后台 Cache Management 可见。
+
+手工验证：
+
+- `curl -I` 检查 CMS、分类、商品页的头。
+- 第二次带 `If-None-Match` 检查 304。
+- 保存商品后检查 ETag 变化和 purge 文件。
+- 登录、购物车、checkout、admin 检查 bypass。
+- 关闭模块后检查响应头不变。

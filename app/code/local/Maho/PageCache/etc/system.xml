@@ -1,0 +1,268 @@
+<?xml version="1.0"?>
+<config>
+    <sections>
+        <page_cache translate="label">
+            <label>Page Cache</label>
+            <tab>general</tab>
+            <frontend_type>text</frontend_type>
+            <sort_order>900</sort_order>
+            <show_in_default>1</show_in_default>
+            <show_in_website>1</show_in_website>
+            <show_in_store>1</show_in_store>
+            <groups>
+                <general translate="label">
+                    <label>General</label>
+                    <frontend_type>text</frontend_type>
+                    <sort_order>10</sort_order>
+                    <expanded>1</expanded>
+                    <show_in_default>1</show_in_default>
+                    <show_in_website>1</show_in_website>
+                    <show_in_store>1</show_in_store>
+                    <fields>
+                        <enabled translate="label comment">
+                            <label>Enable Page Cache</label>
+                            <comment>Only anonymous GET requests on the configured routes are affected.</comment>
+                            <frontend_type>select</frontend_type>
+                            <source_model>adminhtml/system_config_source_yesno</source_model>
+                            <sort_order>10</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>1</show_in_website>
+                            <show_in_store>1</show_in_store>
+                        </enabled>
+                        <mode translate="label comment">
+                            <label>Mode</label>
+                            <comment>Proxy stores HTML in a reverse proxy or CDN. Revalidating asks the proxy to revalidate every request with ETag or Last-Modified. Local stores full page HTML in Maho's cache and skips layout generation on a hit.</comment>
+                            <frontend_type>select</frontend_type>
+                            <source_model>page_cache/system_config_source_mode</source_model>
+                            <backend_model>page_cache/system_config_backend_mode</backend_model>
+                            <sort_order>20</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>1</show_in_website>
+                            <show_in_store>1</show_in_store>
+                        </mode>
+                        <ttl translate="label comment">
+                            <label>TTL (seconds)</label>
+                            <comment>Lifetime of the cache metadata and the proxy cache entries.</comment>
+                            <frontend_type>text</frontend_type>
+                            <validate>validate-number validate-greater-than-zero</validate>
+                            <sort_order>30</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>1</show_in_website>
+                            <show_in_store>1</show_in_store>
+                        </ttl>
+                        <html_max_size translate="label comment">
+                            <label>Local HTML Size Limit (bytes)</label>
+                            <comment>A larger page bypasses the local cache. Default is 2 MB.</comment>
+                            <frontend_type>text</frontend_type>
+                            <validate>validate-number validate-greater-than-zero</validate>
+                            <sort_order>35</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>1</show_in_website>
+                            <show_in_store>1</show_in_store>
+                        </html_max_size>
+                        <cacheable_routes translate="label comment">
+                            <label>Cacheable Routes</label>
+                            <comment>One full action name per line, for example catalog_product_view.</comment>
+                            <frontend_type>textarea</frontend_type>
+                            <sort_order>40</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>1</show_in_website>
+                            <show_in_store>1</show_in_store>
+                        </cacheable_routes>
+                        <session_skip_routes translate="label comment">
+                            <label>Session Skip Routes</label>
+                            <comment>One full action name per line. Requests without a Maho session cookie skip session start on these routes.</comment>
+                            <frontend_type>textarea</frontend_type>
+                            <sort_order>50</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>1</show_in_website>
+                            <show_in_store>1</show_in_store>
+                        </session_skip_routes>
+                        <allowed_params translate="label comment">
+                            <label>Allowed Query Parameters</label>
+                            <comment>Comma-separated. A request with any other query parameter bypasses the cache.</comment>
+                            <frontend_type>text</frontend_type>
+                            <sort_order>60</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>1</show_in_website>
+                            <show_in_store>1</show_in_store>
+                        </allowed_params>
+                        <filter_path_marker translate="label comment">
+                            <label>Filter Path Segment</label>
+                            <comment>URL segment that marks a layered-navigation page, for example shop for /shoes/shop/nike.html. Leave empty to disable the filter depth check.</comment>
+                            <frontend_type>text</frontend_type>
+                            <sort_order>62</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>1</show_in_website>
+                            <show_in_store>1</show_in_store>
+                        </filter_path_marker>
+                        <max_filter_depth translate="label comment">
+                            <label>Max Filter Depth</label>
+                            <comment>Deepest layered-navigation combination still cached. Each extra segment and each -- joined value counts as one. Default is 2.</comment>
+                            <frontend_type>text</frontend_type>
+                            <validate>validate-number</validate>
+                            <sort_order>64</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>1</show_in_website>
+                            <show_in_store>1</show_in_store>
+                        </max_filter_depth>
+                        <max_path_segments translate="label comment">
+                            <label>Max Path Segments</label>
+                            <comment>A deeper path bypasses the cache. This caps crawler-generated URL variants. Default is 8.</comment>
+                            <frontend_type>text</frontend_type>
+                            <validate>validate-number validate-greater-than-zero</validate>
+                            <sort_order>66</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>1</show_in_website>
+                            <show_in_store>1</show_in_store>
+                        </max_path_segments>
+                        <respect_no_cache translate="label comment">
+                            <label>Respect no-cache Requests</label>
+                            <comment>When enabled, a request with Cache-Control: no-cache bypasses the cache.</comment>
+                            <frontend_type>select</frontend_type>
+                            <source_model>adminhtml/system_config_source_yesno</source_model>
+                            <sort_order>70</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>1</show_in_website>
+                            <show_in_store>1</show_in_store>
+                        </respect_no_cache>
+                        <debug_headers translate="label comment">
+                            <label>Debug Headers</label>
+                            <comment>Output X-Maho-Cache-Tags, X-Maho-Cache-Version and detailed bypass reasons.</comment>
+                            <frontend_type>select</frontend_type>
+                            <source_model>adminhtml/system_config_source_yesno</source_model>
+                            <sort_order>80</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>1</show_in_website>
+                            <show_in_store>1</show_in_store>
+                        </debug_headers>
+                    </fields>
+                </general>
+                <dynamic translate="label">
+                    <label>Dynamic Blocks</label>
+                    <frontend_type>text</frontend_type>
+                    <sort_order>20</sort_order>
+                    <expanded>0</expanded>
+                    <show_in_default>1</show_in_default>
+                    <show_in_website>1</show_in_website>
+                    <show_in_store>1</show_in_store>
+                    <fields>
+                        <injection translate="label comment">
+                            <label>Injection Method</label>
+                            <comment>Ajax works without a reverse proxy. ESI requires a proxy that resolves esi:include; local mode always uses Ajax.</comment>
+                            <frontend_type>select</frontend_type>
+                            <source_model>page_cache/system_config_source_injection</source_model>
+                            <sort_order>10</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>1</show_in_website>
+                            <show_in_store>1</show_in_store>
+                        </injection>
+                        <ttl translate="label comment">
+                            <label>Dynamic Block TTL (seconds)</label>
+                            <comment>0 disables dynamic block caching. Only blocks explicitly marked cacheable use this value.</comment>
+                            <frontend_type>text</frontend_type>
+                            <validate>validate-number</validate>
+                            <sort_order>20</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>1</show_in_website>
+                            <show_in_store>1</show_in_store>
+                        </ttl>
+                    </fields>
+                </dynamic>
+                <warmup translate="label">
+                    <label>Warmup</label>
+                    <frontend_type>text</frontend_type>
+                    <sort_order>30</sort_order>
+                    <expanded>0</expanded>
+                    <show_in_default>1</show_in_default>
+                    <show_in_website>1</show_in_website>
+                    <show_in_store>1</show_in_store>
+                    <fields>
+                        <concurrency translate="label comment">
+                            <label>Concurrent Requests</label>
+                            <comment>Default concurrency for page-cache:warm.</comment>
+                            <frontend_type>text</frontend_type>
+                            <validate>validate-number validate-greater-than-zero</validate>
+                            <sort_order>10</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>1</show_in_website>
+                            <show_in_store>1</show_in_store>
+                        </concurrency>
+                    </fields>
+                </warmup>
+                <static translate="label">
+                    <label>Static Export</label>
+                    <frontend_type>text</frontend_type>
+                    <sort_order>40</sort_order>
+                    <expanded>0</expanded>
+                    <show_in_default>1</show_in_default>
+                    <show_in_website>1</show_in_website>
+                    <show_in_store>1</show_in_store>
+                    <fields>
+                        <enabled translate="label comment">
+                            <label>Enable Static HTML Export</label>
+                            <comment>Writes anonymous default pages to var/page-cache/static for nginx or Caddy. Requires web server configuration, a deny rule for the cache directory, and the cleanup cron. The first version supports one node.</comment>
+                            <frontend_type>select</frontend_type>
+                            <source_model>adminhtml/system_config_source_yesno</source_model>
+                            <sort_order>10</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>1</show_in_website>
+                            <show_in_store>1</show_in_store>
+                        </enabled>
+                    </fields>
+                </static>
+                <stats translate="label">
+                    <label>Statistics</label>
+                    <frontend_type>text</frontend_type>
+                    <sort_order>50</sort_order>
+                    <expanded>0</expanded>
+                    <show_in_default>1</show_in_default>
+                    <show_in_website>0</show_in_website>
+                    <show_in_store>0</show_in_store>
+                    <fields>
+                        <enabled translate="label comment">
+                            <label>Enable Statistics</label>
+                            <comment>Records PHP-side page cache events in the database. Static, proxy and CDN hits do not run PHP and are not counted.</comment>
+                            <frontend_type>select</frontend_type>
+                            <source_model>adminhtml/system_config_source_yesno</source_model>
+                            <sort_order>10</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>0</show_in_website>
+                            <show_in_store>0</show_in_store>
+                        </enabled>
+                        <raw_retention_days translate="label comment">
+                            <label>Raw Event Retention (days)</label>
+                            <comment>How long individual events are kept before rollup cleanup. Default is 30.</comment>
+                            <frontend_type>text</frontend_type>
+                            <validate>validate-number validate-greater-than-zero</validate>
+                            <sort_order>20</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>0</show_in_website>
+                            <show_in_store>0</show_in_store>
+                        </raw_retention_days>
+                        <rollup_retention_days translate="label comment">
+                            <label>Hourly Rollup Retention (days)</label>
+                            <comment>How long hourly aggregates are kept. Default is 365.</comment>
+                            <frontend_type>text</frontend_type>
+                            <validate>validate-number validate-greater-than-zero</validate>
+                            <sort_order>30</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>0</show_in_website>
+                            <show_in_store>0</show_in_store>
+                        </rollup_retention_days>
+                        <max_duration_ms translate="label comment">
+                            <label>Maximum Recorded Duration (ms)</label>
+                            <comment>Events slower than this are still counted, but their duration is capped. Default is 60000.</comment>
+                            <frontend_type>text</frontend_type>
+                            <validate>validate-number validate-greater-than-zero</validate>
+                            <sort_order>40</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>0</show_in_website>
+                            <show_in_store>0</show_in_store>
+                        </max_duration_ms>
+                    </fields>
+                </stats>
+            </groups>
+        </page_cache>
+    </sections>
+</config>
