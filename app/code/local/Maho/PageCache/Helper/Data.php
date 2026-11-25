@@ -231,9 +231,6 @@ class Maho_PageCache_Helper_Data extends Mage_Core_Helper_Abstract
     }
 
     /**
-     * @return array{user: string, password: string}|null
-     */
-    /**
      * @return list<string>
      */
     public function getWarmupAllowedHosts(): array
@@ -246,6 +243,9 @@ class Maho_PageCache_Helper_Data extends Mage_Core_Helper_Abstract
         ));
     }
 
+    /**
+     * @return array{user: string, password: string}|null
+     */
     public function getWarmupAuth(): ?array
     {
         $user = trim((string) Mage::getStoreConfig(self::XML_PATH_WARMUP_AUTH_USER));
