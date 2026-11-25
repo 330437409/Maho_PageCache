@@ -12,9 +12,6 @@ declare(strict_types=1);
 
 class Maho_PageCache_Model_HtmlCache
 {
-    private const int COMPRESS_MIN_BYTES = 4096;
-    private const int COMPRESS_LEVEL = 6;
-
     /**
      * @param array{global: int, url: int}|null $versions
      */
@@ -37,7 +34,7 @@ class Maho_PageCache_Model_HtmlCache
     public function getVersions(Maho_PageCache_Model_Context $context): array
     {
         $urlHash = $context->getUrlHash();
-        $meta = Mage::app()->getCache()->load($this->key()->getMetaKey($urlHash));
+        $meta = $this->cache()->load($this->key()->getMetaKey($urlHash));
         $metaVersion = is_array($meta) && isset($meta['version']) ? (int) $meta['version'] : 1;
         $version = Mage::getSingleton('page_cache/version');
 
@@ -48,11 +45,46 @@ class Maho_PageCache_Model_HtmlCache
     }
 
     /**
+     * @return array{global: int, url: int}
+     */
+    public function getCurrentVersions(Maho_PageCache_Model_Context $context): array
+    {
+        $version = Mage::getSingleton('page_cache/version');
+        return [
+            'global' => $version->getGlobal(),
+            'url' => $version->getUrl($context->getUrlHash()),
+        ];
+    }
+
+    /**
      * @param array{global: int, url: int}|null $versions
      */
     public function getLockName(Maho_PageCache_Model_Context $context, ?array $versions = null): string
     {
-        return 'page_cache_html_' . $this->getHash($context, $versions);
+        return $this->key()->getLockName($context);
+    }
+
+    /**
+     * @param array{global: int, url: int}|null $versions
+     * @return array{entry: array<string, mixed>|null, versions: array{global: int, url: int}}
+     */
+    public function loadEnvelope(
+        Maho_PageCache_Model_Context $context,
+        ?array $versions = null,
+    ): array {
+        $versions ??= $this->getCurrentVersions($context);
+        $stored = $this->cache()->load($this->key()->getEnvelopeKey($context));
+        if (is_array($stored)) {
+            $entry = Maho_PageCache_Model_CacheEnvelope::decode($stored);
+            if ($entry === null
+                || !Maho_PageCache_Model_CacheEnvelope::isValid($entry, $context, $versions)
+            ) {
+                return ['entry' => null, 'versions' => $versions];
+            }
+            return ['entry' => $entry, 'versions' => $versions];
+        }
+
+        return ['entry' => $this->loadLegacy($context), 'versions' => $versions];
     }
 
     /**
@@ -61,33 +93,36 @@ class Maho_PageCache_Model_HtmlCache
      */
     public function load(Maho_PageCache_Model_Context $context, ?array $versions = null): ?array
     {
+        return $this->loadEnvelope($context, $versions)['entry'];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function loadLegacy(Maho_PageCache_Model_Context $context): ?array
+    {
         $key = $this->key();
-        $meta = Mage::app()->getCache()->load($key->getMetaKey($context->getUrlHash()));
+        $meta = $this->cache()->load($key->getMetaKey($context->getUrlHash()));
         if (!is_array($meta) || !isset($meta['version'])) {
             return null;
         }
 
-        $entry = Mage::app()->getCache()->load(
-            $key->getHtmlKey($this->getHash($context, $versions)),
-        );
-        if (!is_array($entry)
-            || !isset($entry['html'])
-            || !is_string($entry['html'])
-            || $entry['html'] === ''
-            || ($entry['mode'] ?? '') !== Maho_PageCache_Helper_Data::MODE_LOCAL
-        ) {
+        $version = Mage::getSingleton('page_cache/version');
+        $versions = [
+            'global' => $version->getGlobal(),
+            'url' => max((int) $meta['version'], $version->getUrl($context->getUrlHash())),
+        ];
+        $entry = $this->cache()->load($key->getHtmlKey($this->getHash($context, $versions)));
+        if (!is_array($entry)) {
             return null;
         }
 
-        if (($entry['html_encoding'] ?? 'plain') === 'gzip') {
-            $decoded = function_exists('gzdecode') ? @gzdecode($entry['html']) : false;
-            if (!is_string($decoded) || $decoded === '') {
-                return null;
-            }
-            $entry['html'] = $decoded;
+        $decoded = Maho_PageCache_Model_CacheEnvelope::decode($entry);
+        if ($decoded === null || (string) ($decoded['mode'] ?? '') !== Maho_PageCache_Helper_Data::MODE_LOCAL) {
+            return null;
         }
 
-        return $entry;
+        return $decoded;
     }
 
     /**
@@ -95,6 +130,7 @@ class Maho_PageCache_Model_HtmlCache
      * @param array<string, string> $headers
      * @param array{global: int, url: int} $versions
      * @param array<string, array<string, mixed>> $dynamicBlocks
+     * @param array<string, array<array-key, int|string>> $proxyEntities
      * @return array<string, mixed>|null
      */
     public function save(
@@ -105,6 +141,7 @@ class Maho_PageCache_Model_HtmlCache
         array $headers,
         array $versions,
         array $dynamicBlocks = [],
+        array $proxyEntities = [],
     ): ?array {
         if ($this->isTooLarge($html)) {
             return null;
@@ -113,8 +150,12 @@ class Maho_PageCache_Model_HtmlCache
         $ttl = max(1, $ttl);
         $storedHtml = $html;
         $htmlEncoding = 'plain';
-        if (function_exists('gzencode') && strlen($html) >= self::COMPRESS_MIN_BYTES) {
-            $compressed = gzencode($html, self::COMPRESS_LEVEL);
+        $helper = $this->helper();
+        if ($helper->getCompressionEnabled()
+            && function_exists('gzencode')
+            && strlen($html) >= $helper->getCompressionMinBytes()
+        ) {
+            $compressed = $this->compress($html);
             if ($compressed !== false && strlen($compressed) < strlen($html)) {
                 $storedHtml = $compressed;
                 $htmlEncoding = 'gzip';
@@ -122,12 +163,19 @@ class Maho_PageCache_Model_HtmlCache
         }
 
         $entry = [
+            'schema_version' => Maho_PageCache_Model_CacheEnvelope::SCHEMA_VERSION,
             'html' => $storedHtml,
             'html_encoding' => $htmlEncoding,
             'headers' => $headers,
             'tags' => array_values(array_unique($tags)),
             'url' => $context->getPurgeUrl(),
+            'url_hash' => $context->getUrlHash(),
             'context' => $context->getHash(),
+            'context_hash' => $context->getHash(),
+            'versions' => [
+                'global' => (int) $versions['global'],
+                'url' => (int) $versions['url'],
+            ],
             'version' => $versions['url'],
             'global_version' => $versions['global'],
             'mode' => $context->getMode(),
@@ -142,11 +190,12 @@ class Maho_PageCache_Model_HtmlCache
             ),
             'last_modified' => time(),
             'dynamic_blocks' => $dynamicBlocks,
+            'proxy_entities' => $this->sanitizeProxyEntities($proxyEntities),
         ];
 
         $key = $this->key();
         $urlHash = $context->getUrlHash();
-        $metaSaved = Mage::app()->getCache()->save(
+        $metaSaved = $this->cache()->save(
             [
                 'url' => $context->getPurgeUrl(),
                 'tags' => $entry['tags'],
@@ -161,12 +210,13 @@ class Maho_PageCache_Model_HtmlCache
             $ttl + 3600,
         );
         if (!$metaSaved) {
+            $this->cache()->remove($key->getEnvelopeKey($context));
             return null;
         }
 
-        $saved = Mage::app()->getCache()->save(
+        $saved = $this->cache()->save(
             $entry,
-            $key->getHtmlKey($this->getHash($context, $versions)),
+            $key->getEnvelopeKey($context),
             array_merge(['PAGE_CACHE', 'PAGE_CACHE_HTML'], $key->getCacheTags($tags)),
             $ttl,
         );
@@ -185,11 +235,17 @@ class Maho_PageCache_Model_HtmlCache
      */
     public function remove(Maho_PageCache_Model_Context $context, array $versions): void
     {
-        Mage::app()->getCache()->remove($this->key()->getHtmlKey($this->getHash($context, $versions)));
+        $this->cache()->remove($this->key()->getEnvelopeKey($context));
+        $this->cache()->remove($this->key()->getHtmlKey($this->getHash($context, $versions)));
         Mage::getSingleton('page_cache/staticCache')->removeByUrl(
             $context->getPurgeUrl(),
             $this->getStoreCode($context),
         );
+    }
+
+    protected function compress(string $html): string|false
+    {
+        return gzencode($html, $this->helper()->getCompressionLevel());
     }
 
     public function isTooLarge(string $html): bool
@@ -218,7 +274,7 @@ class Maho_PageCache_Model_HtmlCache
      */
     public function getContexts(string $urlHash): array
     {
-        $contexts = Mage::app()->getCache()->load($this->key()->getHtmlIndexKey($urlHash));
+        $contexts = $this->cache()->load($this->key()->getHtmlIndexKey($urlHash));
         if (!is_array($contexts)) {
             return [];
         }
@@ -233,7 +289,7 @@ class Maho_PageCache_Model_HtmlCache
         $contexts = $this->getContexts($urlHash);
         if (!in_array($contextHash, $contexts, true)) {
             $contexts[] = $contextHash;
-            Mage::app()->getCache()->save(
+            $this->cache()->save(
                 array_values($contexts),
                 $this->key()->getHtmlIndexKey($urlHash),
                 ['PAGE_CACHE'],
@@ -251,6 +307,44 @@ class Maho_PageCache_Model_HtmlCache
         }
 
         return preg_match('/^[A-Za-z0-9_-]+$/', $code) === 1 ? $code : '';
+    }
+
+    /**
+     * @param array<string, array<array-key, int|string>> $entities
+     * @return array<string, list<int>>
+     */
+    private function sanitizeProxyEntities(array $entities): array
+    {
+        $allowed = ['product', 'category', 'cms_page', 'cms_block'];
+        $result = [];
+        $count = 0;
+        foreach ($allowed as $type) {
+            $ids = $entities[$type] ?? [];
+            if (!is_array($ids)) {
+                continue;
+            }
+            foreach ($ids as $id) {
+                if (!is_numeric($id)) {
+                    continue;
+                }
+                $id = (int) $id;
+                if ($id <= 0 || isset($result[$type][$id])) {
+                    continue;
+                }
+                $result[$type][$id] = $id;
+                $count++;
+                if ($count >= 200) {
+                    break 2;
+                }
+            }
+        }
+
+        return array_map(array_values(...), $result);
+    }
+
+    protected function cache(): Mage_Core_Model_Cache
+    {
+        return Mage::app()->getCache();
     }
 
     private function key(): Maho_PageCache_Model_Key

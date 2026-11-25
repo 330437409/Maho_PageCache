@@ -23,6 +23,9 @@ class Maho_PageCache_Helper_Data extends Mage_Core_Helper_Abstract
     public const XML_PATH_PROXY_CONTEXT_MODE = 'page_cache/proxy/context_mode';
     public const XML_PATH_STOCK_PENDING_WARN_AGE = 'page_cache/general/stock_pending_warn_age';
     public const XML_PATH_HTML_MAX_SIZE = 'page_cache/general/html_max_size';
+    public const XML_PATH_COMPRESSION_ENABLED = 'page_cache/local/compression_enabled';
+    public const XML_PATH_COMPRESSION_MIN_BYTES = 'page_cache/local/compression_min_bytes';
+    public const XML_PATH_COMPRESSION_LEVEL = 'page_cache/local/compression_level';
     public const XML_PATH_DYNAMIC_INJECTION = 'page_cache/dynamic/injection';
     public const XML_PATH_DYNAMIC_TTL = 'page_cache/dynamic/ttl';
     public const XML_PATH_DYNAMIC_SERVER_SIDE = 'page_cache/dynamic/server_side';
@@ -38,11 +41,14 @@ class Maho_PageCache_Helper_Data extends Mage_Core_Helper_Abstract
     public const XML_PATH_WARMUP_QUEUE_LIMIT = 'page_cache/warmup/queue_limit';
     public const XML_PATH_WARMUP_AUTH_USER = 'page_cache/warmup/auth_user';
     public const XML_PATH_WARMUP_AUTH_PASSWORD = 'page_cache/warmup/auth_password';
+    public const XML_PATH_WARMUP_ALLOWED_HOSTS = 'page_cache/warmup/allowed_hosts';
     public const XML_PATH_FILTER_PATH_MARKER = 'page_cache/general/filter_path_marker';
     public const XML_PATH_MAX_FILTER_DEPTH = 'page_cache/general/max_filter_depth';
     public const XML_PATH_MAX_PATH_SEGMENTS = 'page_cache/general/max_path_segments';
     public const XML_PATH_STATIC_ENABLED = 'page_cache/static/enabled';
     public const XML_PATH_STATS_ENABLED = 'page_cache/stats/enabled';
+    public const XML_PATH_STATS_MODE = 'page_cache/stats/mode';
+    public const XML_PATH_STATS_SAMPLE_RATE = 'page_cache/stats/sample_rate';
     public const XML_PATH_STATS_RAW_RETENTION_DAYS = 'page_cache/stats/raw_retention_days';
     public const XML_PATH_STATS_ROLLUP_RETENTION_DAYS = 'page_cache/stats/rollup_retention_days';
     public const XML_PATH_STATS_MAX_DURATION_MS = 'page_cache/stats/max_duration_ms';
@@ -125,6 +131,23 @@ class Maho_PageCache_Helper_Data extends Mage_Core_Helper_Abstract
     {
         $size = (int) Mage::getStoreConfig(self::XML_PATH_HTML_MAX_SIZE);
         return $size > 0 ? $size : 2097152;
+    }
+
+    public function getCompressionEnabled(): bool
+    {
+        return Mage::getStoreConfigFlag(self::XML_PATH_COMPRESSION_ENABLED);
+    }
+
+    public function getCompressionMinBytes(): int
+    {
+        $bytes = (int) Mage::getStoreConfig(self::XML_PATH_COMPRESSION_MIN_BYTES);
+        return $bytes > 0 ? $bytes : 4096;
+    }
+
+    public function getCompressionLevel(): int
+    {
+        $level = (int) Mage::getStoreConfig(self::XML_PATH_COMPRESSION_LEVEL);
+        return $level >= 1 && $level <= 9 ? $level : 6;
     }
 
     public function getDynamicInjection(): string
@@ -210,6 +233,19 @@ class Maho_PageCache_Helper_Data extends Mage_Core_Helper_Abstract
     /**
      * @return array{user: string, password: string}|null
      */
+    /**
+     * @return list<string>
+     */
+    public function getWarmupAllowedHosts(): array
+    {
+        $raw = (string) Mage::getStoreConfig(self::XML_PATH_WARMUP_ALLOWED_HOSTS);
+        $lines = preg_split('/\R/', $raw) ?: [];
+        return array_values(array_filter(
+            array_map(trim(...), $lines),
+            static fn(string $line): bool => $line !== '',
+        ));
+    }
+
     public function getWarmupAuth(): ?array
     {
         $user = trim((string) Mage::getStoreConfig(self::XML_PATH_WARMUP_AUTH_USER));
@@ -249,6 +285,26 @@ class Maho_PageCache_Helper_Data extends Mage_Core_Helper_Abstract
     public function getStatsEnabled(): bool
     {
         return Mage::getStoreConfigFlag(self::XML_PATH_STATS_ENABLED);
+    }
+
+    public function getStatsMode(): string
+    {
+        if (!$this->getStatsEnabled()) {
+            return Maho_PageCache_Model_Stat::MODE_OFF;
+        }
+
+        $mode = strtolower((string) Mage::getStoreConfig(self::XML_PATH_STATS_MODE));
+        return in_array($mode, [
+            Maho_PageCache_Model_Stat::MODE_OFF,
+            Maho_PageCache_Model_Stat::MODE_FULL,
+            Maho_PageCache_Model_Stat::MODE_SAMPLED,
+        ], true) ? $mode : Maho_PageCache_Model_Stat::MODE_FULL;
+    }
+
+    public function getStatsSampleRate(): float
+    {
+        $rate = (float) Mage::getStoreConfig(self::XML_PATH_STATS_SAMPLE_RATE);
+        return max(0.0, min(1.0, $rate));
     }
 
     public function getStatsRawRetentionDays(): int

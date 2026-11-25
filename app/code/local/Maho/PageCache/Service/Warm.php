@@ -63,9 +63,12 @@ class Maho_PageCache_Service_Warm
             $urls = array_merge($urls, $this->getSitemapUrls());
         }
 
+        $policy = $this->urlPolicy();
         $urls = array_values(array_filter(
             $urls,
-            static fn(mixed $url): bool => is_string($url) && preg_match('#^https?://#i', $url) === 1,
+            static fn(mixed $url): bool => is_string($url)
+                && preg_match('#^https?://#i', $url) === 1
+                && $policy->isAllowed($url),
         ));
 
         return array_slice(array_values(array_unique($urls)), 0, max(1, $limit));
@@ -98,6 +101,9 @@ class Maho_PageCache_Service_Warm
 
             $sitemapUrls = [];
             foreach ($this->parseSitemap($xml) as $location) {
+                if (!$this->urlPolicy()->isAllowed($location)) {
+                    continue;
+                }
                 if (!$this->isSitemapUrl($location)) {
                     $sitemapUrls[] = $location;
                     continue;
@@ -115,18 +121,10 @@ class Maho_PageCache_Service_Warm
                 $sitemapUrls = array_merge($sitemapUrls, $this->parseSitemap($childXml));
             }
 
-            $baseUrl = Mage::app()->getStore((int) $sitemap->getStoreId())
-                ->getBaseUrl(Mage_Core_Model_Store::URL_TYPE_LINK);
-            $baseHost = parse_url((string) $baseUrl, PHP_URL_HOST);
-            if (is_string($baseHost) && $baseHost !== '') {
-                $sitemapUrls = array_filter(
-                    $sitemapUrls,
-                    static function (string $url) use ($baseHost): bool {
-                        $host = parse_url($url, PHP_URL_HOST);
-                        return !is_string($host) || strcasecmp($host, $baseHost) === 0;
-                    },
-                );
-            }
+            $sitemapUrls = array_filter(
+                $sitemapUrls,
+                fn(string $url): bool => $this->urlPolicy()->isAllowed($url),
+            );
 
             $urls = array_merge($urls, $sitemapUrls);
         }
@@ -158,6 +156,10 @@ class Maho_PageCache_Service_Warm
         foreach ($chunks as $index => $chunk) {
             $responses = [];
             foreach ($chunk as $url) {
+                if (!$this->urlPolicy()->isAllowed($url)) {
+                    $result['skipped'][$url] = 'disallowed_host';
+                    continue;
+                }
                 try {
                     $responses[$url] = $client->request('GET', $url, ['headers' => $headers]);
                 } catch (\Throwable $e) {
@@ -392,6 +394,11 @@ class Maho_PageCache_Service_Warm
     private function key(): Maho_PageCache_Model_Key
     {
         return Mage::getSingleton('page_cache/key');
+    }
+
+    protected function urlPolicy(): Maho_PageCache_Service_UrlPolicy
+    {
+        return Mage::getService('page_cache/urlPolicy');
     }
 
     protected function createClient(): HttpClientInterface

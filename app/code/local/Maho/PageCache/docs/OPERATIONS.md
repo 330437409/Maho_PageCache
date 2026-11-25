@@ -9,7 +9,7 @@
 1. 确认模块版本为 0.5.4：`./maho page-cache:status` 或查看 `etc/config.xml`。
 2. 执行 `./maho migrate`，确认 `page_cache_stock_pending` 表存在。
 3. 确认 cron 可用：`./maho cron:list | grep page_cache`。
-4. 需要命中数据时开启统计：`page_cache/stats/enabled=1`，并确认 `page_cache_stat` 表可写。
+4. 需要命中数据时开启统计：`page_cache/stats/enabled=1`，选择 `page_cache/stats/mode`（`full` 或 `sampled`），并确认 `page_cache_stat` 表可写。
 5. 确保日志目录可写：`var/log/page-cache-stock.log` 和 `var/log/exception.log`。
 
 ## 2. 每日检查
@@ -52,7 +52,7 @@ grep -i page_cache var/log/exception.log | tail -n 50
 - top missed URL
 - 最近 flush / purge / warmup
 
-统计关闭时，记录 `counters unavailable`，不要用缓存计数代替。
+统计关闭时，记录 `counters unavailable`，不要用缓存计数代替。采样模式下面板显示 `Sampled` 和采样率，hit rate 与总量是估算值；`purge`、`flush`、`warmup` 仍为完整记录。
 
 ### 2.4 cron
 
@@ -176,6 +176,8 @@ Page cache stock pending:
 - pending 长时间不清：先运行 stock reindex；仍不清时检查 indexer 模式、cron 和 `page_cache_stock_pending` 表，不要手工删行，因为行是重试信号。
 - 页面出现旧库存：立即执行 stock reindex，必要时 `./maho cache:flush` 并临时关闭页面缓存。
 - 需要完全回滚：关闭 `page_cache/general/enabled`，刷新缓存，保留 `page_cache_stock_pending` 表供排查。
+- 从 0.7.0 回滚到 0.6.x：0.7.0 已删除旧 `page_cache_url_tag` 表。回滚代码后运行 `./maho migrate`，声明式 schema 会重建空表；不要恢复旧表数据。0.6.x 在索引缺失或为空时会走全量失效，页面不会串用，但代理 purge 范围会变大。
+- 回滚前先做数据库备份，并确认 0.6.x 的 `page_cache_url`/`page_cache_url_tag` 查询在该站点没有被自定义代码直接依赖。
 
 ## 9. 隐私
 

@@ -229,3 +229,29 @@ it('does not trigger full layout generation events', function () {
 
     expect(ServerPlaceholderLayoutObserver::$fired)->toBeFalse();
 });
+
+it('does not wrap a server block when server-side rendering is disabled', function () {
+    Mage::app()->getStore()->setConfig('page_cache/dynamic/server_side', '0');
+
+    $result = Mage::getService('page_cache/dynamic')->createServerMarker(
+        serverPlaceholderBlock(),
+        '<span>anonymous</span>',
+        serverPlaceholderContext(),
+        3600,
+    );
+
+    expect($result)->toBeNull();
+});
+
+it('returns a local page without server markers unchanged', function () {
+    $context = serverPlaceholderContext();
+    $html = '<html><body><p>plain local page</p></body></html>';
+
+    $result = Mage::getService('page_cache/dynamic')->renderServerBlocks(
+        $html,
+        ['dynamic_blocks' => []],
+        $context,
+    );
+
+    expect($result)->toBe($html);
+});

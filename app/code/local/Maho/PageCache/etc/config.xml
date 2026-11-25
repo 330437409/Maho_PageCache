@@ -2,7 +2,7 @@
 <config>
     <modules>
         <Maho_PageCache>
-            <version>0.5.5</version>
+            <version>0.7.0</version>
         </Maho_PageCache>
     </modules>
     <global>
@@ -31,9 +31,12 @@
                     <url>
                         <table>page_cache_url</table>
                     </url>
-                    <url_tag>
-                        <table>page_cache_url_tag</table>
-                    </url_tag>
+                    <url_context>
+                        <table>page_cache_url_context</table>
+                    </url_context>
+                    <url_context_tag>
+                        <table>page_cache_url_context_tag</table>
+                    </url_context_tag>
                     <static_file>
                         <table>page_cache_static_file</table>
                     </static_file>
@@ -63,6 +66,17 @@
             </types>
         </cache>
     </global>
+    <adminhtml>
+        <translate>
+            <modules>
+                <Maho_PageCache>
+                    <files>
+                        <default>Maho_PageCache.csv</default>
+                    </files>
+                </Maho_PageCache>
+            </modules>
+        </translate>
+    </adminhtml>
     <default>
         <page_cache>
             <general>
@@ -86,6 +100,11 @@ catalog_product_view]]></session_skip_routes>
                 <debug_headers>0</debug_headers>
                 <stock_pending_warn_age>3600</stock_pending_warn_age>
             </general>
+            <local>
+                <compression_enabled>1</compression_enabled>
+                <compression_min_bytes>4096</compression_min_bytes>
+                <compression_level>6</compression_level>
+            </local>
             <proxy>
                 <context_mode>cookie</context_mode>
             </proxy>
@@ -107,12 +126,15 @@ catalog_product_view]]></session_skip_routes>
                 <queue_limit>10000</queue_limit>
                 <auth_user></auth_user>
                 <auth_password></auth_password>
+                <allowed_hosts></allowed_hosts>
             </warmup>
             <static>
                 <enabled>0</enabled>
             </static>
             <stats>
                 <enabled>0</enabled>
+                <mode>full</mode>
+                <sample_rate>0.05</sample_rate>
                 <raw_retention_days>30</raw_retention_days>
                 <rollup_retention_days>365</rollup_retention_days>
                 <max_duration_ms>60000</max_duration_ms>

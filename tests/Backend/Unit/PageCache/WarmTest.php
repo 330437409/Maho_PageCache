@@ -25,6 +25,9 @@ function warmupTestQueueClean(): void
 }
 
 beforeEach(function () {
+    Mage::app()->getStore()->setConfig('web/unsecure/base_url', 'https://example.com/');
+    Mage::app()->getStore()->setConfig('web/secure/base_url', 'https://example.com/');
+    Mage::getService('page_cache/urlPolicy')->reset();
     Mage::app()->getStore()->setConfig('page_cache/warmup/enabled', '1');
     Mage::app()->getStore()->setConfig('page_cache/warmup/batch_size', '10');
     Mage::app()->getStore()->setConfig('page_cache/warmup/concurrency', '2');
@@ -142,7 +145,7 @@ it('classifies permanent and retryable responses', function () {
     $service = warmServiceWithResponses([
         new MockResponse('ok', ['http_code' => 200, 'response_headers' => ['X-Maho-Cache' => 'MISS']]),
         new MockResponse('', ['http_code' => 200, 'response_headers' => ['X-Maho-Cache' => 'BYPASS']]),
-        new MockResponse('', ['http_code' => 302]),
+        new MockResponse('', ['http_code' => 302, 'response_headers' => ['Location' => 'https://evil.example/redirected']]),
         new MockResponse('', ['http_code' => 404]),
         new MockResponse('', ['http_code' => 410]),
         new MockResponse('', ['http_code' => 401]),
@@ -181,6 +184,37 @@ it('classifies permanent and retryable responses', function () {
             'https://example.com/limited',
             'https://example.com/error',
         ]);
+});
+
+it('filters explicit urls outside the store origins', function () {
+    $service = new Maho_PageCache_Service_Warm();
+
+    expect($service->collectUrls([
+        'https://example.com/allowed',
+        'https://evil.example/collect',
+        'http://169.254.169.254/latest/meta-data/',
+    ], false, 10))->toBe(['https://example.com/allowed']);
+});
+
+it('skips warm urls outside the store origins without a request', function () {
+    $service = new class extends Maho_PageCache_Service_Warm {
+        public int $requests = 0;
+
+        #[\Override]
+        protected function createClient(): HttpClientInterface
+        {
+            return new MockHttpClient(function (): MockResponse {
+                $this->requests++;
+                return new MockResponse('ok', ['http_code' => 200]);
+            });
+        }
+    };
+
+    $result = $service->warm(['https://evil.example/collect'], 1);
+
+    expect($result['warmed'])->toBe([])
+        ->and($result['skipped']['https://evil.example/collect'])->toBe('disallowed_host')
+        ->and($service->requests)->toBe(0);
 });
 
 it('sends basic auth when configured', function () {
@@ -306,4 +340,82 @@ it('does nothing when the warmup lock is held', function () {
     expect($summary['processed'])->toBe(0)
         ->and($service->calls)->toBe([])
         ->and($queue->count())->toBe(1);
+});
+
+it('does not send basic auth to a host outside the store origins', function () {
+    Mage::app()->getStore()->setConfig('page_cache/warmup/auth_user', 'staging');
+    Mage::app()->getStore()->setConfig('page_cache/warmup/auth_password', 'secret');
+
+    $service = new class extends Maho_PageCache_Service_Warm {
+        /** @var list<string> */
+        public array $requests = [];
+
+        #[\Override]
+        protected function createClient(): HttpClientInterface
+        {
+            return new MockHttpClient(function (string $method, string $url): MockResponse {
+                $this->requests[] = $url;
+                return new MockResponse('ok', ['http_code' => 200]);
+            });
+        }
+    };
+
+    $result = $service->warm(['https://evil.example/a'], 1);
+
+    expect($result['skipped']['https://evil.example/a'])->toBe('disallowed_host')
+        ->and($service->requests)->toBe([]);
+});
+
+it('does not request a child sitemap outside the store origins', function () {
+    $filename = 'pc_test_' . bin2hex(random_bytes(4)) . '.xml';
+    $path = 'media/' . $filename;
+    $sitemap = Mage::getModel('sitemap/sitemap');
+    $sitemap->setSitemapPath('media')
+        ->setSitemapFilename($filename)
+        ->setStoreId(1)
+        ->save();
+
+    $index = <<<'XML'
+    <?xml version="1.0" encoding="UTF-8"?>
+    <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+        <sitemap><loc>https://evil.example/evil.xml</loc></sitemap>
+        <sitemap><loc>https://example.com/child.xml</loc></sitemap>
+    </sitemapindex>
+    XML;
+    $child = <<<'XML'
+    <?xml version="1.0" encoding="UTF-8"?>
+    <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+        <url><loc>https://example.com/from-child</loc></url>
+    </urlset>
+    XML;
+    Mage::getStorage('sitemaps')->write($path, $index);
+
+    $service = new class extends Maho_PageCache_Service_Warm {
+        /** @var list<string> */
+        public array $requests = [];
+
+        #[\Override]
+        protected function createClient(): HttpClientInterface
+        {
+            return new MockHttpClient(function (string $method, string $url): MockResponse {
+                $this->requests[] = $url;
+                return new MockResponse(<<<'XML'
+                <?xml version="1.0" encoding="UTF-8"?>
+                <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+                    <url><loc>https://example.com/from-child</loc></url>
+                </urlset>
+                XML, ['http_code' => 200]);
+            });
+        }
+    };
+
+    try {
+        $urls = $service->getSitemapUrls();
+    } finally {
+        $sitemap->delete();
+        Mage::getStorage('sitemaps')->delete($path);
+    }
+
+    expect($urls)->toBe(['https://example.com/from-child'])
+        ->and($service->requests)->toBe(['https://example.com/child.xml']);
 });

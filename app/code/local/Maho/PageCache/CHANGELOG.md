@@ -2,6 +2,35 @@
 
 All notable changes to `Maho_PageCache` are recorded here.
 
+## 0.7.0 (2026-11-25)
+
+### Known issue
+
+- A Local HIT improves P95 by 1.42%, below the RFC-007 target of 15%. Profiling shows the page cache hit logic takes about 0.66 ms, or 3% of a request; the rest is Maho bootstrap and routing. The gate stays open, and the target moves to a fast path or Static Export.
+
+### Added
+
+- `page_cache/proxy` reuses product, category, CMS page and CMS block models within one request and loads a batch with one collection query. Server-side dynamic blocks can declare `page_cache_proxies` to preload their entities. Local hits restore the current product, category and CMS page from the cache entry and merge entity cache tags into the page tags. Model data is not stored in the page cache.
+- Local page cache compression is configurable with `page_cache/local/compression_enabled`, `compression_min_bytes` and `compression_level`. The defaults stay 4 KB and gzip level 6, and a failed compression or decompression falls back to plain HTML or a cache miss.
+- Deployment profiles for nginx and Varnish keep analytics cookies out of the shared cache key, bypass every storefront session request, and isolate unknown cookies. Both profiles were tested against a real proxy with two store views.
+- `page_cache/stats/mode` adds `off`, `full` and `sampled` modes. Sampling is decided once per request, so all request events of a request are kept or dropped together. Purge, flush and warmup events are always recorded, and the dashboard shows the mode and warns that sampled counts are estimates.
+- Warmup accepts extra store alias origins in `page_cache/warmup/allowed_hosts`, one origin per line. Requests and Basic Auth are limited to the store base URLs and those origins, and a child sitemap outside them is never requested.
+- The proxy `X-Cache-Tags` header is bounded to 50 tags. Pages that overflow carry `page_cache_overflow_product` when product tags were dropped and `page_cache_overflow` when other tags were dropped; tag purges include the matching overflow tag, so a listing page is not missed when one of its product tags was dropped.
+
+### Changed
+
+- Local page cache now stores a v2 CacheEnvelope with a stable key and versions, reducing a local HIT from five cache backend reads to three. Meta is kept for revalidating and dynamic responses, and old entries fall back until they expire.
+
+### Removed
+
+- The legacy `page_cache_url_tag` table. `./maho migrate` invalidates the page cache once, clears the static files and queues, then drops the table; the context index is rebuilt on demand.
+
+### Fixed
+
+- Page Cache admin strings now load from the module CSV, so the Chinese configuration and dashboard labels appear in the admin.
+- The URL index keeps tags, store code and public path for every cache context instead of overwriting the previous context. Invalidation now removes every context variant and every context's static file.
+- Warmup only requests URLs on the store's configured origins. The queue, the explicit URL filter, child sitemap requests and the HTTP client reject other hosts, so Basic Auth cannot be sent to an arbitrary server.
+
 ## 0.5.5 (2026-11-24)
 
 ### Added

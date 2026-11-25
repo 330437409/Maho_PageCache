@@ -67,6 +67,22 @@ class Maho_PageCache_Model_Key
         return 'PC_HTML_' . $hash;
     }
 
+    public function getEnvelopeKey(Maho_PageCache_Model_Context $context): string
+    {
+        return 'PC_HTML_V2_' . hash(
+            'sha256',
+            $context->getUrlHash() . '|' . $context->getHash() . '|' . $context->getMode(),
+        );
+    }
+
+    public function getLockName(Maho_PageCache_Model_Context $context): string
+    {
+        return 'page_cache_html_' . hash(
+            'sha256',
+            $context->getUrlHash() . '|' . $context->getHash() . '|' . $context->getMode(),
+        );
+    }
+
     public function getHtmlIndexKey(string $urlHash): string
     {
         return 'PC_HTML_INDEX_' . $urlHash;

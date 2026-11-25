@@ -93,7 +93,7 @@ abstract class Maho_PageCache_Model_Backend_Abstract
             $tags,
         )));
         $tags = array_filter($tags, static fn(string $tag): bool => $tag !== '');
-        return implode(',', array_slice($tags, 0, 50));
+        return implode(',', Maho_PageCache_Model_TagBudget::fit(array_values($tags)));
     }
 
     protected function response(): Mage_Core_Controller_Response_Http

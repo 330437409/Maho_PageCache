@@ -12,6 +12,10 @@ declare(strict_types=1);
 
 class Maho_PageCache_Model_Stat
 {
+    public const MODE_OFF = 'off';
+    public const MODE_FULL = 'full';
+    public const MODE_SAMPLED = 'sampled';
+
     public const EVENT_HIT = 'hit';
     public const EVENT_MISS = 'miss';
     public const EVENT_BYPASS = 'bypass';
@@ -37,9 +41,11 @@ class Maho_PageCache_Model_Stat
     /** @var list<array<string, mixed>> */
     private array $buffer = [];
 
+    private ?bool $sampled = null;
+
     public function isEnabled(): bool
     {
-        return $this->helper()->getStatsEnabled();
+        return $this->helper()->getStatsMode() !== self::MODE_OFF;
     }
 
     public function record(
@@ -49,7 +55,8 @@ class Maho_PageCache_Model_Stat
         ?int $durationMs = null,
         ?string $reason = null,
     ): void {
-        if (!$this->isEnabled() || !in_array($eventType, self::EVENTS, true)) {
+        $mode = $this->helper()->getStatsMode();
+        if ($mode === self::MODE_OFF || !in_array($eventType, self::EVENTS, true)) {
             return;
         }
 
@@ -59,6 +66,9 @@ class Maho_PageCache_Model_Stat
             self::EVENT_WARMUP,
         ], true);
         if (Mage::app()->getStore()->isAdmin() && !$systemEvent) {
+            return;
+        }
+        if ($mode === self::MODE_SAMPLED && !$systemEvent && !$this->isSampledRequest()) {
             return;
         }
 
@@ -94,6 +104,17 @@ class Maho_PageCache_Model_Stat
         if (count($this->buffer) >= self::MAX_BUFFER) {
             $this->flush();
         }
+    }
+
+    private function isSampledRequest(): bool
+    {
+        if ($this->sampled === null) {
+            $rate = $this->helper()->getStatsSampleRate();
+            $this->sampled = $rate >= 1.0
+                || ($rate > 0.0 && random_int(1, 1_000_000) <= (int) round($rate * 1_000_000));
+        }
+
+        return $this->sampled;
     }
 
     public function flush(): void

@@ -4,12 +4,12 @@ Maho 的 HTTP 页面缓存集成层。第一期支持 `proxy` 和 `revalidating`
 
 ## 状态
 
-0.5.5 已交付，累计包含第一期的 HTTP 集成层、proxy/revalidating 两种模式、session skip、tag 失效、purge 队列、配置和 CLI，第二期的 `local` 模式、Ajax/ESI 动态块和 `page-cache:warm`，第三期的静态文件导出、统计面板、定时预热和服务器端动态块占位符，以及 0.5.1 的 cache integrity 修复、0.5.2 的 tag 索引重构、0.5.3 的 P1 加固与性能优化、0.5.4 的 stock pending 监控和 0.5.5 的监控指标导出与 Page Cache 后台报表。
+0.7.0 发布准备中：RFC-007 Phase 1 CacheEnvelope 和 PERF-02 压缩配置、Phase 2 Context Index 迁移和旧表清理、Phase 3 Warmup 安全补强、Phase 4 Stats 采样、Dynamic 边界与 Proxy Models 验证、PERF-04 Cookie 规范化文档已实现；0.6.1 FR-21 和审计 P1 修复已实现；Phase 5 本地验证完成，本地三库通过；官方 CI 和 G9 仍开放。0.5.5 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付；0.5.1 cache integrity 修复、0.5.2 tag 索引重构、0.5.3 P1 加固与性能优化、0.5.4 stock pending 监控和 0.5.5 监控指标导出与后台报表已交付，累计包含第一期的 HTTP 集成层、proxy/revalidating 两种模式、session skip、tag 失效、purge 队列、配置和 CLI，第二期的 `local` 模式、Ajax/ESI 动态块和 `page-cache:warm`，第三期的静态文件导出、统计面板、定时预热、服务器端动态块占位符和请求级代理模型，以及 0.5.1 的 cache integrity 修复、0.5.2 的 tag 索引重构、0.5.3 的 P1 加固与性能优化、0.5.4 的 stock pending 监控和 0.5.5 的监控指标导出与 Page Cache 后台报表。
 
 - 第一期：HTTP 集成层，`proxy` + `revalidating`。0.2.0 已交付。
 - 第二期：`local` 模式、整页 HTML 缓存、Ajax/ESI 动态块、缓存预热。0.2.0 已交付。
 - local 模式只缓存无 session cookie 的匿名页面；被动浏览不会建立 session。动态块打孔用于 proxy/revalidating 模式；local 模式缓存匿名渲染，显式 opt-in 的 leaf block 可以在命中时服务器端重建。form key 在用户提交表单时才获取。
-- 第三期：静态文件导出、统计面板、定时预热、服务器端占位符、代理模型、多节点 purge。静态导出和统计面板 0.3.0 已交付；定时预热 0.4.0 已交付；服务器端动态块占位符 0.5.0 已交付；代理模型和多节点只登记。
+- 第三期：静态文件导出、统计面板、定时预热、服务器端占位符、代理模型、多节点 purge。静态导出和统计面板 0.3.0 已交付；定时预热 0.4.0 已交付；服务器端动态块占位符 0.5.0 已交付；请求级代理模型 0.6.0 开发中；多节点只登记。
 
 ## 文档
 
@@ -33,6 +33,23 @@ Maho 的 HTTP 页面缓存集成层。第一期支持 `proxy` 和 `revalidating`
 - `docs/OPERATIONS.md`：0.5.4 生产观察和监控接入 runbook。
 - `docs/specs/page-cache-monitor-export.md`：0.5.5 监控指标导出规格。
 - `docs/specs/page-cache-admin-menu.md`：0.5.5 Page Cache 一级菜单和 Warm Now 规格。
+- `docs/specs/page-cache-proxy-models.md`：0.6.0 请求级代理模型规格。
+- `docs/specs/page-cache-tag-budget.md`：0.6.1 proxy tag 预算与 overflow tag 规格。
+- `docs/specs/page-cache-audit-p1-fixes.md`：0.6.1 审计 P1 修复规格。
+- `docs/rfc/RFC-007-performance-architecture.md`：0.7.0 性能与架构优化 RFC。
+- `docs/specs/page-cache-07-performance.md`：0.7.0 Local CacheEnvelope 规格。
+- `docs/specs/page-cache-07-stats-sampling.md`：0.7.0 Stats 采样模式规格。
+- `docs/adr/0021-local-cache-envelope.md`：Local CacheEnvelope 决策。
+- `docs/adr/0023-stats-sampling.md`：Stats 请求级采样决策。
+- `docs/benchmark/0.6.1-baseline.md`：0.6.1 性能基线和复现方法。
+- `docs/benchmark/0.7.0-cacheenvelope-dev-check.md`：CacheEnvelope 开发中复测。
+- `docs/benchmark/0.7.0-compression.md`：0.7.0 HTML 压缩基准。
+- `docs/benchmark/0.7.0-local-hit-profile.md`：0.7.0 Local HIT 时间分布和 G9 结论。
+- `docs/specs/page-cache-07-compression.md`：0.7.0 压缩配置规格。
+- `docs/deployment/README.md`：代理缓存 Cookie 规范化规则和验证结果。
+- `docs/deployment/nginx-cache-key.md`：nginx cache key 配置。
+- `docs/deployment/varnish-cache-key.vcl`：Varnish cache key 配置。
+- `docs/adr/0020-request-scoped-proxy-models.md`：请求级代理模型的数据来源和失效边界。
 - `.claude/rules/`：模块级防漂移规则。
 
 ## 设计来源
@@ -48,7 +65,7 @@ Maho 的 HTTP 页面缓存集成层。第一期支持 `proxy` 和 `revalidating`
 模块位于 `app/code/local/Maho/PageCache`，并附带 `app/etc/modules/Maho_PageCache.xml`。安装步骤：
 
 1. `composer dump-autoload`，让类映射、路由和观察者属性生效。
-2. `./maho migrate`，创建统计表、预热队列、URL 索引表 `page_cache_url`/`page_cache_url_tag`、静态文件索引 `page_cache_static_file`、stock pending 表 `page_cache_stock_pending`，并写入 `page_cache` 缓存类型选项。
+2. `./maho migrate`，创建统计表、预热队列、URL 索引表 `page_cache_url`、`page_cache_url_context`、`page_cache_url_context_tag`、静态文件索引 `page_cache_static_file`、stock pending 表 `page_cache_stock_pending`，并写入 `page_cache` 缓存类型选项。0.7.0 升级会先做一次全量页面缓存失效，再删除旧 `page_cache_url_tag` 表。
 3. `./maho cache:flush`。
 4. 在 `System > Configuration > Page Cache` 开启并选择模式。
 5. 配置反向代理或 CDN：遵守 `Vary: Accept-Encoding, Cookie`，按 URL 和 `Cookie` 区分缓存对象，并在 `Cookie` 含 `maho_session` 时 bypass；消费 purge 文件或监听 `maho_page_cache_purge_urls` 事件。`X-Maho-Cache-Context` 只用于调试。purge 文件中的 `*` 表示全量 purge。使用 ESI 时，代理还必须解析 `esi:include` 并禁止缓存 `X-Maho-Cache: DYNAMIC` 响应。
@@ -63,7 +80,7 @@ Maho 的 HTTP 页面缓存集成层。第一期支持 `proxy` 和 `revalidating`
 System > Configuration > Page Cache
 ```
 
-主要字段：开关、模式（`proxy`、`revalidating`、`local`）、TTL、local HTML 大小上限、可缓存路由、允许的 query 参数、路径段数上限、分层导航标记和深度、是否遵守 no-cache、调试头、session skip 路由、proxy context 模式、stock pending 告警阈值、动态块注入方式、动态块 TTL、动态请求限流和窗口、服务器端动态块开关和类型白名单、预热开关/批次/并发/间隔/重试/队列上限/basic auth、静态文件导出、统计开关和保留期。
+主要字段：开关、模式（`proxy`、`revalidating`、`local`）、TTL、local HTML 大小上限、可缓存路由、允许的 query 参数、路径段数上限、分层导航标记和深度、是否遵守 no-cache、调试头、session skip 路由、proxy context 模式、stock pending 告警阈值、动态块注入方式、动态块 TTL、动态请求限流和窗口、服务器端动态块开关和类型白名单、预热开关/批次/并发/间隔/重试/队列上限/basic auth/允许的别名 origin、静态文件导出、统计开关和保留期。
 
 ## 静态文件导出
 
@@ -88,7 +105,12 @@ var/page-cache/static/{store_code}/{public_path}.gz
 
 ## 统计面板
 
-一级菜单 `Page Cache` 用 Overview、Trend、Top Missed URLs、Recent Events 四个标准报表 grid 显示 PHP 侧 hit rate、平均耗时、趋势、top missed URL 和最近 flush/purge/warmup，并提供 `Warm Now`（一个预热队列批次）和 `Configuration` 按钮。默认关闭；在 `System > Configuration > Page Cache > Statistics` 开启。
+一级菜单 `Page Cache` 用 Overview、Trend、Top Missed URLs、Recent Events 四个标准报表 grid 显示 PHP 侧 hit rate、平均耗时、趋势、top missed URL 和最近 flush/purge/warmup，并提供 `Warm Now`（一个预热队列批次）和 `Configuration` 按钮。默认关闭；在 `System > Configuration > Page Cache > Statistics` 开启，并选择统计模式：
+
+- `off`：不记录。
+- `full`：记录每个请求事件，适合调试和验收。
+- `sampled`：按 `page_cache/stats/sample_rate` 采样，适合高流量生产；面板标明计数为估算。
+- `purge`、`flush`、`warmup` 系统事件始终完整记录。
 
 - 原始事件保留 30 天，小时 rollup 保留 365 天，均可配置。
 - `page_cache_stats_rollup` 每小时聚合，`page_cache_stats_cleanup` 每天清理。
@@ -106,7 +128,7 @@ local 命中时，显式标记的 leaf block 可以在服务器端重建，不�
 
 ## 定时预热
 
-默认关闭。开启 `System > Configuration > Page Cache > Warmup` 后，tag 失效会把受影响 URL 写入 `page_cache_warmup_queue`，`page_cache_warmup` cron 每分钟按批次消费。
+默认关闭。开启 `System > Configuration > Page Cache > Warmup` 后，tag 失效会把受影响 URL 写入 `page_cache_warmup_queue`，`page_cache_warmup` cron 每分钟按批次消费。预热只请求 store base URL 或 `page_cache/warmup/allowed_hosts` 中显式列出的 origin；不跟随重定向，basic auth 只发送到这些 origin。
 
 - 队列按 URL 去重，有上限；超过上限时淘汰最旧行。
 - 404、redirect、bypass、401/403 和其他永久 4xx 跳过；429、5xx 和网络错误重试，超过次数后移出。
@@ -135,7 +157,7 @@ local 命中时，显式标记的 leaf block 可以在服务器端重建，不�
 vendor/bin/pest tests/Backend/Unit/PageCache
 ```
 
-当前 201 个测试通过。
+当前 247 个测试通过。
 
 ## 许可证
 

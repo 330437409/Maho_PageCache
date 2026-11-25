@@ -40,9 +40,7 @@ function localCacheHeaderValue(Mage_Core_Controller_Response_Http $response, str
 
 function localCacheLockName(Maho_PageCache_Model_Context $context, ?array $versions = null): string
 {
-    $cache = new Maho_PageCache_Model_HtmlCache();
-    $versions ??= $cache->getVersions($context);
-    return 'page_cache_html_' . $cache->getHash($context, $versions);
+    return (new Maho_PageCache_Model_HtmlCache())->getLockName($context);
 }
 
 function localStatClean(): void
@@ -188,7 +186,7 @@ it('compresses large local html entries', function () {
     $html = '<html>' . str_repeat('compressible ', 500) . '</html>';
 
     $entry = $cache->save($context, $html, [], 3600, [], $versions);
-    $stored = Mage::app()->getCache()->load($key->getHtmlKey($cache->getHash($context, $versions)));
+    $stored = Mage::app()->getCache()->load($key->getEnvelopeKey($context));
 
     expect($entry['html_encoding'])->toBe('gzip')
         ->and($stored['html_encoding'])->toBe('gzip')
@@ -204,7 +202,7 @@ it('keeps small local html entries uncompressed', function () {
     $html = '<html>small</html>';
 
     $entry = $cache->save($context, $html, [], 3600, [], $versions);
-    $stored = Mage::app()->getCache()->load($key->getHtmlKey($cache->getHash($context, $versions)));
+    $stored = Mage::app()->getCache()->load($key->getEnvelopeKey($context));
 
     expect($entry['html_encoding'])->toBe('plain')
         ->and($stored['html'])->toBe($html);
@@ -218,7 +216,7 @@ it('indexes the stored context for observation', function () {
     expect($cache->getContexts($context->getUrlHash()))->toContain($context->getHash());
 });
 
-it('does not revive html when the metadata was evicted', function () {
+it('loads a v2 entry even when the metadata was evicted', function () {
     $context = localCacheContext();
     $cache = new Maho_PageCache_Model_HtmlCache();
     $key = new Maho_PageCache_Model_Key();
@@ -227,7 +225,51 @@ it('does not revive html when the metadata was evicted', function () {
     $cache->save($context, '<html>old</html>', ['catalog_product_1'], 3600, [], $versions);
     Mage::app()->getCache()->remove($key->getMetaKey($context->getUrlHash()));
 
-    expect($cache->load($context, $versions))->toBeNull();
+    expect($cache->load($context))->not->toBeNull()
+        ->and($cache->load($context)['html'])->toBe('<html>old</html>');
+});
+
+it('loads a legacy entry when the v2 envelope is absent', function () {
+    $context = localCacheContext();
+    $cache = new Maho_PageCache_Model_HtmlCache();
+    $key = new Maho_PageCache_Model_Key();
+    $versions = $cache->getVersions($context);
+    $entry = [
+        'html' => '<html>legacy</html>',
+        'headers' => [],
+        'tags' => [],
+        'url' => $context->getPurgeUrl(),
+        'context' => $context->getHash(),
+        'version' => $versions['url'],
+        'global_version' => $versions['global'],
+        'mode' => 'local',
+        'ttl' => 3600,
+    ];
+    Mage::app()->getCache()->save(
+        ['url' => $context->getPurgeUrl(), 'tags' => [], 'created_at' => time(), 'mode' => 'local', 'ttl' => 3600, 'version' => $versions['url'], 'store_id' => 1],
+        $key->getMetaKey($context->getUrlHash()),
+        ['PAGE_CACHE'],
+        3600,
+    );
+    Mage::app()->getCache()->save(
+        $entry,
+        $key->getHtmlKey($cache->getHash($context, $versions)),
+        ['PAGE_CACHE'],
+        3600,
+    );
+
+    expect($cache->load($context))->not->toBeNull()
+        ->and($cache->load($context)['html'])->toBe('<html>legacy</html>');
+});
+
+it('does not serve a v2 entry after the url version changes', function () {
+    $context = localCacheContext();
+    $cache = new Maho_PageCache_Model_HtmlCache();
+    $cache->save($context, '<html>url version</html>', [], 3600, [], $cache->getVersions($context));
+
+    (new Maho_PageCache_Model_Version())->incrementUrl($context->getUrlHash());
+
+    expect($cache->load($context))->toBeNull();
 });
 
 it('does not revive html when the url version key was evicted after invalidation', function () {
@@ -290,7 +332,7 @@ it('tags local html and meta with the entity cache tag', function () {
     expect($cache->save($context, '<html>tagged</html>', ['catalog_product_1', 'PAGE_CACHE'], 3600, [], $versions))
         ->not->toBeNull();
 
-    $htmlKey = $key->getHtmlKey($cache->getHash($context, $versions));
+    $htmlKey = $key->getEnvelopeKey($context);
     $metaKey = $key->getMetaKey($context->getUrlHash());
     expect(Mage::app()->getCache()->load($htmlKey))->not->toBeFalse()
         ->and(Mage::app()->getCache()->load($metaKey))->not->toBeFalse();

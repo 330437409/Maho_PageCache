@@ -78,6 +78,64 @@ it('merges url variants and caps the list', function () {
         ->and((int) $rows[0]['variants_truncated'])->toBe(1);
 });
 
+it('keeps tags from different contexts on the same url', function () {
+    $index = new Maho_PageCache_Model_UrlIndex();
+    $first = urlIndexContext(['params' => ['p' => '1']]);
+    $second = urlIndexContext(['params' => ['p' => '2']]);
+
+    $index->add($first, ['catalog_product_1'], 1);
+    $index->add($second, ['catalog_product_2'], 1);
+
+    $firstRows = $index->getByTag('catalog_product_1');
+    $secondRows = $index->getByTag('catalog_product_2');
+
+    expect($firstRows)->toHaveCount(2)
+        ->and($secondRows)->toHaveCount(2)
+        ->and(array_column($firstRows, 'context_url'))->toContain($first->getPurgeUrl(), $second->getPurgeUrl())
+        ->and(array_column($secondRows, 'context_url'))->toContain($first->getPurgeUrl(), $second->getPurgeUrl())
+        ->and($firstRows[0]['urls'])->toBe([$first->getPurgeUrl(), $second->getPurgeUrl()]);
+});
+
+it('keeps store and public path for every context', function () {
+    $index = new Maho_PageCache_Model_UrlIndex();
+    $first = urlIndexContext(['public_path' => '/first']);
+    $second = urlIndexContext(['store_id' => 0, 'public_path' => '/second']);
+
+    $index->add($first, ['catalog_product_1'], 1);
+    $index->add($second, ['catalog_product_1'], 1);
+
+    $rows = $index->getByTag('catalog_product_1');
+
+    expect($rows)->toHaveCount(2)
+        ->and(array_column($rows, 'public_path'))->toBe(['/first', '/second'])
+        ->and(array_column($rows, 'store_code'))->toBe(['default', 'admin']);
+});
+
+it('keeps tags when the same context is saved again', function () {
+    $context = urlIndexContext();
+    $index = new Maho_PageCache_Model_UrlIndex();
+
+    $index->add($context, ['catalog_product_1'], 1);
+    $index->add($context, ['catalog_category_2'], 1);
+
+    expect($index->getByTag('catalog_product_1'))->toHaveCount(1)
+        ->and($index->getByTag('catalog_category_2'))->toHaveCount(1);
+});
+
+it('finds every context for a category tag', function () {
+    $index = new Maho_PageCache_Model_UrlIndex();
+    $first = urlIndexContext(['params' => ['p' => '1']]);
+    $second = urlIndexContext(['params' => ['p' => '2']]);
+
+    $index->add($first, ['catalog_category_2'], 1);
+    $index->add($second, ['catalog_category_2'], 1);
+
+    $rows = $index->getByTag('catalog_category_2');
+
+    expect($rows)->toHaveCount(2)
+        ->and(array_column($rows, 'context_url'))->toContain($first->getPurgeUrl(), $second->getPurgeUrl());
+});
+
 it('keeps a url while another tag still points to it', function () {
     $context = urlIndexContext();
     $index = new Maho_PageCache_Model_UrlIndex();

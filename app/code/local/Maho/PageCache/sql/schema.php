@@ -119,16 +119,39 @@ return function (SchemaEditor $schema): void {
 
     $schema->addTable(
         Table::editor()
-            ->setUnquotedName('page_cache_url_tag')
+            ->setUnquotedName('page_cache_url_context')
+            ->addColumn(Schema::column('context_id', Types::INTEGER, unsigned: true, autoincrement: true))
             ->addColumn(Schema::column('url_id', Types::INTEGER, unsigned: true))
+            ->addColumn(Schema::column('context_hash', Types::STRING, length: 64))
+            ->addColumn(Schema::column('store_id', Types::SMALLINT, unsigned: true, default: 0))
+            ->addColumn(Schema::column('store_code', Types::STRING, length: 32, default: ''))
+            ->addColumn(Schema::column('public_path', Types::STRING, length: 2048))
+            ->addColumn(Schema::column('url', Types::STRING, length: 2048))
+            ->addColumn(Schema::column('created_at', Types::DATETIME_IMMUTABLE))
+            ->addColumn(Schema::column('updated_at', Types::DATETIME_IMMUTABLE))
+            ->addPrimaryKeyConstraint(
+                PrimaryKeyConstraint::editor()->setUnquotedColumnNames('context_id')->create(),
+            )
+            ->addIndex(
+                Index::editor()->setType(IndexType::UNIQUE)->setUnquotedColumnNames('url_id', 'context_hash'),
+            )
+            ->addIndex(Index::editor()->setUnquotedColumnNames('updated_at'))
+            ->setComment('Page Cache URL Context Index')
+            ->create(),
+    );
+
+    $schema->addTable(
+        Table::editor()
+            ->setUnquotedName('page_cache_url_context_tag')
+            ->addColumn(Schema::column('context_id', Types::INTEGER, unsigned: true))
             ->addColumn(Schema::column('tag', Types::STRING, length: 128))
             ->addIndex(
                 Index::editor()
                     ->setType(IndexType::UNIQUE)
-                    ->setUnquotedColumnNames('url_id', 'tag'),
+                    ->setUnquotedColumnNames('context_id', 'tag'),
             )
             ->addIndex(Index::editor()->setUnquotedColumnNames('tag'))
-            ->setComment('Page Cache URL Tag Index')
+            ->setComment('Page Cache URL Context Tag Index')
             ->create(),
     );
 

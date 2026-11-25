@@ -1,6 +1,6 @@
 # 产品需求文档（PRD）：Maho 页面缓存
 
-> 状态：0.5.5 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付；0.5.1 cache integrity 修复、0.5.2 tag 索引重构、0.5.3 P1 加固与性能优化、0.5.4 stock pending 监控和 0.5.5 监控指标导出与后台报表已交付
+> 状态：0.7.0 发布准备中：RFC-007 Phase 1 CacheEnvelope 和 PERF-02 压缩配置、Phase 2 Context Index 迁移和旧表清理、Phase 3 Warmup 安全补强、Phase 4 Stats 采样、Dynamic 边界与 Proxy Models 验证、PERF-04 Cookie 规范化文档已实现；0.6.1 FR-21 和审计 P1 修复已实现；Phase 5 本地验证完成，本地三库通过；官方 CI 和 G9 仍开放。0.5.5 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付；0.5.1 cache integrity 修复、0.5.2 tag 索引重构、0.5.3 P1 加固与性能优化、0.5.4 stock pending 监控和 0.5.5 监控指标导出与后台报表已交付。
 > 模块：`Maho_PageCache`
 > 代码路径：`app/code/local/Maho/PageCache`
 > 关联 spec：`docs/specs/page-cache.md`
@@ -80,14 +80,21 @@ Maho 目前有 Symfony Cache 对象缓存（file/redis），但没有内置的 H
 | 编号 | 需求 | 优先级 | 状态 |
 |---|---|---|---|
 | FR-14 | 服务器端占位符打孔：缓存页面保存 block 占位符，命中时只渲染动态块 | P3 | 已交付@v0.5.0 |
-| FR-15 | 代理模型：product、category、CMS 的懒加载代理，减少动态块渲染成本 | P3 | 计划 |
+| FR-15 | 代理模型：product、category、CMS 的请求级代理加载器，动态块按 store/context 复用模型并批量预加载，减少重复查询和 N+1 | P3 | 已实现，待 0.7.0 发版 |
 | FR-16 | 统计面板：DB 事件表、小时 rollup、后台面板，按路由/store/mode 统计 hit/miss/bypass/revalidated、PHP 耗时、top missed URL 和 flush 记录 | P3 | 已交付@v0.3.0 |
 | FR-17 | 静态文件导出：把匿名默认页的 local HTML 额外写成 path-based `.html`/`.gz`，由 Web 服务器直接返回；公共路径映射；允许参数变体继续走 PHP；严格 session cookie bypass；默认关闭，必须 deny 缓存目录 | P3 | 已交付@v0.3.0 |
 | FR-18 | 定时预热：后台 Warmup 配置组、purge 后 requeue、cron 分批预热、sitemap/URL、并发、限速、basic auth、重试和失败汇总；手工触发仍用 CLI | P3 | 已交付@v0.4.0 |
-| FR-19 | 多节点：purge 广播、Redis 共享版本、静态文件共享存储 | P3 | 计划 |
+| FR-19 | 多节点：Redis 共享版本、per-node purge fan-out 与状态、本地/共享两级缓存同时失效、静态文件共享存储或节点级预热 | P3 | 计划 |
 | FR-20 | session cookie 安全命中：默认关闭的 opt-in，仅 local 模式对购物车为空、未登录、无消息且渲染不写 session 的匿名请求做短 TTL 缓存；proxy/revalidating 保持 bypass；需 ADR-0019 安全评审 | P2 | 暂停（等待 session 只读 API） |
+| FR-21 | Tag 预算与 overflow tag：proxy `X-Cache-Tags` 超过预算时保留宽 tag，商品 tag 用 overflow tag 代替，purge 自动带上 overflow tag | P3 | 已实现，待 0.7.0 发版 |
+| FR-22 | Purge 持久化投递：DB outbox、per-target ack/重试/退避、`page-cache:purge:status` 和 stale 告警 | P3 | 计划 |
+| FR-23 | 失效审计日志：记录 area/cron、失效类型、reason、tag 总数与样本、影响 URL 数、purge/warm 入队；后台筛选/导出/retention | P3 | 计划 |
+| FR-24 | 预热调度升级：滑动窗口并发、活跃产品/分类 URL 源、后台进度、cache flush 后仍有效的锁 | P3 | 计划 |
+| FR-25 | Proxy SWR/grace：proxy 模式 `stale-while-revalidate` 和 grace 配置，降低 TTL 到期回源峰值 | P3 | 计划 |
 
-> 状态取值：计划 / 开发中 / 已交付@vX.Y.Z / 暂停。第一期和第二期已交付 0.2.0；第三期静态导出和统计面板已交付 0.3.0；定时预热已交付 0.4.0；服务器端动态块占位符已交付 0.5.0；其余只登记。静态文件导出、统计面板和定时预热分别见 ADR-0012、ADR-0013、ADR-0014。第三期拆解见 `.tmp/brainstorm-phase3-2026-11-23.md`。
+> 状态取值：计划 / 开发中 / 已交付@vX.Y.Z / 暂停。第一期和第二期已交付 0.2.0；第三期静态导出和统计面板已交付 0.3.0；定时预热已交付 0.4.0；服务器端动态块占位符已交付 0.5.0；请求级代理模型已实现，随 0.7.0 发版。0.6.1 的 FR-21 和审计 P1 修复（Context 级 URL 索引、Warm URL allowlist）已并入 0.7.0。0.7.0 由 RFC-007 接管（性能与架构优化，不新增 FR）；Phase 1 CacheEnvelope 和 PERF-02 压缩配置、Phase 2 Context Index 迁移和旧表清理、Phase 3 Warmup 安全补强、Phase 4 Stats 采样、Dynamic 边界与 Proxy Models 验证、PERF-04 Cookie 规范化文档已实现；Phase 5 本地验证完成，三库 CI 和 G9 仍开放，待发版；FR-22/FR-23 顺延到 0.8.0，FR-19 到 0.9.0，FR-24/FR-25 到 0.10.0；FR-26 作为独立开发工具候选，暂不登记。静态文件导出、统计面板和定时预热分别见 ADR-0012、ADR-0013、ADR-0014，代理模型见 ADR-0020。第三期拆解见 `.tmp/brainstorm-phase3-2026-11-23.md`，线路图见 `.tmp/page-cache-roadmap-2026-11-24.md`。
+
+> 版本节奏（2026-11-24 起）：0.6.1 FR-21 + 审计 P1（并入 0.7.0）；0.7.0 RFC-007 性能与架构；0.8.0 FR-22/FR-23；0.9.0 FR-19；0.10.0 FR-24/FR-25；1.0.0 FR-26（可选）。
 
 ## 5. 非功能需求（NFR）
 
@@ -248,7 +255,9 @@ Maho 目前有 Symfony Cache 对象缓存（file/redis），但没有内置的 H
 #### AC-16 多节点（FR-19）
 
 - A 节点失效后 B 节点不再命中旧版本。
-- 静态文件通过共享存储或节点级预热保持一致。
+- 每个节点/目标的 purge 独立记录、独立重试、独立状态；一个目标失败不阻塞其他目标。
+- 本地 L1 和共享 L2 两级缓存同时失效，旧内容不会从任一层复活。
+- 静态文件通过共享存储或节点级预热保持一致；冷启动 runbook 可复现。
 - 全局版本严格递增，purge 广播可验证。
 
 #### AC-17 session cookie 安全命中（FR-20）
@@ -259,6 +268,46 @@ Maho 目前有 Symfony Cache 对象缓存（file/redis），但没有内置的 H
 - HTML key 包含 session id 或等价会话分区值，跨 session 不共享。
 - 命中响应不含 PII，form key/SID 和动态块继续使用占位符。
 - kill switch、短 TTL、命中计数和测试齐备；任一条件无法确认时继续 bypass。
+
+#### AC-18 Tag 预算与 overflow tag（FR-21）
+
+- tag 数未超预算时 `X-Cache-Tags` 字节级不变。
+- 超预算时宽 tag 优先，商品 tag 其次，被丢 tag 用 `page_cache_overflow` 或 `page_cache_overflow_product` 代替。
+- 任一被丢 tag 失效时 purge 自动带上对应 overflow tag；按 URL purge 的消费者不受影响。
+- 分类页超过预算后，修改被丢商品仍能让代理页面失效。
+- 单元测试覆盖 header、purge、URL 索引；实机验证一次代理模式。
+
+#### AC-19 Purge 持久化投递（FR-22）
+
+- purge 入队后 flush cache、重启进程，pending 仍存在。
+- 每个目标独立 ack、重试、退避；ack 后才删除，失败不静默消失。
+- 一个目标失败不阻塞其他目标；达到上限后状态可见。
+- `page-cache:purge` 现有选项不变；新增 `page-cache:purge:status` 显示 pending、最老年龄、失败数和每目标状态。
+- 重复投递幂等，不丢 purge；stale 超过阈值时记录 warning。
+- 单元/集成测试覆盖 cache flush、崩溃重放、per-target、stale 告警；实机验证失败后恢复。
+
+#### AC-20 失效审计日志（FR-23）
+
+- 记录时间、area/cron job、失效类型、reason、tag 总数、样本 tag、影响 URL 数、purge/warm 入队状态。
+- 后台 “Invalidations” tab 支持筛选、分页、CSV/Excel 导出和批量删除。
+- retention 自动清理；统计关闭时审计日志可独立开关。
+- 不记录客户、cookie、完整 query 或 PII；写入失败不影响页面。
+- 单元/集成测试覆盖各类失效来源、retention 和无 PII；实机验证一次商品保存。
+
+#### AC-21 预热调度升级（FR-24）
+
+- 滑动窗口并发，慢 URL 不阻塞整批；`delay_ms` 作为请求启动间隔。
+- 活跃产品/分类 URL 源按 store、可见性和 301 过滤正确。
+- 后台显示 pending、processed、warmed、skipped、failed、oldest 和锁状态。
+- cache flush 后锁仍有效，操作失败后释放。
+- 单元/集成测试覆盖并发、URL 源、进度、锁释放和非 200；实机跑一次全量预热。
+
+#### AC-22 Proxy SWR/grace（FR-25）
+
+- proxy 响应按配置输出 `stale-while-revalidate`；0 时不输出。
+- local 和 revalidating 响应头不变。
+- purge 仍为硬删除；SWR 只在 TTL 过期后生效。
+- 单元测试覆盖响应头；实机用代理验证 TTL 过期后返回旧页并后台刷新。
 
 ## 7. 风险与待定
 

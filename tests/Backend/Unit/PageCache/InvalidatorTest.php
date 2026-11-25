@@ -12,6 +12,9 @@ use Tests\MahoBackendTestCase;
 uses(MahoBackendTestCase::class);
 
 beforeEach(function () {
+    Mage::app()->getStore()->setConfig('web/unsecure/base_url', 'https://example.com/');
+    Mage::app()->getStore()->setConfig('web/secure/base_url', 'https://example.com/');
+    Mage::getService('page_cache/urlPolicy')->reset();
     Mage::app()->getStore()->setConfig('page_cache/general/enabled', '1');
     Mage::app()->getStore()->setConfig('page_cache/general/mode', 'proxy');
     Mage::app()->getCache()->cleanType('page_cache');
@@ -139,7 +142,7 @@ it('falls back to a full invalidation for a large attribute mass update', functi
 });
 
 it('invalidates a tag, increments the url version and enqueues a purge', function () {
-    $context = new Maho_PageCache_Model_Context(pageCacheContextData(['mode' => 'proxy']));
+    $context = invalidatorStaticContext('/tag-purge.html', ['mode' => 'proxy']);
     $urlHash = $context->getUrlHash();
     invalidatorIndex($context, ['catalog_product_1']);
 
@@ -154,6 +157,62 @@ it('invalidates a tag, increments the url version and enqueues a purge', functio
     expect((new Maho_PageCache_Model_Version())->getUrl($urlHash))->toBe(2)
         ->and($urls)->toContain($context->getPurgeUrl())
         ->and(Mage::getModel('page_cache/urlIndex')->getByTag('catalog_product_1'))->toBe([]);
+});
+
+it('adds overflow tags to the proxy purge payload', function () {
+    $context = invalidatorStaticContext('/overflow.html', ['mode' => 'proxy']);
+    invalidatorIndex($context, ['catalog_product_1', 'cms_page_2']);
+
+    (new Maho_PageCache_Service_Invalidator())->invalidateTags(['catalog_product_1', 'cms_page_2']);
+
+    $tags = [];
+    foreach ((new Maho_PageCache_Model_PurgeQueue())->getEntries() as $entry) {
+        $tags = array_merge($tags, $entry['tags']);
+    }
+
+    expect($tags)->toContain('catalog_product_1')
+        ->and($tags)->toContain('cms_page_2')
+        ->and($tags)->toContain(Maho_PageCache_Model_TagBudget::OVERFLOW_PRODUCT)
+        ->and($tags)->toContain(Maho_PageCache_Model_TagBudget::OVERFLOW);
+});
+
+it('invalidates every context variant of a url once', function () {
+    $first = invalidatorStaticContext('/contexts.html', ['mode' => 'proxy', 'params' => ['p' => '1']]);
+    $second = invalidatorStaticContext('/contexts.html', ['mode' => 'proxy', 'params' => ['p' => '2']]);
+    invalidatorIndex($first, ['catalog_product_1']);
+    invalidatorIndex($second, ['catalog_product_2']);
+
+    (new Maho_PageCache_Service_Invalidator())->invalidateTags(['catalog_product_1']);
+
+    $urls = [];
+    foreach ((new Maho_PageCache_Model_PurgeQueue())->getEntries() as $entry) {
+        $urls = array_merge($urls, $entry['urls']);
+    }
+
+    expect((new Maho_PageCache_Model_Version())->getUrl($first->getUrlHash()))->toBe(2)
+        ->and($urls)->toContain($first->getPurgeUrl())
+        ->and($urls)->toContain($second->getPurgeUrl())
+        ->and(Mage::getModel('page_cache/urlIndex')->getByTag('catalog_product_2'))->toHaveCount(1);
+});
+
+it('removes the static file of every context on the same url', function () {
+    Mage::app()->getStore()->setConfig('page_cache/static/enabled', '1');
+    $first = invalidatorStaticContext('/shared.html', ['public_path' => '/first']);
+    $second = invalidatorStaticContext('/shared.html', ['public_path' => '/second']);
+    $static = Mage::getSingleton('page_cache/staticCache');
+    $firstPath = $static->getFilePath($first);
+    $secondPath = $static->getFilePath($second);
+    $static->save($first, '<html>first</html>');
+    $static->save($second, '<html>second</html>');
+    invalidatorIndex($first, ['catalog_product_1']);
+    invalidatorIndex($second, ['catalog_product_2']);
+
+    (new Maho_PageCache_Service_Invalidator())->invalidateTags(['catalog_product_1']);
+
+    expect($firstPath)->not->toBeNull()
+        ->and($secondPath)->not->toBeNull()
+        ->and(file_exists((string) $firstPath))->toBeFalse()
+        ->and(file_exists((string) $secondPath))->toBeFalse();
 });
 
 it('invalidates the cache id tags of a generic model', function () {
@@ -359,7 +418,7 @@ it('clears the stored etag when a tag is invalidated', function () {
 it('falls back to a full invalidation when the url index fails', function () {
     $resource = Mage::getSingleton('core/resource');
     $write = $resource->getConnection('core_write');
-    $table = $resource->getTableName('page_cache/url_tag');
+    $table = $resource->getTableName('page_cache/url_context_tag');
     $backup = $table . '_backup';
     $write->query('ALTER TABLE ' . $table . ' RENAME TO ' . $backup);
     try {

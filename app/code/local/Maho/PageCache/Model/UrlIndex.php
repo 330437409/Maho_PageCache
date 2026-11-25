@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Persistent URL and tag index for proxy purge, warmup and static removal.
+ * Persistent URL, context and tag index for proxy purge, warmup and static removal.
  *
  * SPDX-FileCopyrightText: 2026 Maho <https://mahocommerce.com>
  * SPDX-License-Identifier: OSL-3.0
@@ -28,6 +28,7 @@ class Maho_PageCache_Model_UrlIndex
         $tags = $this->normalizeTags($tags);
         $urlHash = $context->getUrlHash();
         $url = $context->getPurgeUrl();
+        $contextHash = $context->getHash();
         $publicPath = $context->getPublicPath();
         $storeId = $context->getStoreId();
         $storeCode = $this->storeCode($storeId);
@@ -51,41 +52,57 @@ class Maho_PageCache_Model_UrlIndex
                 $urls = array_slice($urls, -self::MAX_URL_VARIANTS);
             }
 
-            $urlId = is_array($existing) ? (int) $existing['url_id'] : 0;
-            $rowVersion = max(1, $version, is_array($existing) ? (int) ($existing['version'] ?? 1) : 1);
-            if ($urlId > 0) {
-                $write->update($this->urlTable(), [
-                    'url' => $url,
-                    'urls' => $this->encodeUrls($urls),
-                    'variants_truncated' => $truncated ? 1 : 0,
-                    'public_path' => $publicPath,
-                    'store_id' => $storeId,
-                    'store_code' => $storeCode,
-                    'version' => $rowVersion,
-                    'updated_at' => $now,
-                ], ['url_id = ?' => $urlId]);
-            } else {
-                $write->insert($this->urlTable(), [
-                    'url_hash' => $urlHash,
-                    'url' => $url,
-                    'urls' => $this->encodeUrls($urls),
-                    'variants_truncated' => $truncated ? 1 : 0,
-                    'public_path' => $publicPath,
-                    'store_id' => $storeId,
-                    'store_code' => $storeCode,
-                    'version' => $rowVersion,
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ]);
-                $urlId = (int) $write->lastInsertId($this->urlTable(), 'url_id');
+            $urlVersion = max(1, $version, is_array($existing) ? (int) ($existing['version'] ?? 1) : 1);
+            $write->insertOnDuplicate($this->urlTable(), [
+                'url_hash' => $urlHash,
+                'url' => $url,
+                'urls' => $this->encodeUrls($urls),
+                'variants_truncated' => $truncated ? 1 : 0,
+                'public_path' => $publicPath,
+                'store_id' => $storeId,
+                'store_code' => $storeCode,
+                'version' => $urlVersion,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ], ['url', 'urls', 'variants_truncated', 'public_path', 'store_id', 'store_code', 'version', 'updated_at']);
+
+            $urlRow = $write->fetchRow(
+                $write->select()
+                    ->from($this->urlTable(), ['url_id'])
+                    ->where('url_hash = ?', $urlHash),
+            );
+            $urlId = is_array($urlRow) ? (int) ($urlRow['url_id'] ?? 0) : 0;
+            if ($urlId <= 0) {
+                throw new \RuntimeException('Could not resolve the page cache URL index row.');
             }
 
-            $write->delete($this->tagTable(), ['url_id = ?' => $urlId]);
+            $write->insertOnDuplicate($this->contextTable(), [
+                'url_id' => $urlId,
+                'context_hash' => $contextHash,
+                'store_id' => $storeId,
+                'store_code' => $storeCode,
+                'public_path' => $publicPath,
+                'url' => $url,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ], ['store_id', 'store_code', 'public_path', 'url', 'updated_at']);
+
+            $contextRow = $write->fetchRow(
+                $write->select()
+                    ->from($this->contextTable(), ['context_id'])
+                    ->where('url_id = ?', $urlId)
+                    ->where('context_hash = ?', $contextHash),
+            );
+            $contextId = is_array($contextRow) ? (int) ($contextRow['context_id'] ?? 0) : 0;
+            if ($contextId <= 0) {
+                throw new \RuntimeException('Could not resolve the page cache URL context row.');
+            }
+
             if ($tags !== []) {
-                $write->insertMultiple($this->tagTable(), array_map(
-                    static fn(string $tag): array => ['url_id' => $urlId, 'tag' => $tag],
+                $write->insertOnDuplicate($this->contextTagTable(), array_map(
+                    static fn(string $tag): array => ['context_id' => $contextId, 'tag' => $tag],
                     $tags,
-                ));
+                ), ['tag']);
             }
 
             $write->commit();
@@ -103,37 +120,58 @@ class Maho_PageCache_Model_UrlIndex
      */
     public function getByTag(string $tag): ?array
     {
+        $tag = substr($tag, 0, 128);
         try {
             $read = $this->read();
-            $rows = $read->fetchAll(
+            $contextUrlIds = array_values(array_unique(array_map(intval(...), $read->fetchCol(
                 $read->select()
-                    ->from(['u' => $this->urlTable()], [
-                        'url_id',
-                        'url_hash',
-                        'url',
-                        'urls',
-                        'variants_truncated',
-                        'public_path',
-                        'store_code',
-                        'store_id',
-                        'version',
-                    ])
-                    ->join(['t' => $this->tagTable()], 't.url_id = u.url_id', [])
-                    ->where('t.tag = ?', substr($tag, 0, 128))
-                    ->order('u.url_id ASC'),
-            );
+                    ->from(['t' => $this->contextTagTable()], [])
+                    ->join(['c' => $this->contextTable()], 'c.context_id = t.context_id', ['c.url_id'])
+                    ->where('t.tag = ?', $tag),
+            ))));
+            $contextRows = [];
+            if ($contextUrlIds !== []) {
+                $contextRows = $read->fetchAll(
+                    $read->select()
+                        ->from(['c' => $this->contextTable()], [
+                            'context_id',
+                            'context_hash',
+                            'store_id',
+                            'store_code',
+                            'public_path',
+                            'context_url' => 'url',
+                        ])
+                        ->join(['u' => $this->urlTable()], 'u.url_id = c.url_id', [
+                            'url_id',
+                            'url_hash',
+                            'url',
+                            'urls',
+                            'variants_truncated',
+                            'version',
+                        ])
+                        ->where('c.url_id IN (?)', $contextUrlIds)
+                        ->order('u.url_id ASC')
+                        ->order('c.context_id ASC'),
+                );
+            }
         } catch (\Throwable $e) {
             Mage::logException($e);
             return null;
         }
 
         $result = [];
-        foreach ($rows as $row) {
+        foreach ($contextRows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
             $urls = $this->decodeUrls((string) ($row['urls'] ?? '[]'));
             if ($urls === []) {
                 $urls = [(string) ($row['url'] ?? '')];
             }
             $row['urls'] = $urls;
+            $row['context_id'] = (int) ($row['context_id'] ?? 0);
+            $row['context_hash'] = (string) ($row['context_hash'] ?? '');
+            $row['context_url'] = (string) ($row['context_url'] ?? $row['url'] ?? '');
             $result[] = $row;
         }
 
@@ -142,19 +180,29 @@ class Maho_PageCache_Model_UrlIndex
 
     public function removeTag(string $tag): void
     {
+        $tag = substr($tag, 0, 128);
         try {
             $write = $this->write();
-            $write->delete($this->tagTable(), ['tag = ?' => substr($tag, 0, 128)]);
+            $write->delete($this->contextTagTable(), ['tag = ?' => $tag]);
 
-            $read = $this->read();
-            $ids = array_map(intval(...), $read->fetchCol(
-                $read->select()
-                    ->from(['u' => $this->urlTable()], ['u.url_id'])
-                    ->joinLeft(['t' => $this->tagTable()], 't.url_id = u.url_id', [])
-                    ->where('t.url_id IS NULL'),
+            $orphanContexts = array_map(intval(...), $this->read()->fetchCol(
+                $this->read()->select()
+                    ->from(['c' => $this->contextTable()], ['c.context_id'])
+                    ->joinLeft(['t' => $this->contextTagTable()], 't.context_id = c.context_id', [])
+                    ->where('t.context_id IS NULL'),
             ));
-            if ($ids !== []) {
-                $write->delete($this->urlTable(), $write->quoteInto('url_id IN (?)', $ids));
+            if ($orphanContexts !== []) {
+                $write->delete($this->contextTable(), $write->quoteInto('context_id IN (?)', $orphanContexts));
+            }
+
+            $orphanUrls = array_map(intval(...), $this->read()->fetchCol(
+                $this->read()->select()
+                    ->from(['u' => $this->urlTable()], ['u.url_id'])
+                    ->joinLeft(['c' => $this->contextTable()], 'c.url_id = u.url_id', [])
+                    ->where('c.context_id IS NULL'),
+            ));
+            if ($orphanUrls !== []) {
+                $write->delete($this->urlTable(), $write->quoteInto('url_id IN (?)', $orphanUrls));
             }
         } catch (\Throwable $e) {
             Mage::logException($e);
@@ -178,7 +226,8 @@ class Maho_PageCache_Model_UrlIndex
         $write = $this->write();
         try {
             $write->beginTransaction();
-            $write->delete($this->tagTable(), '1=1');
+            $write->delete($this->contextTagTable(), '1=1');
+            $write->delete($this->contextTable(), '1=1');
             $write->delete($this->urlTable(), '1=1');
             $write->commit();
         } catch (\Throwable $e) {
@@ -206,7 +255,15 @@ class Maho_PageCache_Model_UrlIndex
 
             $write = $this->write();
             $write->beginTransaction();
-            $write->delete($this->tagTable(), $write->quoteInto('url_id IN (?)', $ids));
+            $contextIds = array_map(intval(...), $read->fetchCol(
+                $read->select()
+                    ->from($this->contextTable(), ['context_id'])
+                    ->where('url_id IN (?)', $ids),
+            ));
+            if ($contextIds !== []) {
+                $write->delete($this->contextTagTable(), $write->quoteInto('context_id IN (?)', $contextIds));
+                $write->delete($this->contextTable(), $write->quoteInto('context_id IN (?)', $contextIds));
+            }
             $write->delete($this->urlTable(), $write->quoteInto('url_id IN (?)', $ids));
             $write->commit();
 
@@ -297,9 +354,14 @@ class Maho_PageCache_Model_UrlIndex
         return Mage::getSingleton('core/resource')->getTableName('page_cache/url');
     }
 
-    private function tagTable(): string
+    private function contextTable(): string
     {
-        return Mage::getSingleton('core/resource')->getTableName('page_cache/url_tag');
+        return Mage::getSingleton('core/resource')->getTableName('page_cache/url_context');
+    }
+
+    private function contextTagTable(): string
+    {
+        return Mage::getSingleton('core/resource')->getTableName('page_cache/url_context_tag');
     }
 
     private function read(): Maho\Db\Adapter\AdapterInterface

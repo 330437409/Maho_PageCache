@@ -1,0 +1,130 @@
+{
+  "label": "b3-local-redis",
+  "url": "http://localhost:8004/page-cache-test-product/",
+  "requests_per_round": 300,
+  "concurrency": 10,
+  "warmup_requests": 2,
+  "rounds": [
+    {
+      "round": 1,
+      "requests": 300,
+      "duration_seconds": 1.7084,
+      "rps": 175.6,
+      "latency_ms": {
+        "min": 40.48,
+        "p50": 52.312,
+        "p95": 88.818,
+        "p99": 101.304,
+        "max": 116.303
+      },
+      "statuses": {
+        "200": 300
+      },
+      "cache_headers": {
+        "HIT": 300
+      },
+      "proxy_headers": {
+        "none": 300
+      },
+      "errors": 0
+    },
+    {
+      "round": 2,
+      "requests": 300,
+      "duration_seconds": 1.5908,
+      "rps": 188.58,
+      "latency_ms": {
+        "min": 35.626,
+        "p50": 50.019,
+        "p95": 65.412,
+        "p99": 96.765,
+        "max": 100.129
+      },
+      "statuses": {
+        "200": 300
+      },
+      "cache_headers": {
+        "HIT": 300
+      },
+      "proxy_headers": {
+        "none": 300
+      },
+      "errors": 0
+    },
+    {
+      "round": 3,
+      "requests": 300,
+      "duration_seconds": 1.6345,
+      "rps": 183.54,
+      "latency_ms": {
+        "min": 37.154,
+        "p50": 50.993,
+        "p95": 70.867,
+        "p99": 105.302,
+        "max": 110.956
+      },
+      "statuses": {
+        "200": 300
+      },
+      "cache_headers": {
+        "HIT": 300
+      },
+      "proxy_headers": {
+        "none": 300
+      },
+      "errors": 0
+    },
+    {
+      "round": 4,
+      "requests": 300,
+      "duration_seconds": 1.5869,
+      "rps": 189.04,
+      "latency_ms": {
+        "min": 37.73,
+        "p50": 50.566,
+        "p95": 62.909,
+        "p99": 95.433,
+        "max": 101.813
+      },
+      "statuses": {
+        "200": 300
+      },
+      "cache_headers": {
+        "HIT": 300
+      },
+      "proxy_headers": {
+        "none": 300
+      },
+      "errors": 0
+    },
+    {
+      "round": 5,
+      "requests": 300,
+      "duration_seconds": 1.5908,
+      "rps": 188.59,
+      "latency_ms": {
+        "min": 39.942,
+        "p50": 51.008,
+        "p95": 60.772,
+        "p99": 96.942,
+        "max": 102.641
+      },
+      "statuses": {
+        "200": 300
+      },
+      "cache_headers": {
+        "HIT": 300
+      },
+      "proxy_headers": {
+        "none": 300
+      },
+      "errors": 0
+    }
+  ],
+  "median": {
+    "rps": 188.58,
+    "p50_ms": 50.993,
+    "p95_ms": 65.412,
+    "p99_ms": 96.942
+  }
+}

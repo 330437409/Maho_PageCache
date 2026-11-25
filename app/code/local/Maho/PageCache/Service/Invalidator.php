@@ -105,6 +105,10 @@ class Maho_PageCache_Service_Invalidator
         $urls = [];
         $warmUrls = [];
         $variantsTruncated = false;
+        $seenUrlIds = [];
+        $seenStatic = [];
+        $seenUrls = [];
+        $seenWarm = [];
         foreach ($tags as $tag) {
             $rows = $this->urlIndex()->getByTag($tag);
             if ($rows === null) {
@@ -118,17 +122,28 @@ class Maho_PageCache_Service_Invalidator
                     continue;
                 }
 
-                $newVersion = max(
-                    (int) ($row['version'] ?? 1) + 1,
-                    $this->version()->getUrl($urlHash) + 1,
-                );
-                $this->version()->setUrl($urlHash, $newVersion);
-                $this->urlIndex()->setVersion((int) ($row['url_id'] ?? 0), $newVersion);
-                Mage::app()->getCache()->remove($this->key()->getEtagKey($urlHash));
-                $this->staticCache()->removeByUrl(
-                    (string) ($row['public_path'] ?? ''),
-                    (string) ($row['store_code'] ?? ''),
-                );
+                $urlId = (int) ($row['url_id'] ?? 0);
+                $versionKey = $urlId > 0 ? (string) $urlId : $urlHash;
+                if (!isset($seenUrlIds[$versionKey])) {
+                    $newVersion = max(
+                        (int) ($row['version'] ?? 1) + 1,
+                        $this->version()->getUrl($urlHash) + 1,
+                    );
+                    $this->version()->setUrl($urlHash, $newVersion);
+                    if ($urlId > 0) {
+                        $this->urlIndex()->setVersion($urlId, $newVersion);
+                    }
+                    Mage::app()->getCache()->remove($this->key()->getEtagKey($urlHash));
+                    $seenUrlIds[$versionKey] = true;
+                }
+
+                $publicPath = (string) ($row['public_path'] ?? '');
+                $storeCode = (string) ($row['store_code'] ?? '');
+                $staticKey = $publicPath . '|' . $storeCode;
+                if (!isset($seenStatic[$staticKey])) {
+                    $this->staticCache()->removeByUrl($publicPath, $storeCode);
+                    $seenStatic[$staticKey] = true;
+                }
 
                 $variantUrls = is_array($row['urls'] ?? null) ? $row['urls'] : [];
                 if ($variantUrls === []) {
@@ -139,10 +154,22 @@ class Maho_PageCache_Service_Invalidator
                     static fn(mixed $url): bool => is_string($url) && $url !== '',
                 )));
                 $variantsTruncated = $variantsTruncated || !empty($row['variants_truncated']);
-                $storeId = (int) ($row['store_id'] ?? 0);
                 foreach ($variantUrls as $variantUrl) {
-                    $urls[] = $variantUrl;
-                    $warmUrls[$storeId][] = $variantUrl;
+                    if (!isset($seenUrls[$variantUrl])) {
+                        $urls[] = $variantUrl;
+                        $seenUrls[$variantUrl] = true;
+                    }
+                }
+
+                $storeId = (int) ($row['store_id'] ?? 0);
+                $contextUrl = (string) ($row['context_url'] ?? '');
+                $warmCandidates = $contextUrl !== '' ? [$contextUrl] : $variantUrls;
+                foreach ($warmCandidates as $warmUrl) {
+                    $warmKey = $storeId . '|' . $warmUrl;
+                    if (!isset($seenWarm[$warmKey])) {
+                        $warmUrls[$storeId][] = $warmUrl;
+                        $seenWarm[$warmKey] = true;
+                    }
                 }
             }
 
@@ -153,7 +180,7 @@ class Maho_PageCache_Service_Invalidator
             if ($variantsTruncated) {
                 $this->queue()->enqueueFullPurge();
             } else {
-                $this->queue()->enqueue($urls, $tags, Maho_PageCache_Helper_Data::MODE_PROXY);
+                $this->queue()->enqueue($urls, Maho_PageCache_Model_TagBudget::withOverflow($tags), Maho_PageCache_Helper_Data::MODE_PROXY);
             }
         }
 

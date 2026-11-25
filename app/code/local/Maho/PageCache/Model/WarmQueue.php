@@ -184,12 +184,16 @@ class Maho_PageCache_Model_WarmQueue
     private function normalizeUrls(array $urls): array
     {
         $valid = [];
+        $policy = Mage::getService('page_cache/urlPolicy');
         foreach ($urls as $url) {
             if (!is_string($url)) {
                 continue;
             }
             $url = trim($url);
             if ($url === '' || strlen($url) > self::MAX_URL_LENGTH || preg_match('#^https?://#i', $url) !== 1) {
+                continue;
+            }
+            if (!$policy->isAllowed($url)) {
                 continue;
             }
             $valid[$url] = true;

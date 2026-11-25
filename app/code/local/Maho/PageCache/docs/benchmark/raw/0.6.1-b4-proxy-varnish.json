@@ -1,0 +1,130 @@
+{
+  "label": "b4-proxy-varnish",
+  "url": "http://localhost:6081/page-cache-test-product/",
+  "requests_per_round": 300,
+  "concurrency": 10,
+  "warmup_requests": 2,
+  "rounds": [
+    {
+      "round": 1,
+      "requests": 300,
+      "duration_seconds": 0.0944,
+      "rps": 3177.09,
+      "latency_ms": {
+        "min": 1.028,
+        "p50": 2.525,
+        "p95": 5.947,
+        "p99": 13.456,
+        "max": 26.759
+      },
+      "statuses": {
+        "200": 300
+      },
+      "cache_headers": {
+        "MISS": 300
+      },
+      "proxy_headers": {
+        "HIT": 300
+      },
+      "errors": 0
+    },
+    {
+      "round": 2,
+      "requests": 300,
+      "duration_seconds": 0.0553,
+      "rps": 5421.44,
+      "latency_ms": {
+        "min": 0.742,
+        "p50": 1.563,
+        "p95": 3.332,
+        "p99": 4.093,
+        "max": 4.4
+      },
+      "statuses": {
+        "200": 300
+      },
+      "cache_headers": {
+        "MISS": 300
+      },
+      "proxy_headers": {
+        "HIT": 300
+      },
+      "errors": 0
+    },
+    {
+      "round": 3,
+      "requests": 300,
+      "duration_seconds": 0.0513,
+      "rps": 5853.39,
+      "latency_ms": {
+        "min": 0.71,
+        "p50": 1.511,
+        "p95": 2.926,
+        "p99": 3.536,
+        "max": 4.068
+      },
+      "statuses": {
+        "200": 300
+      },
+      "cache_headers": {
+        "MISS": 300
+      },
+      "proxy_headers": {
+        "HIT": 300
+      },
+      "errors": 0
+    },
+    {
+      "round": 4,
+      "requests": 300,
+      "duration_seconds": 0.0585,
+      "rps": 5126.37,
+      "latency_ms": {
+        "min": 0.718,
+        "p50": 1.733,
+        "p95": 3.486,
+        "p99": 3.786,
+        "max": 3.973
+      },
+      "statuses": {
+        "200": 300
+      },
+      "cache_headers": {
+        "MISS": 300
+      },
+      "proxy_headers": {
+        "HIT": 300
+      },
+      "errors": 0
+    },
+    {
+      "round": 5,
+      "requests": 300,
+      "duration_seconds": 0.0716,
+      "rps": 4187.29,
+      "latency_ms": {
+        "min": 0.691,
+        "p50": 2.128,
+        "p95": 4.723,
+        "p99": 5.974,
+        "max": 6.234
+      },
+      "statuses": {
+        "200": 300
+      },
+      "cache_headers": {
+        "MISS": 300
+      },
+      "proxy_headers": {
+        "HIT": 300
+      },
+      "errors": 0
+    }
+  ],
+  "median": {
+    "rps": 5126.37,
+    "p50_ms": 1.733,
+    "p95_ms": 3.486,
+    "p99_ms": 4.093
+  }
+}

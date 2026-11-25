@@ -31,6 +31,10 @@
             <?= $this->__('Enable them in System > Configuration > Page Cache > Statistics.') ?>
         </a>
     </div>
+<?php elseif ($this->isStatsSampled()): ?>
+    <div class="d-alert d-alert-warning mb-4">
+        <?= $this->__('Statistics are sampled at %s. Counts are estimates, not exact totals. Purge, flush and warmup events are recorded completely.', $this->getStatsSampleRatePercent() . '%') ?>
+    </div>
 <?php endif; ?>
 <?php if (!$this->isWarmupEnabled()): ?>
     <div class="d-alert d-alert-info mb-4">
@@ -65,7 +69,7 @@
 </form>
 
 <div class="flex flex-wrap gap-x-6 gap-y-1 text-sm opacity-80 mb-4">
-    <span><?= $this->__('Statistics') ?>: <?= $this->isStatsEnabled() ? $this->__('Enabled') : $this->__('Disabled') ?></span>
+    <span><?= $this->__('Statistics') ?>: <?= $this->isStatsEnabled() ? $this->escapeHtml($this->__('Enabled (%s)', $this->getStatsModeLabel())) : $this->__('Disabled') ?></span>
     <span><?= $this->__('Raw retention') ?>: <?= $this->getRawRetentionDays() ?> <?= $this->__('days') ?></span>
     <span><?= $this->__('Rollup retention') ?>: <?= $this->getRollupRetentionDays() ?> <?= $this->__('days') ?></span>
     <span><?= $this->__('Last rollup') ?>: <?= $this->getLastRollupBucket() === null ? $this->__('n/a') : $this->escapeHtml($this->getLastRollupBucket()) ?></span>

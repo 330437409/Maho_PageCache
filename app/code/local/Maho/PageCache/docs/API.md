@@ -1,6 +1,6 @@
 # 接口文档：Maho 页面缓存
 
-> 状态：0.5.5 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付；0.5.1 cache integrity 修复、0.5.2 tag 索引重构、0.5.3 P1 加固与性能优化、0.5.4 stock pending 监控和 0.5.5 监控指标导出与后台报表已交付
+> 状态：0.7.0 发布准备中：RFC-007 Phase 1 CacheEnvelope 和 PERF-02 压缩配置、Phase 2 Context Index 迁移和旧表清理、Phase 3 Warmup 安全补强、Phase 4 Stats 采样、Dynamic 边界与 Proxy Models 验证、PERF-04 Cookie 规范化文档已实现；0.6.1 FR-21 和审计 P1 修复已实现；Phase 5 本地验证完成，本地三库通过；官方 CI 和 G9 仍开放。0.5.5 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付；0.5.1 cache integrity 修复、0.5.2 tag 索引重构、0.5.3 P1 加固与性能优化、0.5.4 stock pending 监控和 0.5.5 监控指标导出与后台报表已交付。
 > 关联 PRD：`docs/PRD.md`
 > 关联架构：`docs/ARCHITECTURE.md`
 
@@ -23,6 +23,9 @@
 | `page_cache/general/mode` | select | `revalidating` | `proxy`、`revalidating` 或 `local` |
 | `page_cache/general/ttl` | text | 3600 | 缓存 TTL，秒 |
 | `page_cache/general/html_max_size` | text | 2097152 | local HTML 条目上限，字节 |
+| `page_cache/local/compression_enabled` | yes/no | 1 | local HTML 压缩开关 |
+| `page_cache/local/compression_min_bytes` | text | 4096 | 小于该值的页面不压缩 |
+| `page_cache/local/compression_level` | text | 6 | gzip 级别 1 到 9 |
 | `page_cache/general/stock_pending_warn_age` | text | 3600 | stock pending 年龄告警阈值秒数，0 关闭 |
 | `page_cache/proxy/context_mode` | select | `cookie` | `cookie` 依赖代理遵守 `Vary: Cookie`；`default` 只缓存默认 store 或 URL 带 store code 的请求，`___store` cookie 切换 bypass |
 | `page_cache/dynamic/injection` | select | `ajax` | 动态块注入方式：`ajax` 或 `esi` |
@@ -40,6 +43,7 @@
 | `page_cache/warmup/queue_limit` | text | 10000 | 预热队列上限 |
 | `page_cache/warmup/auth_user` | text | 空 | basic auth 用户 |
 | `page_cache/warmup/auth_password` | obscure | 空 | basic auth 密码，加密存储 |
+| `page_cache/warmup/allowed_hosts` | textarea | 空 | store 别名 origin，每行一个，scheme/host/port 必须完全匹配 |
 | `page_cache/general/cacheable_routes` | textarea | 见下 | 每行一个 full action name |
 | `page_cache/general/allowed_params` | text | `p,limit,order,dir,mode` | 允许的 query 参数，逗号分隔 |
 | `page_cache/general/respect_no_cache` | yes/no | 1 | 请求带 `Cache-Control: no-cache` 时 bypass |
@@ -50,6 +54,8 @@
 | `page_cache/general/max_path_segments` | text | 8 | 最大路径段数 |
 | `page_cache/static/enabled` | yes/no | 0 | 静态文件导出开关 |
 | `page_cache/stats/enabled` | yes/no | 0 | 统计开关 |
+| `page_cache/stats/mode` | select | `full` | `off`、`full`、`sampled`；`enabled=0` 时永远关闭 |
+| `page_cache/stats/sample_rate` | text | 0.05 | 采样比例，0 到 1 |
 | `page_cache/stats/raw_retention_days` | text | 30 | 原始事件保留天数 |
 | `page_cache/stats/rollup_retention_days` | text | 365 | 小时聚合保留天数 |
 | `page_cache/stats/max_duration_ms` | text | 60000 | 单事件耗时上限 |
@@ -87,7 +93,14 @@ Cache-Control: public, s-maxage=<ttl>, max-age=0
 
 第一次响应为 `X-Maho-Cache: MISS`。代理命中时 Maho 不参与，头由代理返回。
 
-代理必须按 URL 和 `Cookie` 缓存，也就是遵守 `Vary: Accept-Encoding, Cookie`。`X-Maho-Cache-Context` 是调试和审计头，不是代理 key。代理必须不缓存带 session cookie 的 bypass 响应；最稳妥的配置是只按 `maho_session`、store/货币相关 cookie 和 URL 生成 key，或在 `Cookie` 含 `maho_session` 时直接 bypass。代理忽略 `Vary` 时，不同 context 可能共享对象。模块只能设置头，不能强制代理遵守。
+代理必须按 URL 和 `Cookie` 缓存，也就是遵守 `Vary: Accept-Encoding, Cookie`。`X-Maho-Cache-Context` 是调试和审计头，不是代理 key。
+
+`X-Cache-Tags` 最多 50 个 tag。超过预算时先保留页面自身、分类、CMS 等宽 tag，再保留商品 tag；被丢掉的组用 overflow tag 代替：
+
+- 商品 tag `catalog_product_<id>` 被丢：`page_cache_overflow_product`
+- 其他 tag 被丢：`page_cache_overflow`
+
+按 tag purge 的消费者必须同时处理这两个 overflow tag；按 URL purge 的消费者不受影响。代理必须不缓存带 session cookie 的 bypass 响应；最稳妥的配置是只按 `maho_session`、store/货币相关 cookie 和 URL 生成 key，或在 `Cookie` 含 `maho_session` 时直接 bypass。代理忽略 `Vary` 时，不同 context 可能共享对象。模块只能设置头，不能强制代理遵守。nginx 和 Varnish 的 Cookie 规范化示例见 `docs/deployment/README.md`。
 
 ### 3.3 `revalidating` 模式
 
@@ -181,6 +194,24 @@ local 服务器端占位符：
 - token 无效、定义缺失、block 异常或出现 `Set-Cookie` 时保留匿名 fallback。
 - static 文件写入前剥离标记，只保留匿名 fallback。
 
+代理模型（FR-15）：
+
+```php
+$proxy = Mage::getService('page_cache/proxy');
+
+$product = $proxy->getProduct($productId);      // ?Mage_Catalog_Model_Product
+$products = $proxy->getProducts($productIds);   // [id => product]
+$category = $proxy->getCategory($categoryId);
+$page = $proxy->getCmsPage($pageId);
+$block = $proxy->getCmsBlock($blockId);
+```
+
+- 同一请求内按 `type + store_id + id` 复用实例；重复调用不再查询。
+- 单个 getter 传 `null` 时返回当前页面上下文实体；没有上下文时返回 `null`。
+- 动态块用 `page_cache_proxies="product:1,product:2,category:3"` 声明预加载实体，渲染前统一批量加载。
+- 代理加载的实体 tag 合并进页面 tag；模型数据不写入页面缓存。
+- 引用类型只允许 `product`、`category`、`cms_page`、`cms_block`；非法值和超过 200 个的引用被忽略。
+
 block 标记 `page_cache_dynamic_cacheable=1` 且 `page_cache/dynamic/ttl>0` 时，模块按 block 集合缓存动态响应；命中时跳过 layout，form key/SID 仍从当前 session 生成。key 包含 block 列表、页面 URL、context、customer group、store 和页面版本。
 
 ### 3.6 ESI 动态块
@@ -252,17 +283,21 @@ var/page-cache/static/{store_code}/{public_path}.gz
 - 指标：hit rate、PHP 平均耗时、miss、bypass、trend、top missed URL、最近 flush/purge/warmup。
 - 只统计 PHP 侧；静态文件、代理和 CDN 命中不计入。
 - 原始事件保留 30 天，小时 rollup 保留 365 天，均可配置。
+- `page_cache/stats/mode=sampled` 时按请求采样，面板显示采样率并标明计数为估算；`purge`、`flush`、`warmup` 仍完整记录。
 - admin 前台请求不记录，避免 secret key 进入统计。
 
 ### 3.9 定时预热
 
 默认关闭。后台 `Warmup` 配置组只控制调度开关、队列和请求参数，不提供“立即预热”按钮；立即预热使用 `./maho page-cache:warm`。开启 `page_cache/warmup/enabled` 后：
 
+- 只请求 store base URL 或 `page_cache/warmup/allowed_hosts` 中显式列出的 origin；非信任 origin 不入队、不请求，也不发送 basic auth。
 - tag 失效把受影响 URL 写入 `page_cache_warmup_queue`，按 URL sha256 去重。
 - `page_cache_warmup` cron 每分钟消费，批次大小、并发、间隔、重试和队列上限见配置。
 - 404、410、3xx、bypass、401、403 和其他永久 4xx 跳过并移出；429、5xx 和网络错误重试，达到 `max_attempts` 后移出。
 - 全量失效清空队列，不自动全站预热。
 - 请求不发送 session cookie；配置 basic auth 后发送 `Authorization: Basic`。
+- 只接受 store base URL 的 scheme+host+port；入队、发请求和子 sitemap 请求前都会校验，非 store origin 不请求。
+- URL 索引按 context 保存 tag、store 和 public path；同一 URL 的 `?p=1` 和 `?p=2` 不会互相覆盖。
 - 最近一次汇总保留 7 天，`page-cache:status` 读取。
 
 ### 3.10 Stock pending 监控
@@ -347,6 +382,7 @@ PHP counters: unavailable (statistics disabled)
 4. 同时写 `var/page-cache/purge-<timestamp>.txt`，供外部消费者读取。
 5. 成功后删除队列条目，失败保留并记录日志。
 6. URL 为 `*` 表示全量 purge，消费者必须清空该模式的全部缓存对象。
+7. 按 tag purge 时，商品 tag 会附带 `page_cache_overflow_product`，非商品 tag 会附带 `page_cache_overflow`；消费者按 tag 清理时必须处理这两个 tag。
 
 purge entry 保留 24 小时，queue index 保留 25 小时。index 不会先于 entry 过期，避免待处理条目失去索引。
 

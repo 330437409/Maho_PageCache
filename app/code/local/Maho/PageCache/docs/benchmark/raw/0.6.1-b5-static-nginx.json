@@ -1,0 +1,115 @@
+{
+  "label": "b5-static-nginx",
+  "url": "http://localhost:8081/page-cache-test-product/",
+  "requests_per_round": 300,
+  "concurrency": 10,
+  "warmup_requests": 1,
+  "rounds": [
+    {
+      "round": 1,
+      "requests": 300,
+      "duration_seconds": 0.0833,
+      "rps": 3599.41,
+      "latency_ms": {
+        "min": 0.579,
+        "p50": 2.095,
+        "p95": 5.478,
+        "p99": 11.981,
+        "max": 15.458
+      },
+      "statuses": {
+        "200": 300
+      },
+      "cache_headers": {
+        "none": 300
+      },
+      "errors": 0
+    },
+    {
+      "round": 2,
+      "requests": 300,
+      "duration_seconds": 0.0557,
+      "rps": 5389.1,
+      "latency_ms": {
+        "min": 0.49,
+        "p50": 1.474,
+        "p95": 3.205,
+        "p99": 3.672,
+        "max": 3.978
+      },
+      "statuses": {
+        "200": 300
+      },
+      "cache_headers": {
+        "none": 300
+      },
+      "errors": 0
+    },
+    {
+      "round": 3,
+      "requests": 300,
+      "duration_seconds": 0.0521,
+      "rps": 5758,
+      "latency_ms": {
+        "min": 0.558,
+        "p50": 1.467,
+        "p95": 3.038,
+        "p99": 4.347,
+        "max": 4.404
+      },
+      "statuses": {
+        "200": 300
+      },
+      "cache_headers": {
+        "none": 300
+      },
+      "errors": 0
+    },
+    {
+      "round": 4,
+      "requests": 300,
+      "duration_seconds": 0.0508,
+      "rps": 5902.44,
+      "latency_ms": {
+        "min": 0.443,
+        "p50": 1.325,
+        "p95": 3.391,
+        "p99": 4.713,
+        "max": 5.824
+      },
+      "statuses": {
+        "200": 300
+      },
+      "cache_headers": {
+        "none": 300
+      },
+      "errors": 0
+    },
+    {
+      "round": 5,
+      "requests": 300,
+      "duration_seconds": 0.0464,
+      "rps": 6458.71,
+      "latency_ms": {
+        "min": 0.6,
+        "p50": 1.396,
+        "p95": 2.627,
+        "p99": 3.08,
+        "max": 4.208
+      },
+      "statuses": {
+        "200": 300
+      },
+      "cache_headers": {
+        "none": 300
+      },
+      "errors": 0
+    }
+  ],
+  "median": {
+    "rps": 5758,
+    "p50_ms": 1.467,
+    "p95_ms": 3.205,
+    "p99_ms": 4.347
+  }
+}

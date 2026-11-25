@@ -22,6 +22,9 @@ function warmupQueueClean(): void
 }
 
 beforeEach(function () {
+    Mage::app()->getStore()->setConfig('web/unsecure/base_url', 'https://example.com/');
+    Mage::app()->getStore()->setConfig('web/secure/base_url', 'https://example.com/');
+    Mage::getService('page_cache/urlPolicy')->reset();
     Mage::app()->getStore()->setConfig('page_cache/warmup/enabled', '1');
     Mage::app()->getStore()->setConfig('page_cache/warmup/queue_limit', '100');
     warmupQueueClean();
@@ -54,6 +57,20 @@ it('enqueues valid absolute urls once', function () {
         ->and(array_column($rows, 'url'))->toBe(['https://example.com/a', 'https://example.com/c'])
         ->and((int) $rows[0]['store_id'])->toBe(1)
         ->and($rows[0]['reason'])->toBe('catalog_product_1');
+});
+
+it('rejects urls outside the store origins', function () {
+    $queue = Mage::getModel('page_cache/warmQueue');
+
+    $inserted = $queue->enqueue([
+        'http://169.254.169.254/latest/meta-data/',
+        'https://evil.example/collect',
+        'https://example.com/allowed',
+    ], 1, 'test');
+
+    expect($inserted)->toBe(1)
+        ->and($queue->count())->toBe(1)
+        ->and(array_column($queue->peek(10), 'url'))->toBe(['https://example.com/allowed']);
 });
 
 it('does not enqueue when warmup is disabled', function () {

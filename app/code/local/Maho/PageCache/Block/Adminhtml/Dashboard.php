@@ -103,9 +103,34 @@ class Maho_PageCache_Block_Adminhtml_Dashboard extends Mage_Adminhtml_Block_Widg
         return Mage::helper('page_cache')->getWarmupEnabled();
     }
 
+    public function getStatsMode(): string
+    {
+        return Mage::helper('page_cache')->getStatsMode();
+    }
+
+    public function getStatsModeLabel(): string
+    {
+        return match ($this->getStatsMode()) {
+            Maho_PageCache_Model_Stat::MODE_FULL => (string) $this->__('Full'),
+            Maho_PageCache_Model_Stat::MODE_SAMPLED => (string) $this->__('Sampled %s', $this->getStatsSampleRatePercent() . '%'),
+            default => (string) $this->__('Off'),
+        };
+    }
+
+    public function isStatsSampled(): bool
+    {
+        return $this->getStatsMode() === Maho_PageCache_Model_Stat::MODE_SAMPLED;
+    }
+
+    public function getStatsSampleRatePercent(): string
+    {
+        $percent = Mage::helper('page_cache')->getStatsSampleRate() * 100;
+        return rtrim(rtrim(number_format($percent, 2, '.', ''), '0'), '.');
+    }
+
     public function isStatsEnabled(): bool
     {
-        return Mage::helper('page_cache')->getStatsEnabled();
+        return $this->getStatsMode() !== Maho_PageCache_Model_Stat::MODE_OFF;
     }
 
     public function getRawRetentionDays(): int

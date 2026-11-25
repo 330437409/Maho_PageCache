@@ -36,6 +36,7 @@ class Maho_PageCache_Model_Observer
             Mage::unregister('page_cache_tags');
             Mage::unregister('page_cache_server_blocks');
             Mage::unregister('page_cache_stock_pending');
+            Mage::getService('page_cache/proxy')->reset();
             $service = Mage::getService('page_cache/request');
             $input = $service->getInput($controller);
             $dynamic = Mage::getService('page_cache/dynamic');
@@ -165,30 +166,29 @@ class Maho_PageCache_Model_Observer
         try {
             $context = Mage::getModel('page_cache/context');
             $cache = Mage::getSingleton('page_cache/htmlCache');
-            $entry = $cache->load($context);
-            if ($entry !== null) {
-                $this->serveLocalEntry($controller, $context, $entry, $helper);
+            $result = $cache->loadEnvelope($context);
+            if ($result['entry'] !== null) {
+                $this->serveLocalEntry($controller, $context, $result['entry'], $helper);
                 return;
             }
 
-            $versions = $cache->getVersions($context);
-            $lockName = $cache->getLockName($context, $versions);
+            $lockName = $cache->getLockName($context);
             $lock = Mage::getSingleton('core/lock');
             if (!$lock->acquire($lockName) && !$lock->acquireWithin($lockName, $this->getLockWaitSeconds())) {
                 Mage::register('page_cache_local_bypass_reason', 'lock_timeout');
                 return;
             }
 
-            $entry = $cache->load($context, $versions);
-            if ($entry !== null) {
+            $result = $cache->loadEnvelope($context);
+            if ($result['entry'] !== null) {
                 $lock->release($lockName);
                 $lockName = null;
-                $this->serveLocalEntry($controller, $context, $entry, $helper);
+                $this->serveLocalEntry($controller, $context, $result['entry'], $helper);
                 return;
             }
 
             Mage::register('page_cache_local_lock_name', $lockName);
-            Mage::register('page_cache_local_versions', $versions);
+            Mage::register('page_cache_local_versions', $result['versions']);
             $lockName = null;
         } catch (\Throwable $e) {
             Mage::logException($e);
@@ -446,6 +446,7 @@ class Maho_PageCache_Model_Observer
 
             $context = Mage::getModel('page_cache/context');
             $tags = array_keys(Mage::registry('page_cache_tags') ?: []);
+            $tags = array_merge($tags, Mage::getService('page_cache/proxy')->getTags());
             $tags[] = 'PAGE_CACHE';
             $tags = array_values(array_unique($tags));
             $ttl = $helper->getTtl();
@@ -644,6 +645,7 @@ class Maho_PageCache_Model_Observer
             $cache->collectHeaders(Mage::app()->getResponse()),
             $versions,
             is_array($dynamicBlocks) ? $dynamicBlocks : [],
+            Mage::getService('page_cache/proxy')->capturePageContext(),
         );
         if ($entry === null) {
             $service->applyBypass('cache_write', $debug);

@@ -1,0 +1,115 @@
+{
+  "label": "b1-revalidating-304",
+  "url": "http://localhost:8000/page-cache-test-product/",
+  "requests_per_round": 300,
+  "concurrency": 10,
+  "warmup_requests": 1,
+  "rounds": [
+    {
+      "round": 1,
+      "requests": 300,
+      "duration_seconds": 1.2227,
+      "rps": 245.35,
+      "latency_ms": {
+        "min": 21.98,
+        "p50": 36.128,
+        "p95": 70.544,
+        "p99": 84.85,
+        "max": 101.345
+      },
+      "statuses": {
+        "304": 300
+      },
+      "cache_headers": {
+        "REVALIDATED": 300
+      },
+      "errors": 0
+    },
+    {
+      "round": 2,
+      "requests": 300,
+      "duration_seconds": 1.2005,
+      "rps": 249.89,
+      "latency_ms": {
+        "min": 22.836,
+        "p50": 34.208,
+        "p95": 68.366,
+        "p99": 78.305,
+        "max": 98.31
+      },
+      "statuses": {
+        "304": 300
+      },
+      "cache_headers": {
+        "REVALIDATED": 300
+      },
+      "errors": 0
+    },
+    {
+      "round": 3,
+      "requests": 300,
+      "duration_seconds": 1.2004,
+      "rps": 249.92,
+      "latency_ms": {
+        "min": 23.169,
+        "p50": 35.649,
+        "p95": 65.77,
+        "p99": 80.229,
+        "max": 88.415
+      },
+      "statuses": {
+        "304": 300
+      },
+      "cache_headers": {
+        "REVALIDATED": 300
+      },
+      "errors": 0
+    },
+    {
+      "round": 4,
+      "requests": 300,
+      "duration_seconds": 1.1944,
+      "rps": 251.18,
+      "latency_ms": {
+        "min": 22.456,
+        "p50": 34.697,
+        "p95": 64.71,
+        "p99": 78.668,
+        "max": 85.016
+      },
+      "statuses": {
+        "304": 300
+      },
+      "cache_headers": {
+        "REVALIDATED": 300
+      },
+      "errors": 0
+    },
+    {
+      "round": 5,
+      "requests": 300,
+      "duration_seconds": 1.1896,
+      "rps": 252.19,
+      "latency_ms": {
+        "min": 21.628,
+        "p50": 33.783,
+        "p95": 66.225,
+        "p99": 76.7,
+        "max": 87.724
+      },
+      "statuses": {
+        "304": 300
+      },
+      "cache_headers": {
+        "REVALIDATED": 300
+      },
+      "errors": 0
+    }
+  ],
+  "median": {
+    "rps": 249.92,
+    "p50_ms": 34.697,
+    "p95_ms": 66.225,
+    "p99_ms": 78.668
+  }
+}

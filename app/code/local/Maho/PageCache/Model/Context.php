@@ -15,6 +15,9 @@ class Maho_PageCache_Model_Context
     /** @var array<string, mixed> */
     private array $data;
 
+    private ?string $hashCache = null;
+    private ?string $urlHashCache = null;
+
     /**
      * @param array<string, mixed>|null $data
      */
@@ -35,7 +38,10 @@ class Maho_PageCache_Model_Context
 
     public function getHash(): string
     {
-        return hash('sha256', (string) json_encode($this->getContext(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+        return $this->hashCache ??= hash(
+            'sha256',
+            (string) json_encode($this->getContext(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+        );
     }
 
     public function getUrl(): string
@@ -55,7 +61,7 @@ class Maho_PageCache_Model_Context
 
     public function getUrlHash(): string
     {
-        return Mage::getModel('page_cache/key')->getUrlHash($this->getUrl());
+        return $this->urlHashCache ??= Mage::getModel('page_cache/key')->getUrlHash($this->getUrl());
     }
 
     public function getCanonicalUrl(): string
