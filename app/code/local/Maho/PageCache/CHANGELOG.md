@@ -2,6 +2,16 @@
 
 All notable changes to `Maho_PageCache` are recorded here.
 
+## 1.0.0 (2026-11-25)
+
+### Added
+
+- Completed the Simplified Chinese locale for every Page Cache admin string.
+
+### Changed
+
+- 1.0.0 is the first stable release. It includes every page cache feature through 0.10.0 and has no breaking changes from 0.10.0. The optional FR-26 developer tool is not part of this release.
+
 ## 0.10.0 (2026-11-25)
 
 ### Added
