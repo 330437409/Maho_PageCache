@@ -4,7 +4,7 @@ Maho 的 HTTP 页面缓存集成层。第一期支持 `proxy` 和 `revalidating`
 
 ## 状态
 
-0.8.0 已发布@v0.8.0（dist）：FR-22 purge DB outbox、per-target ack/重试、`page-cache:purge:status` 和 stale 告警，以及 FR-23 失效审计表、后台 Invalidations tab、导出和 retention 已交付。0.7.0 已发布@v0.7.0（dist）：RFC-007 Phase 1 CacheEnvelope 和 PERF-02 压缩配置、Phase 2 Context Index 迁移和旧表清理、Phase 3 Warmup 安全补强、Phase 4 Stats 采样、Dynamic 边界与 Proxy Models 验证、PERF-04 Cookie 规范化文档已实现；0.6.1 FR-21 和审计 P1 修复已实现；Phase 5 完成，dist 三库 CI 通过；G9 保留 Known issue。0.5.5 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付；0.5.1 cache integrity 修复、0.5.2 tag 索引重构、0.5.3 P1 加固与性能优化、0.5.4 stock pending 监控和 0.5.5 监控指标导出与后台报表已交付，累计包含第一期的 HTTP 集成层、proxy/revalidating 两种模式、session skip、tag 失效、purge 队列、配置和 CLI，第二期的 `local` 模式、Ajax/ESI 动态块和 `page-cache:warm`，第三期的静态文件导出、统计面板、定时预热、服务器端动态块占位符和请求级代理模型，以及 0.5.1 的 cache integrity 修复、0.5.2 的 tag 索引重构、0.5.3 的 P1 加固与性能优化、0.5.4 的 stock pending 监控和 0.5.5 的监控指标导出与 Page Cache 后台报表。
+0.8.0 已发布@v0.8.0（dist）：FR-22 purge DB outbox、per-target ack/重试、`page-cache:purge:status` 和 stale 告警；FR-23 失效审计表、后台 Invalidations tab、导出和 retention；Static Export 生产配置和 nginx/Caddy benchmark 已完成。0.7.0 已发布@v0.7.0（dist）：RFC-007 Phase 1 CacheEnvelope 和 PERF-02 压缩配置、Phase 2 Context Index 迁移和旧表清理、Phase 3 Warmup 安全补强、Phase 4 Stats 采样、Dynamic 边界与 Proxy Models 验证、PERF-04 Cookie 规范化文档已实现；0.6.1 FR-21 和审计 P1 修复已实现；Phase 5 完成，dist 三库 CI 通过；G9 保留 Known issue。0.5.5 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付；0.5.1 cache integrity 修复、0.5.2 tag 索引重构、0.5.3 P1 加固与性能优化、0.5.4 stock pending 监控和 0.5.5 监控指标导出与后台报表已交付，累计包含第一期的 HTTP 集成层、proxy/revalidating 两种模式、session skip、tag 失效、purge 队列、配置和 CLI，第二期的 `local` 模式、Ajax/ESI 动态块和 `page-cache:warm`，第三期的静态文件导出、统计面板、定时预热、服务器端动态块占位符和请求级代理模型，以及 0.5.1 的 cache integrity 修复、0.5.2 的 tag 索引重构、0.5.3 的 P1 加固与性能优化、0.5.4 的 stock pending 监控和 0.5.5 的监控指标导出与 Page Cache 后台报表。
 
 - 第一期：HTTP 集成层，`proxy` + `revalidating`。0.2.0 已交付。
 - 第二期：`local` 模式、整页 HTML 缓存、Ajax/ESI 动态块、缓存预热。0.2.0 已交付。
@@ -48,6 +48,9 @@ Maho 的 HTTP 页面缓存集成层。第一期支持 `proxy` 和 `revalidating`
 - `docs/specs/page-cache-07-compression.md`：0.7.0 压缩配置规格。
 - `docs/specs/page-cache-08-purge-outbox.md`：0.8.0 purge outbox 规格。
 - `docs/specs/page-cache-08-invalidation-audit.md`：0.8.0 失效审计规格。
+- `docs/specs/page-cache-08-static-export-production.md`：0.8.x Static Export 生产化规格。
+- `docs/deployment/static-export.md`：Static Export 的 nginx/Caddy 生产配置。
+- `docs/benchmark/0.8.0-static-export.md`：0.8.x Static Export 基准。
 - `docs/adr/0024-purge-outbox.md`：Purge DB outbox 决策。
 - `docs/deployment/README.md`：代理缓存 Cookie 规范化规则和验证结果。
 - `docs/deployment/nginx-cache-key.md`：nginx cache key 配置。
@@ -96,15 +99,17 @@ var/page-cache/static/{store_code}/{public_path}.gz
 
 `{public_path}` 对首页是 `index.html`，对 `/category/` 是 `category/index.html`，对 `/product.html` 是 `product.html`。
 
-只导出无 `maho_session` cookie、无 query 参数的页面。带允许参数的变体继续走 PHP/local。
+只导出无 session cookie、无 `store` cookie 且无 query 参数的页面。带允许参数的变体继续走 PHP/local。
 
 部署要求：
 
-1. nginx 或 Caddy 直接返回静态文件，示例见 `docs/specs/page-cache-static-export.md`。
-2. Web 服务器在 `Cookie` 含 `maho_session`、`___store` 或有 query 参数时回 PHP。
-3. 缓存目录必须 deny 直接访问。
-4. `page_cache_static_cleanup` cron 每 5 分钟清理超过 TTL 的文件。
-5. 第一版只支持单节点；多节点共享存储留到 FR-19。
+1. nginx 或 Caddy 直接返回静态文件，完整配置见 `docs/deployment/static-export.md`。
+2. Web 服务器在 `Cookie` 含 `maho_session`、`store` 或有 query 参数时回 PHP；`___store` 是 query，由参数规则拦截。
+3. 多 store 按 `store` cookie 的值映射到对应静态目录，未知 store 回 PHP。
+4. 缓存目录必须 deny 直接访问。
+5. `page_cache_static_cleanup` cron 每 5 分钟清理超过 TTL 的文件。
+6. Static Export benchmark 目标：P95 比 Local HIT 低至少 80%，RPS 至少 5 倍。
+7. 第一版只支持单节点；多节点共享存储留到 FR-19。
 
 ## 统计面板
 

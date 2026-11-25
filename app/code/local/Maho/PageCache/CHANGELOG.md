@@ -2,6 +2,13 @@
 
 All notable changes to `Maho_PageCache` are recorded here.
 
+## Unreleased
+
+### Added
+
+- Production nginx and Caddy profiles for Static Export, with session/admin/legacy/store cookie bypass, per-store static roots, query and method bypass, gzip, conditional cache headers, directory deny and rollback steps.
+- Static Export benchmarks for nginx and Caddy, and a relative target of P95 at least 80% below Local HIT and RPS at least 5x Local HIT.
+
 ## 0.8.0 (2026-11-25)
 
 ### Added

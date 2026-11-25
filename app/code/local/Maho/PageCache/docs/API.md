@@ -1,6 +1,6 @@
 # 接口文档：Maho 页面缓存
 
-> 状态：0.8.0 已发布@v0.8.0（dist）：FR-22 purge DB outbox、per-target ack/重试、`page-cache:purge:status` 和 stale 告警。0.7.0 已发布@v0.7.0（dist）：RFC-007 Phase 1 CacheEnvelope 和 PERF-02 压缩配置、Phase 2 Context Index 迁移和旧表清理、Phase 3 Warmup 安全补强、Phase 4 Stats 采样、Dynamic 边界与 Proxy Models 验证、PERF-04 Cookie 规范化文档已实现；0.6.1 FR-21 和审计 P1 修复已实现；Phase 5 完成，dist 三库 CI 通过；G9 保留 Known issue。0.5.5 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付；0.5.1 cache integrity 修复、0.5.2 tag 索引重构、0.5.3 P1 加固与性能优化、0.5.4 stock pending 监控和 0.5.5 监控指标导出与后台报表已交付。
+> 状态：0.8.0 已发布@v0.8.0（dist）：FR-22 purge DB outbox、per-target ack/重试、`page-cache:purge:status` 和 stale 告警；FR-23 失效审计表、后台 Invalidations tab、导出和 retention；Static Export 生产配置和 nginx/Caddy benchmark 已完成。0.7.0 已发布@v0.7.0（dist）：RFC-007 Phase 1 CacheEnvelope 和 PERF-02 压缩配置、Phase 2 Context Index 迁移和旧表清理、Phase 3 Warmup 安全补强、Phase 4 Stats 采样、Dynamic 边界与 Proxy Models 验证、PERF-04 Cookie 规范化文档已实现；0.6.1 FR-21 和审计 P1 修复已实现；Phase 5 完成，dist 三库 CI 通过；G9 保留 Known issue。0.5.5 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付；0.5.1 cache integrity 修复、0.5.2 tag 索引重构、0.5.3 P1 加固与性能优化、0.5.4 stock pending 监控和 0.5.5 监控指标导出与后台报表已交付。
 > 关联 PRD：`docs/PRD.md`
 > 关联架构：`docs/ARCHITECTURE.md`
 
@@ -243,14 +243,15 @@ var/page-cache/static/{store_code}/{public_path}.gz
 
 `{public_path}` 对首页是 `index.html`，对 `/category/` 是 `category/index.html`，对 `/product.html` 是 `product.html`。
 
-- 只导出无 `maho_session` cookie、无 query 参数的匿名默认页。
+- 只导出无 session cookie、无 `store` cookie 且无 query 参数的匿名默认页。
 - 带允许参数的变体继续走 PHP/local。
 - 路由改写后使用公共路径，例如 `/page-cache-test/` 写成 `page-cache-test/index.html`。
-- 静态文件由 nginx 或 Caddy 直接返回，PHP 不启动；Web 服务器示例见 `docs/specs/page-cache-static-export.md`。
+- 静态文件由 nginx 或 Caddy 直接返回，PHP 不启动；完整配置见 `docs/deployment/static-export.md`。
 - 缓存目录必须 deny 直接访问。
-- Web 服务器必须在 `Cookie` 含 `maho_session`、`___store` 或有 query 参数时回 PHP。
+- Web 服务器必须在 `Cookie` 含 `maho_session`、`store` 或有 query 参数时回 PHP；`___store` 是 query，由参数规则拦截。
+- 多 store 按 `store` cookie 的值映射到对应静态目录，未知 store 回 PHP。
 - tag 失效和全量失效会删除静态文件；`page_cache_static_cleanup` cron 按 `page_cache_static_file` 索引删除到期文件，索引为空时回退目录扫描。
-- 静态命中不经过 PHP，不计入 PHP 侧计数；Caddy 示例可加 `X-Page-Cache: HIT-static`，nginx 以没有 `X-Maho-Cache` 和 PHP 不启动为准。
+- 静态命中不经过 PHP，不计入 PHP 侧计数；nginx 和 Caddy 配置都用 `X-Page-Cache: HIT-static` 标记。
 - 第一版只支持单节点；多节点共享存储和广播见 FR-19。
 
 ## 4. Bypass 原因码

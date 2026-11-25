@@ -198,6 +198,8 @@ Page cache stock pending:
 - 需要完全回滚：关闭 `page_cache/general/enabled`，刷新缓存，保留 `page_cache_stock_pending` 表供排查。
 - 从 0.7.0 回滚到 0.6.x：0.7.0 已删除旧 `page_cache_url_tag` 表。回滚代码后运行 `./maho migrate`，声明式 schema 会重建空表；不要恢复旧表数据。0.6.x 在索引缺失或为空时会走全量失效，页面不会串用，但代理 purge 范围会变大。
 - 回滚前先做数据库备份，并确认 0.6.x 的 `page_cache_url`/`page_cache_url_tag` 查询在该站点没有被自定义代码直接依赖。
+- 2026-11-25 演练：0.8.0 → 0.7.0 → 0.6.1 在 SQLite 副本上通过，`page_cache_url_tag` 在 0.6.1 迁移时重建，站点 200；0.8.0 的 purge outbox 和审计表保留。恢复 0.8.0 后已重跑 `./maho migrate`。
+- 切换 `local.xml` 指向副本后，先 `./maho cache:flush` 再 `./maho migrate`，避免旧 config 缓存指向已删除的数据库。
 
 ## 9. 隐私
 

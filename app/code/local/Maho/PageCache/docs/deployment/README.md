@@ -13,6 +13,8 @@ Vary: Accept-Encoding, Cookie
 
 - [nginx-cache-key.md](nginx-cache-key.md)：nginx `proxy_cache` 的 Cookie 白名单和 session bypass。
 - [varnish-cache-key.vcl](varnish-cache-key.vcl)：Varnish 的 Cookie 清洗、session pass 和 hash 规则。
+- [static-export.md](static-export.md)：Static Export 的 nginx/Caddy 生产配置、验证和回滚。
+- [static/nginx.conf](static/nginx.conf)、[static/Caddyfile](static/Caddyfile)：可直接使用的静态导出配置。
 
 ## Cookie 分类
 

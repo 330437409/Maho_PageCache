@@ -1,0 +1,51 @@
+# SPDX-FileCopyrightText: 2026 Maho <https://mahocommerce.com>
+# SPDX-License-Identifier: OSL-3.0
+#
+# Caddy static export profile for Maho PageCache 0.8.x.
+# Tested with Caddy 2 and a single default store.
+# See docs/deployment/static-export.md before using it.
+
+{
+    auto_https off
+}
+
+:80 {
+    root * /var/www/maho
+
+    handle /var/page-cache/* {
+        respond 403
+    }
+
+    @static {
+        method GET HEAD
+        not header Cookie *maho_session*
+        not header Cookie *maho_admin_session*
+        not header Cookie *frontend*
+        not header Cookie *om_frontend*
+        not header Cookie *adminhtml*
+        # A store cookie always goes to PHP in this single-store profile.
+        # For multi-store, use one site block per store and a store-specific
+        # static path, or a map in a Caddy module that supports it.
+        not header Cookie *store=*
+        expression {query} == ""
+        file {
+            try_files /var/page-cache/static/default{path} /var/page-cache/static/default{path}/index.html
+        }
+    }
+
+    handle @static {
+        header X-Page-Cache HIT-static
+        header Cache-Control "public, max-age=0, must-revalidate"
+        header Vary "Accept-Encoding, Cookie"
+        rewrite * {http.matchers.file.relative}
+        file_server {
+            precompressed gzip
+        }
+    }
+
+    handle {
+        reverse_proxy 127.0.0.1:8000 {
+            header_up Host localhost:8000
+        }
+    }
+}

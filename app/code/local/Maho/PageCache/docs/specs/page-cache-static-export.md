@@ -1,6 +1,7 @@
 # 功能规格：Maho 页面缓存静态文件导出
 
 > 状态：已交付@v0.3.0
+> 0.8.x 生产配置见 `docs/deployment/static-export.md`。本文中 `___store` cookie 的表述已过时，Maho 使用 `store` cookie；`___store` 是 query 参数。
 > 关联 PRD：FR-17
 > 关联 ADR：ADR-0012
 > 分支：`feat/page-cache-static-export`（待创建）
@@ -204,6 +205,8 @@ http {
 - nginx 示例不设置 `X-Page-Cache`；验收以 PHP 不启动和没有 `X-Maho-Cache` 为准。
 
 #### Caddy 示例
+
+> 0.8.x 生产配置见 `docs/deployment/static/Caddyfile`，并移除了下方第三个 `index.html` 兜底，避免缺失路径返回首页。
 
 Caddy 用 `public/var/page-cache/static` 指向 `var/page-cache/static` 的 symlink，root 保持 `public`：
 
