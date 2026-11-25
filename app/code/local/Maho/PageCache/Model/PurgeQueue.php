@@ -382,6 +382,10 @@ class Maho_PageCache_Model_PurgeQueue
         return min(3600, $base * (2 ** $exponent));
     }
 
+    /**
+     * @param list<string> $urls
+     * @param list<string> $tags
+     */
     private function dedupeKey(string $target, string $mode, array $urls, array $tags): string
     {
         sort($urls, SORT_STRING);
@@ -390,6 +394,7 @@ class Maho_PageCache_Model_PurgeQueue
     }
 
     /**
+     * @param list<string> $values
      * @return list<string>
      */
     private function normalizeValues(array $values): array
@@ -410,6 +415,9 @@ class Maho_PageCache_Model_PurgeQueue
         return preg_match('/^[A-Za-z0-9_-]{1,32}$/', $target) === 1 ? $target : self::TARGET_PROXY;
     }
 
+    /**
+     * @param list<string> $values
+     */
     private function encode(array $values): string
     {
         return (string) json_encode(array_values($values), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
