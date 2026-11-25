@@ -7,98 +7,261 @@
  */
 
 /** @var Maho_PageCache_Block_Adminhtml_Dashboard $this */
+
 ?>
-<div class="content-header">
-    <?= $this->getHeaderHtml() ?>
-    <div class="content-buttons form-buttons">
-        <?php if ($this->isWarmupEnabled()): ?>
-            <form method="post" action="<?= $this->escapeHtml($this->getWarmUrl()) ?>" class="inline-block">
-                <input name="form_key" type="hidden" value="<?= $this->escapeHtml($this->getFormKey()) ?>">
-                <button type="submit"
-                        class="d-btn d-btn-primary"
-                        title="<?= $this->escapeHtml($this->__('Process one warmup queue batch now')) ?>">
-                    <?= $this->__('Warm Now') ?>
-                </button>
-            </form>
-        <?php endif; ?>
-        <?= $this->getButtonsHtml() ?>
-    </div>
-</div>
-<?php if (!$this->isStatsEnabled()): ?>
-    <div class="d-alert d-alert-warning mb-4">
-        <?= $this->__('Page cache statistics are disabled.') ?>
-        <a href="<?= $this->escapeHtml($this->getConfigUrl()) ?>" class="link">
-            <?= $this->__('Enable them in System > Configuration > Page Cache > Statistics.') ?>
-        </a>
-    </div>
-<?php elseif ($this->isStatsSampled()): ?>
-    <div class="d-alert d-alert-warning mb-4">
-        <?= $this->__('Statistics are sampled at %s. Counts are estimates, not exact totals. Purge, flush and warmup events are recorded completely.', $this->getStatsSampleRatePercent() . '%') ?>
-    </div>
-<?php endif; ?>
-<?php if (!$this->isWarmupEnabled()): ?>
-    <div class="d-alert d-alert-info mb-4">
-        <?= $this->__('Scheduled warmup is disabled. Enable it under System > Configuration > Page Cache > Warmup to use Warm Now.') ?>
-    </div>
-<?php endif; ?>
+<style>
+    .page-cache-dashboard .pc-setup-card {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--maho-space-3);
+        margin-bottom: var(--maho-space-4);
+        padding: var(--maho-space-4);
+        border: var(--border) solid color-mix(in oklab, var(--color-warning) 35%, var(--color-base-300));
+        border-inline-start-width: 4px;
+        border-inline-start-color: var(--color-warning);
+        border-radius: var(--radius-box);
+        background: color-mix(in oklab, var(--color-warning) 8%, var(--color-base-100));
+    }
 
-<form id="filter_form" method="get" action="<?= $this->escapeHtml($this->getStatsUrl()) ?>" class="filter">
-    <div class="fieldset">
-        <label class="form-inline" for="page_cache_days">
-            <span><?= $this->__('Range') ?></span>
-            <select id="page_cache_days" name="days" class="select">
-                <?php foreach ($this->getRangeOptions() as $value => $label): ?>
-                    <option value="<?= (int) $value ?>"<?= $this->getDays() === $value ? ' selected' : '' ?>>
-                        <?= $this->escapeHtml($label) ?>
-                    </option>
-                <?php endforeach; ?>
-            </select>
-        </label>
-        <label class="form-inline" for="page_cache_store_id">
-            <span><?= $this->__('Store') ?></span>
-            <select id="page_cache_store_id" name="store_id" class="select">
-                <?php foreach ($this->getStores() as $store): ?>
-                    <option value="<?= (int) $store['value'] ?>"<?= $this->getStoreId() === (int) $store['value'] ? ' selected' : '' ?>>
-                        <?= $this->escapeHtml($store['label']) ?>
-                    </option>
-                <?php endforeach; ?>
-            </select>
-        </label>
-        <button type="submit" class="scalable"><?= $this->__('Show Report') ?></button>
-    </div>
-</form>
+    .page-cache-dashboard .pc-setup-icon {
+        display: grid;
+        place-items: center;
+        flex: none;
+        width: 1.5rem;
+        height: 1.5rem;
+        border-radius: 9999px;
+        background: var(--color-warning);
+        color: var(--color-warning-content);
+        font-size: 0.75rem;
+        font-weight: 700;
+    }
 
-<div class="flex flex-wrap gap-x-6 gap-y-1 text-sm opacity-80 mb-4">
-    <span><?= $this->__('Statistics') ?>: <?= $this->isStatsEnabled() ? $this->escapeHtml($this->__('Enabled (%s)', $this->getStatsModeLabel())) : $this->__('Disabled') ?></span>
-    <span><?= $this->__('Raw retention') ?>: <?= $this->getRawRetentionDays() ?> <?= $this->__('days') ?></span>
-    <span><?= $this->__('Rollup retention') ?>: <?= $this->getRollupRetentionDays() ?> <?= $this->__('days') ?></span>
-    <span><?= $this->__('Last rollup') ?>: <?= $this->getLastRollupBucket() === null ? $this->__('n/a') : $this->escapeHtml($this->getLastRollupBucket()) ?></span>
-</div>
+    .page-cache-dashboard .pc-status-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: var(--maho-space-3);
+        margin-bottom: var(--maho-space-4);
+    }
 
+    .page-cache-dashboard .pc-tabs-bar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: var(--maho-space-2) var(--maho-space-4);
+        border-bottom: var(--border) solid var(--color-base-300);
+    }
+
+    .page-cache-dashboard .pc-tabs-bar .tabs-horiz.d-tabs {
+        flex: 1 1 auto;
+        width: auto;
+        border-bottom: 0;
+    }
+
+    .page-cache-dashboard .pc-report-filter {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--maho-space-2);
+        padding-bottom: var(--maho-space-2);
+    }
+
+    .page-cache-dashboard .pc-report-filter-field {
+        display: flex;
+        align-items: center;
+        gap: var(--maho-space-2);
+    }
+
+    .page-cache-dashboard .pc-report-filter-label {
+        white-space: nowrap;
+        color: color-mix(in oklab, var(--color-base-content) 60%, transparent);
+        font-size: var(--maho-text-xs);
+    }
+
+    .page-cache-dashboard .pc-report-filter .d-select {
+        width: auto;
+        min-width: 8.5rem;
+    }
+
+    @media (min-width: 48rem) {
+        .page-cache-dashboard .pc-status-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @media (min-width: 56rem) {
+        .page-cache-dashboard .pc-status-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+    }
+</style>
 <?php
+$statsEnabled = $this->isStatsEnabled();
+$warmupEnabled = $this->isWarmupEnabled();
+$summary = $this->getSummaryStats();
 $warmStats = $this->getWarmupQueueStats();
 $lastWarm = $this->getLastWarmRun();
+$trafficEvents = (int) ($summary['hit'] ?? 0) + (int) ($summary['miss'] ?? 0) + (int) ($summary['bypass'] ?? 0);
+$hitRate = $trafficEvents > 0 ? number_format((float) ($summary['hit_rate'] ?? 0), 1) . '%' : $this->__('n/a');
+$phpDuration = $summary['avg_duration_ms'] === null
+    ? $this->__('n/a')
+    : number_format((float) $summary['avg_duration_ms'], 1) . ' ms';
+$lastRollup = $this->getLastRollupBucket();
 ?>
-<div class="flex flex-wrap gap-x-6 gap-y-1 text-sm opacity-80 mb-4">
-    <span><?= $this->__('Warmup queue') ?>: <?= (int) $warmStats['pending'] ?> <?= $this->__('pending') ?>, <?= (int) $warmStats['due'] ?> <?= $this->__('due') ?></span>
-    <span><?= $this->__('Oldest pending') ?>: <?= $warmStats['oldest_seconds'] === null ? $this->__('n/a') : (int) $warmStats['oldest_seconds'] . 's' ?></span>
-    <span><?= $this->__('Warmup lock') ?>: <?= $this->isWarmupLockHeld() ? $this->__('Held') : $this->__('Free') ?></span>
-    <?php if ($lastWarm !== null): ?>
-        <span><?= $this->__(
-            'Last warmup: processed=%d warmed=%d skipped=%d failed=%d dropped=%d remaining=%d',
-            $lastWarm['processed'],
-            $lastWarm['warmed'],
-            $lastWarm['skipped'],
-            $lastWarm['failed'],
-            $lastWarm['dropped'],
-            $lastWarm['remaining'],
-        ) ?></span>
+<div class="page-cache-dashboard">
+    <div class="content-header">
+        <?= $this->getHeaderHtml() ?>
+        <div class="content-buttons form-buttons">
+            <?php if ($warmupEnabled): ?>
+                <form method="post" action="<?= $this->escapeHtml($this->getWarmUrl()) ?>" class="inline-block">
+                    <input name="form_key" type="hidden" value="<?= $this->escapeHtml($this->getFormKey()) ?>">
+                    <button type="submit"
+                            class="d-btn d-btn-primary d-btn-sm"
+                            title="<?= $this->escapeHtml($this->__('Process one warmup queue batch now')) ?>">
+                        <?= $this->__('Warm Now') ?>
+                    </button>
+                </form>
+            <?php endif; ?>
+            <?= $this->getButtonsHtml() ?>
+        </div>
+    </div>
+
+    <p class="text-sm text-base-content/60 mb-4">
+        <?= $this->__('PHP-side cache statistics, queues and invalidation logs.') ?>
+    </p>
+
+    <?php if (!$statsEnabled || !$warmupEnabled): ?>
+        <div class="pc-setup-card" role="status">
+            <span class="pc-setup-icon" aria-hidden="true">!</span>
+            <div class="min-w-0 flex-1">
+                <p class="font-semibold"><?= $this->__('Finish page cache setup') ?></p>
+                <p class="text-sm text-base-content/70 mt-1">
+                    <?= $this->__('Some page cache features are off. Enable them to collect statistics and warm the cache.') ?>
+                </p>
+                <div class="mt-3 flex flex-wrap gap-2">
+                    <?php if (!$statsEnabled && !$warmupEnabled): ?>
+                        <a class="d-btn d-btn-sm" href="<?= $this->escapeHtml($this->getConfigUrl()) ?>">
+                            <?= $this->__('Open page cache settings') ?>
+                        </a>
+                    <?php else: ?>
+                        <?php if (!$statsEnabled): ?>
+                            <a class="d-btn d-btn-sm" href="<?= $this->escapeHtml($this->getConfigUrl()) ?>">
+                                <?= $this->__('Open statistics settings') ?>
+                            </a>
+                        <?php endif; ?>
+                        <?php if (!$warmupEnabled): ?>
+                            <a class="d-btn d-btn-sm" href="<?= $this->escapeHtml($this->getConfigUrl()) ?>">
+                                <?= $this->__('Open warmup settings') ?>
+                            </a>
+                        <?php endif; ?>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
     <?php endif; ?>
+    <?php if ($statsEnabled && $this->isStatsSampled()): ?>
+        <div class="d-alert d-alert-info d-alert-soft mb-4">
+            <?= $this->__('Statistics are sampled at %s. Counts are estimates, not exact totals. Purge, flush and warmup events are recorded completely.', $this->getStatsSampleRatePercent() . '%') ?>
+        </div>
+    <?php endif; ?>
+
+    <div class="pc-status-grid">
+        <div class="d-card d-card-border bg-base-100">
+            <div class="d-card-body p-4">
+                <div class="flex items-start justify-between gap-3">
+                    <div class="text-xs font-medium uppercase tracking-[0.05em] text-base-content/60">
+                        <?= $this->__('Hit rate') ?>
+                    </div>
+                    <?php if (!$statsEnabled): ?>
+                        <span class="d-badge d-badge-sm d-badge-ghost"><?= $this->__('Historical data') ?></span>
+                    <?php endif; ?>
+                </div>
+                <div class="mt-2 text-2xl font-semibold tabular-nums"><?= $hitRate ?></div>
+                <div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-base-content/60 tabular-nums">
+                    <span><?= $this->__('Hit') ?> <?= (int) ($summary['hit'] ?? 0) ?></span>
+                    <span><?= $this->__('Miss') ?> <?= (int) ($summary['miss'] ?? 0) ?></span>
+                    <span><?= $this->__('Bypass') ?> <?= (int) ($summary['bypass'] ?? 0) ?></span>
+                </div>
+                <div class="mt-1 text-xs text-base-content/60 tabular-nums">
+                    <?= $this->__('PHP duration') ?>: <?= $phpDuration ?>
+                </div>
+                <?php if ($trafficEvents > 0): ?>
+                    <div class="mt-3 h-2 overflow-hidden rounded-full bg-base-200" aria-hidden="true">
+                        <div class="h-full rounded-full"
+                             style="width: <?= min(100, max(0, (float) ($summary['hit_rate'] ?? 0))) ?>%; background: var(--color-success)"></div>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+        <div class="d-card d-card-border bg-base-100">
+            <div class="d-card-body p-4">
+                <div class="flex items-start justify-between gap-3">
+                    <div class="text-xs font-medium uppercase tracking-[0.05em] text-base-content/60">
+                        <?= $this->__('Statistics') ?>
+                    </div>
+                    <span class="d-badge d-badge-sm <?= $statsEnabled ? 'd-badge-success' : 'd-badge-ghost' ?>">
+                        <?= $statsEnabled ? $this->__('Enabled') : $this->__('Disabled') ?>
+                    </span>
+                </div>
+                <div class="mt-2 text-lg font-semibold"><?= $this->escapeHtml($this->getStatsModeLabel()) ?></div>
+                <div class="mt-1 text-xs text-base-content/60">
+                    <?= $this->__('Raw retention') ?>: <?= (int) $this->getRawRetentionDays() ?> <?= $this->__('days') ?>
+                    <span aria-hidden="true"> · </span>
+                    <?= $this->__('Rollup retention') ?>: <?= (int) $this->getRollupRetentionDays() ?> <?= $this->__('days') ?>
+                </div>
+                <div class="mt-1 text-xs text-base-content/60">
+                    <?= $this->__('Last rollup') ?>:
+                    <?= $lastRollup === null ? $this->__('n/a') : $this->escapeHtml($lastRollup) ?>
+                </div>
+            </div>
+        </div>
+        <div class="d-card d-card-border bg-base-100">
+            <div class="d-card-body p-4">
+                <div class="flex items-start justify-between gap-3">
+                    <div class="text-xs font-medium uppercase tracking-[0.05em] text-base-content/60">
+                        <?= $this->__('Warmup queue') ?>
+                    </div>
+                    <span class="d-badge d-badge-sm <?= $warmupEnabled ? 'd-badge-success' : 'd-badge-ghost' ?>">
+                        <?= $warmupEnabled ? $this->__('Enabled') : $this->__('Disabled') ?>
+                    </span>
+                </div>
+                <div class="mt-2 flex items-baseline gap-2 tabular-nums">
+                    <span class="text-2xl font-semibold"><?= (int) $warmStats['pending'] ?></span>
+                    <span class="text-xs text-base-content/60"><?= $this->__('pending') ?></span>
+                    <span class="text-xs text-base-content/60">· <?= (int) $warmStats['due'] ?> <?= $this->__('due') ?></span>
+                </div>
+                <div class="mt-1 text-xs text-base-content/60">
+                    <?= $this->__('Oldest pending') ?>:
+                    <?= $warmStats['oldest_seconds'] === null ? $this->__('n/a') : (int) $warmStats['oldest_seconds'] . 's' ?>
+                    <span aria-hidden="true"> · </span>
+                    <?= $this->__('Warmup lock') ?>:
+                    <?= $this->isWarmupLockHeld() ? $this->__('Held') : $this->__('Free') ?>
+                </div>
+                <div class="mt-1 text-xs text-base-content/60">
+                    <?php if ($lastWarm !== null): ?>
+                        <?= $this->__(
+                            'Last warmup: processed=%d warmed=%d skipped=%d failed=%d dropped=%d remaining=%d',
+                            $lastWarm['processed'],
+                            $lastWarm['warmed'],
+                            $lastWarm['skipped'],
+                            $lastWarm['failed'],
+                            $lastWarm['dropped'],
+                            $lastWarm['remaining'],
+                        ) ?>
+                    <?php else: ?>
+                        <?= $this->__('No warmup run yet') ?>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-4">
+        <?= $this->getTabsHtml() ?>
+        <div id="page_cache_tab_content"></div>
+    </div>
+
+    <p class="text-xs text-base-content/60 mt-4">
+        <?= $this->__('Only PHP-side events are counted. Static file, reverse proxy and CDN hits do not run PHP and are not included.') ?>
+    </p>
 </div>
-
-<?= $this->getTabsHtml() ?>
-<div id="page_cache_tab_content"></div>
-
-<p class="text-xs opacity-70 mt-4">
-    <?= $this->__('Only PHP-side events are counted. Static file, reverse proxy and CDN hits do not run PHP and are not included.') ?>
-</p>

@@ -88,3 +88,32 @@ it('stores and reads the last modified timestamp', function () {
     expect($version->getLastModified('abc'))->toBe(1234567890)
         ->and($version->getLastModified('missing'))->toBe(0);
 });
+
+it('stores the etag entry with the page ttl plus one hour', function () {
+    $spy = new class extends Mage_Core_Model_Cache {
+        public ?int $ttl = null;
+
+        public function __construct() {}
+
+        #[\Override]
+        public function save(mixed $data, string $id, array $tags = [], ?int $lifeTime = null): bool
+        {
+            $this->ttl = $lifeTime;
+
+            return true;
+        }
+    };
+    $app = Mage::app();
+    $property = new ReflectionProperty($app, '_cache');
+    $property->setAccessible(true);
+    $original = $property->getValue($app);
+    $property->setValue($app, $spy);
+
+    try {
+        (new Maho_PageCache_Model_Version())->storeEtag('ttl-hash', 'W/"x"', 100, ['catalog_product_1'], 3600);
+    } finally {
+        $property->setValue($app, $original);
+    }
+
+    expect($spy->ttl)->toBe(7200);
+});

@@ -22,18 +22,6 @@ class Maho_PageCache_Adminhtml_PageCacheController extends Mage_Adminhtml_Contro
         $this->renderLayout();
     }
 
-    #[\Maho\Config\Route('/admin/page_cache/exportSummaryCsv')]
-    public function exportSummaryCsvAction(): void
-    {
-        $this->exportGrid('summary', 'csv');
-    }
-
-    #[\Maho\Config\Route('/admin/page_cache/exportSummaryExcel')]
-    public function exportSummaryExcelAction(): void
-    {
-        $this->exportGrid('summary', 'excel');
-    }
-
     #[\Maho\Config\Route('/admin/page_cache/exportTrendCsv')]
     public function exportTrendCsvAction(): void
     {
@@ -96,7 +84,6 @@ class Maho_PageCache_Adminhtml_PageCacheController extends Mage_Adminhtml_Contro
     private function exportGrid(string $key, string $format): void
     {
         $aliases = [
-            'summary' => 'page_cache/adminhtml_dashboard_tab_summary',
             'trend' => 'page_cache/adminhtml_dashboard_tab_trend',
             'top_missed' => 'page_cache/adminhtml_dashboard_tab_topMissed',
             'recent' => 'page_cache/adminhtml_dashboard_tab_recent',
@@ -152,7 +139,7 @@ class Maho_PageCache_Adminhtml_PageCacheController extends Mage_Adminhtml_Contro
     protected function _initAction(): static
     {
         $this->loadLayout()
-            ->_setActiveMenu('page_cache')
+            ->_setActiveMenu('system/page_cache')
             ->_addBreadcrumb(
                 Mage::helper('page_cache')->__('Page Cache'),
                 Mage::helper('page_cache')->__('Page Cache'),

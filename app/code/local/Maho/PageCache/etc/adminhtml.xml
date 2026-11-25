@@ -1,13 +1,17 @@
 <?xml version="1.0"?>
 <config>
     <menu>
-        <page_cache translate="title" module="page_cache">
-            <title>Page Cache</title>
-            <sort_order>85</sort_order>
-            <action>adminhtml/page_cache/stats</action>
-            <!-- Keep the old ACL path so existing admin roles keep access after the menu move. -->
-            <resource>report/page_cache</resource>
-        </page_cache>
+        <system>
+            <children>
+                <page_cache translate="title" module="page_cache">
+                    <title>Page Cache</title>
+                    <sort_order>91</sort_order>
+                    <action>adminhtml/page_cache/stats</action>
+                    <!-- Keep the old ACL path so existing admin roles keep access after the menu move. -->
+                    <resource>report/page_cache</resource>
+                </page_cache>
+            </children>
+        </system>
     </menu>
     <acl>
         <resources>

@@ -1,6 +1,6 @@
 # 架构文档：Maho 页面缓存
 
-> 状态：0.9.1 已发布@v0.9.1（dist）：监控指标补强、全量预热 runbook，以及统计 rollup、活跃 URL、purge 指标、legacy session cookie、catalog rule、Warm Now 异步和 gzip/动态块加固。 0.9.0 已发布@v0.9.0（dist）：FR-24 预热滑动窗口、活跃商品/分类 URL 源、后台 warmup 进度和锁状态。0.8.0 已发布@v0.8.0（dist）：FR-22 purge DB outbox、per-target ack/重试、`page-cache:purge:status` 和 stale 告警；FR-23 失效审计表、后台 Invalidations tab、导出和 retention；Static Export 生产配置和 nginx/Caddy benchmark 已完成。0.7.0 已发布@v0.7.0（dist）：RFC-007 Phase 1 CacheEnvelope 和 PERF-02 压缩配置、Phase 2 Context Index 迁移和旧表清理、Phase 3 Warmup 安全补强、Phase 4 Stats 采样、Dynamic 边界与 Proxy Models 验证、PERF-04 Cookie 规范化文档已实现；0.6.1 FR-21 和审计 P1 修复已实现；Phase 5 完成，dist 三库 CI 通过；G9 原 Local HIT 目标由 Static Export 替代并达成。0.5.5 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付；0.5.1 cache integrity 修复、0.5.2 tag 索引重构、0.5.3 P1 加固与性能优化、0.5.4 stock pending 监控和 0.5.5 监控指标导出与后台报表已交付。
+> 状态：0.9.2 已发布@v0.9.2（dist）：页面缓存菜单移到 System，后台改为顶部状态卡、tab 栏右侧范围和商店筛选、Invalidation Log，并删除重复的摘要 grid 与导出。 0.9.1 已发布@v0.9.1（dist）：监控指标补强、全量预热 runbook，以及统计 rollup、活跃 URL、purge 指标、legacy session cookie、catalog rule、Warm Now 异步和 gzip/动态块加固。 0.9.0 已发布@v0.9.0（dist）：FR-24 预热滑动窗口、活跃商品/分类 URL 源、后台 warmup 进度和锁状态。0.8.0 已发布@v0.8.0（dist）：FR-22 purge DB outbox、per-target ack/重试、`page-cache:purge:status` 和 stale 告警；FR-23 失效审计表、后台 Invalidations tab、导出和 retention；Static Export 生产配置和 nginx/Caddy benchmark 已完成。0.7.0 已发布@v0.7.0（dist）：RFC-007 Phase 1 CacheEnvelope 和 PERF-02 压缩配置、Phase 2 Context Index 迁移和旧表清理、Phase 3 Warmup 安全补强、Phase 4 Stats 采样、Dynamic 边界与 Proxy Models 验证、PERF-04 Cookie 规范化文档已实现；0.6.1 FR-21 和审计 P1 修复已实现；Phase 5 完成，dist 三库 CI 通过；G9 原 Local HIT 目标由 Static Export 替代并达成。0.5.5 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付；0.5.1 cache integrity 修复、0.5.2 tag 索引重构、0.5.3 P1 加固与性能优化、0.5.4 stock pending 监控和 0.5.5 监控指标导出与后台面板已交付。
 > 模块：`Maho_PageCache`
 > 关联 PRD：`docs/PRD.md`
 > 关联 spec：`docs/specs/page-cache.md`
@@ -47,8 +47,8 @@ app/code/local/Maho/PageCache/
 │   │   ├── Revalidating.php        # revalidating 模式
 │   │   └── Local.php               # local 模式命中、304 和响应头
 │   └── System/Config/              # 模式和注入方式选项
-├── Block/Adminhtml/Dashboard.php   # 报表容器、过滤器和按钮
-├── Block/Adminhtml/Dashboard/      # tab 和四张报表 grid
+├── Block/Adminhtml/Dashboard.php   # 统计与日志面板容器、过滤器和按钮
+├── Block/Adminhtml/Dashboard/      # 后台状态卡、tab 和 grid
 ├── controllers/Adminhtml/PageCacheController.php  # 统计面板控制器
 ├── Service/
 │   ├── Request.php                 # bypass 判定和可缓存路由
@@ -103,7 +103,7 @@ tests/Backend/Unit/PageCache/*
 9. 不是 AJAX 请求。
 10. context 可以安全确定（store、货币、客户组、税均为默认或可独立缓存）。
 
-这里不读取 `customer/session`、`checkout/session` 或 `core/session`，因为读取本身会启动 session。登录、购物车、消息等状态用 session cookie 是否存在来判断。这是保守策略：有 session cookie 就不缓存。ADR-0019 锁定默认行为；只有 FR-20 的 opt-in local 模式才允许重新评估。
+这里不读取 `customer/session`、`checkout/session` 或 `core/session`，因为读取本身会启动 session。登录、购物车、消息等状态用 session cookie 是否存在来判断。这是保守策略：有 session cookie 就不缓存。ADR-0019 锁定默认行为；FR-20 已在 ADR-0025 回滚为暂停，只有 Maho 核心提供只读 session API 后才重新评估。
 
 ### 3.2 revalidating 304
 
@@ -272,9 +272,9 @@ local 服务器端占位符：
 - 面板显示当前模式和采样率；sampled 时标明计数为估算，不是精确总量。
 - admin 前台请求不记录，避免 admin secret key 进入统计；flush/purge/warmup 系统事件不带 admin 路径。
 - `page_cache_stats_rollup` 每小时聚合，只处理比已聚合最新 bucket 更新的数据；原始事件保留到 `raw_retention_days`，由 `page_cache_stats_cleanup` 每天清理。
-- 一级菜单 `Page Cache` 使用五个报表 tab：Overview、Trend、Top Missed URLs、Recent Events、Invalidations；每个 tab 是标准 `Mage_Adminhtml_Block_Widget_Grid`，读取原始表、rollup 表或审计表。`Warm Now` 投递一个预热队列批次任务，不在 admin 请求内执行网络请求。
+- `System > Page Cache` 是统计与日志面板：顶部状态卡显示 hit rate、命中/未命中/绕过、PHP 平均耗时、统计保留和预热队列；下面使用 Trend、Top Missed URLs、Recent Events、Invalidation Log 四个后台 tab。每个 tab 是标准 `Mage_Adminhtml_Block_Widget_Grid`，读取原始表、rollup 表或审计表。`Warm Now` 投递一个预热队列批次任务，不在 admin 请求内执行网络请求。
 - 静态、代理和 CDN 命中不经过 PHP，不计入。
-- `Invalidations` tab 记录 tag 和全量失效的来源、类型、reason、tag 样本、影响 URL 数和 purge/warm 入队；审计开关独立于请求统计，默认关闭。
+- `Invalidation Log` tab 记录 tag 和全量失效的来源、类型、reason、tag 样本、影响 URL 数和 purge/warm 入队；审计开关独立于请求统计，默认关闭。
 
 ### 3.10 失效
 
@@ -487,7 +487,7 @@ CLI：
 
 ## 9. 安全
 
-- 默认只缓存匿名 GET；任何 session cookie、登录、购物车、checkout、admin、preview、维护模式都 bypass。FR-20 是默认关闭的后续产品方向，见 ADR-0019。
+- 默认只缓存匿名 GET；任何 session cookie、登录、购物车、checkout、admin、preview、维护模式都 bypass。FR-20 已暂停，不实现，见 ADR-0025。
 - 不缓存包含 `Set-Cookie` 的响应。
 - 不缓存非 200 响应。
 - local HTML 只保存匿名默认 context；session cookie 请求 bypass。

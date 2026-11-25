@@ -16,7 +16,7 @@
 - 记录时间、area、cron job、类型、reason、tag 总数、样本 tag、影响 URL 数、purge/warm 入队、store、mode。
 - 审计开关独立于请求统计。
 - 样本 tag 数量可配置，总数始终保存。
-- 后台新增 `Invalidations` tab，支持分页、列筛选、CSV/Excel 导出和批量删除。
+- 后台新增 `Invalidation Log` tab，支持分页、列筛选、CSV/Excel 导出和批量删除。
 - 按 retention 每天清理。
 - 写入失败只记录日志，不影响页面或失效流程。
 - 不记录客户、cookie、完整 query 或 PII。
@@ -73,7 +73,7 @@ page_cache_invalidation_log
 
 ## 6. 后台
 
-`Page Cache` 一级菜单新增 `Invalidations` tab：
+`System > Page Cache` 新增 `Invalidation Log` tab：
 
 - 列：Time、Area、Cron Job、Type、Reason、Tags、Tag Sample、URLs、Purge、Warm、Store、Mode。
 - 时间范围复用 24 小时、7 天、30 天筛选。
@@ -104,7 +104,7 @@ page_cache_invalidation_log
 
 - SQLite、MySQL 8.0、PostgreSQL 18 各 `289 passed / 823 assertions`。
 - 开启审计后保存商品，生成 `type=product` 记录，tag 总数 3，reason 为前三个 tag；关闭审计时零写入。
-- 后台 `Invalidations` grid 在 adminhtml design 下渲染成功，包含 `Tag Sample` 列和样本 tag。
+- 后台 `Invalidation Log` grid 在 adminhtml design 下渲染成功，包含 `Tag Sample` 列和样本 tag。
 - 审计记录可按 id 批量删除，retention cleanup 删除超过窗口的行。
 
 ## 10. 风险

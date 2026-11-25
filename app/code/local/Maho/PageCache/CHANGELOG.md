@@ -2,6 +2,14 @@
 
 All notable changes to `Maho_PageCache` are recorded here.
 
+## 0.9.2 (2026-11-25)
+
+### Changed
+
+- The Page Cache admin page now uses a compact setup callout, status cards and a cleaner overview. The overview moved out of the tabs, the range and store filters sit at the right of the report tab bar, and the tab set is Trend, Top Missed URLs, Recent Events and Invalidation Log. The summary grid and its export are gone because the status cards already carry the few numbers it showed. The page remains under `System > Page Cache`.
+- The Page Cache admin page moved from the top-level menu to `System > Page Cache`, between Cache Management and Index Management. The ACL stays `report/page_cache` so existing roles keep access.
+- FR-20 session cookie caching stays paused. There is no official read-only session API, and a custom session fork is not worth the security and maintenance risk. Strict session-cookie bypass remains; see ADR-0025.
+
 ## 0.9.1 (2026-11-25)
 
 ### Added

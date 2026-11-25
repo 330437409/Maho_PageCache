@@ -23,7 +23,7 @@
 - 保留 `page_cache/stats/enabled` 兼容。
 - 请求级采样：同一请求的所有请求事件使用同一个决策。
 - Purge、Flush、Warmup 系统事件始终完整记录。
-- 后台报表显示当前模式和采样率；sampled 时提示数据为估算。
+- 后台面板显示当前模式和采样率；sampled 时提示数据为估算。
 - 不新增表、不改 schema、不改 rollup 结构。
 
 ### 2.2 范围外
@@ -111,7 +111,7 @@ public function isStatsSampled(): bool;
   - 数据为估算，不能当作精确总量。
   - Purge、Flush、Warmup 仍完整记录。
 - `enabled=0` 时保留现有“statistics disabled”提示。
-- 不改变报表 grid 和导出。
+- 不改变后台 grid 和导出。
 
 ## 6. 任务拆分
 
@@ -148,7 +148,7 @@ public function isStatsSampled(): bool;
 - off 显示统计关闭。
 - full 显示 `Enabled (Full)`。
 - sampled 显示 `Enabled (Sampled 5%)` 和估算提示。
-- 现有报表、筛选、导出不回归。
+- 现有面板、筛选、导出不回归。
 
 ### AC-04 回归与隐私
 
@@ -162,7 +162,7 @@ public function isStatsSampled(): bool;
 ## 8. 风险
 
 - 采样数据会让面板的 hit rate 和总量变成估算；必须明确标注，不能用于精确计费或 SLA。
-- 采样率太低会让小流量站点报表失去意义；默认 0.05 只建议高流量生产使用。
+- 采样率太低会让小流量站点统计失去意义；默认 0.05 只建议高流量生产使用。
 - 请求级采样不会让同一请求的不同事件分裂，但不同请求的样本量仍随机波动。
 - `enabled=1` 旧安装默认 full，会保留原写入量；需要管理员主动切到 sampled。
 - 系统事件高频时仍可能产生写入；本 RFC 不做系统事件采样。

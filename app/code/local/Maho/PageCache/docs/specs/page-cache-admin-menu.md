@@ -1,13 +1,13 @@
-# 功能规格：Page Cache 一级菜单和 Warm Now
+# 功能规格：Page Cache 菜单和 Warm Now
 
-> 状态：已交付@v0.5.5；0.9.x 起 Warm Now 改为投递队列任务。
+> 状态：已交付@v0.5.5；0.9.x 起菜单移到 System > Page Cache，Warm Now 改为投递队列任务；0.9.2 完成设置提示、顶部状态卡、tab 栏右侧范围和商店筛选、Invalidation Log 文案，并删除重复的摘要 grid 与导出。
 > 关联 PRD：FR-13、FR-16、FR-18
 > 分支：`feat/page-cache-phase2`
 
 ## 1. 范围
 
-- Page Cache 从 `Reports > Page Cache` 移到后台一级菜单 `Page Cache`。
-- 统计面板改成标准后台 `content-header` 和 `content-buttons`，内容使用四个标准报表 tab 和 grid，带分页、列过滤和 CSV/Excel XML 导出。
+- Page Cache 从 `Reports > Page Cache` 移到后台菜单；0.9.x 起位于 `System > Page Cache`，在 Cache Management 下方、Index Management 上方。
+- 统计面板改成标准后台 `content-header` 和 `content-buttons`，内容使用四个标准后台 tab 和 grid，带分页、列过滤和 CSV/Excel XML 导出。
 - 页面新增 `Warm Now`，投递一个预热队列批次任务。
 - 页面新增 `Configuration`，跳转 `System > Configuration > Page Cache`。
 - ACL 保留 `admin/report/page_cache`，避免升级后现有角色失去权限。
@@ -19,9 +19,10 @@
 
 `etc/adminhtml.xml`：
 
-- 一级菜单 `page_cache`，sort_order 85，action `adminhtml/page_cache/stats`。
+- `system` 下的子菜单 `page_cache`，sort_order 91，action `adminhtml/page_cache/stats`。
+- `system/cache` 的 sort_order 是 90，`system/index` 是 92，因此菜单位于两者之间。
 - 显式 `<resource>report/page_cache</resource>`，菜单权限沿用旧 ACL。
-- 删除 `report` 下的菜单节点，ACL 节点保留。
+- 删除 `report` 下的菜单节点，ACL 节点保留；顶部不再有 `page_cache` 菜单。
 
 ### 2.2 容器和按钮
 
@@ -43,8 +44,8 @@
 
 ## 3. 验收标准
 
-- 后台一级菜单出现 `Page Cache`，`Reports` 下不再出现。
-- 打开页面显示标准 content header、按钮、过滤器和 Overview/Trend/Top Missed/Recent Events 四个 grid tab；每个 grid 有分页、列过滤和 CSV/Excel XML 导出。
+- 后台 `System > Page Cache` 出现在 Cache Management 下方、Index Management 上方；顶部和 `Reports` 下不再出现。
+- 打开页面显示标准 content header、按钮、状态卡、过滤器和 Trend/Top Missed/Recent Events/Invalidation Log 四个 grid tab；每个 grid 有分页、列过滤和 CSV/Excel XML 导出。
 - 有配置权限时显示 `Configuration`，点击进入 Page Cache 配置。
 - scheduled warmup 开启时显示 `Warm Now`；关闭时显示说明并隐藏按钮。
 - `Warm Now` 是 POST，缺 form key 被拒绝；成功投递显示 success，warmup 关闭显示 notice。
@@ -54,6 +55,6 @@
 ## 4. 实现记录
 
 - 代码：`etc/adminhtml.xml`、`controllers/Adminhtml/PageCacheController.php`、`Block/Adminhtml/Dashboard.php`、`template/maho/pagecache/dashboard.phtml`。
-- 测试：`AdminMenuTest`、`ReportGridTest`；手工验证一级菜单、content header、四张 grid、分页/列过滤、CSV/Excel 导出、Warm Now POST 和队列任务消费。
+- 测试：`AdminMenuTest`、`ReportGridTest`；手工验证 System 菜单顺序、content header、四张 grid、分页/列过滤、CSV/Excel 导出、Warm Now POST 和队列任务消费。
 - 测试结果：201 passed（575 assertions）。
 - 交叉验证：模块 CI run 45391144326 在 SQLite、MySQL、PostgreSQL 三个任务上全部通过（2026-11-24）。

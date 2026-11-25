@@ -1,0 +1,35 @@
+<?php
+
+/**
+ * SPDX-FileCopyrightText: 2026 Maho <https://mahocommerce.com>
+ * SPDX-License-Identifier: AFL-3.0
+ * @package Maho_PageCache
+ */
+
+/** @var Maho_PageCache_Block_Adminhtml_Dashboard_Filter $this */
+
+$dashboard = $this->getDashboard();
+?>
+<form id="filter_form" method="get" action="<?= $this->escapeHtml($dashboard->getStatsUrl()) ?>" class="pc-report-filter">
+    <label class="pc-report-filter-field" for="page_cache_days">
+        <span class="pc-report-filter-label"><?= $this->__('Range') ?></span>
+        <select id="page_cache_days" name="days" class="d-select d-select-sm">
+            <?php foreach ($dashboard->getRangeOptions() as $value => $label): ?>
+                <option value="<?= (int) $value ?>"<?= $dashboard->getDays() === $value ? ' selected' : '' ?>>
+                    <?= $this->escapeHtml($label) ?>
+                </option>
+            <?php endforeach; ?>
+        </select>
+    </label>
+    <label class="pc-report-filter-field" for="page_cache_store_id">
+        <span class="pc-report-filter-label"><?= $this->__('Store') ?></span>
+        <select id="page_cache_store_id" name="store_id" class="d-select d-select-sm">
+            <?php foreach ($dashboard->getStores() as $store): ?>
+                <option value="<?= (int) $store['value'] ?>"<?= $dashboard->getStoreId() === (int) $store['value'] ? ' selected' : '' ?>>
+                    <?= $this->escapeHtml($store['label']) ?>
+                </option>
+            <?php endforeach; ?>
+        </select>
+    </label>
+    <button type="submit" class="d-btn d-btn-sm"><?= $this->__('Apply filters') ?></button>
+</form>

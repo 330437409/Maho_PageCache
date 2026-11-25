@@ -58,14 +58,14 @@ grep -i page_cache var/log/exception.log | tail -n 50
 
 ### 2.3 统计面板
 
-后台一级菜单 `Page Cache`，记录：
+`System > Page Cache`，记录：
 
 - hit rate
 - hit / miss / bypass / revalidated
 - PHP 平均耗时
 - top missed URL
 - 最近 flush / purge / warmup
-- `Invalidations` tab：area、cron job、类型、reason、tag 样本、影响 URL 数、purge/warm 入队
+- `Invalidation Log` tab：area、cron job、类型、reason、tag 样本、影响 URL 数、purge/warm 入队
 
 统计关闭时，记录 `counters unavailable`，不要用缓存计数代替。采样模式下面板显示 `Sampled` 和采样率，hit rate 与总量是估算值；`purge`、`flush`、`warmup` 仍为完整记录。
 

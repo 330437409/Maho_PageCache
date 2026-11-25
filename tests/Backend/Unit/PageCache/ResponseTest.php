@@ -237,3 +237,49 @@ it('sets private no-store headers on bypass', function () {
         ->and(pageCacheHeaderValue($response, 'X-Maho-Cache'))->toBe('BYPASS')
         ->and(pageCacheHeaderValue($response, 'X-Maho-Cache-Bypass'))->toBe('session_cookie');
 });
+
+it('bypasses the proxy response when the url index write fails', function () {
+    $store = Mage::app()->getStore();
+    $originalMode = (string) $store->getConfig('page_cache/general/mode');
+    $originalEnabled = (string) $store->getConfig('page_cache/general/enabled');
+    $store->setConfig('page_cache/general/enabled', '1');
+    $store->setConfig('page_cache/general/mode', 'proxy');
+    Mage::register('page_cache_request_cacheable', true);
+    $response = pageCacheResponse();
+    $response->setHttpResponseCode(200);
+    $response->setBody('<html>index failure</html>');
+
+    $registryKey = '_singleton/page_cache/urlIndex';
+    $originalIndex = Mage::registry($registryKey);
+    $failingIndex = new class extends Maho_PageCache_Model_UrlIndex {
+        #[\Override]
+        public function add(Maho_PageCache_Model_Context $context, array $tags, int $version): bool
+        {
+            return false;
+        }
+    };
+    Mage::unregister($registryKey);
+    Mage::register($registryKey, $failingIndex, true);
+
+    try {
+        (new Maho_PageCache_Model_Observer())->sendResponse(
+            new Maho\Event\Observer(['front' => Mage::app()->getFrontController()]),
+        );
+        $context = new Maho_PageCache_Model_Context();
+        $meta = Mage::app()->getCache()->load(
+            (new Maho_PageCache_Model_Key())->getMetaKey($context->getUrlHash()),
+        );
+    } finally {
+        Mage::unregister($registryKey);
+        if ($originalIndex !== null) {
+            Mage::register($registryKey, $originalIndex, true);
+        }
+        Mage::unregister('page_cache_request_cacheable');
+        $store->setConfig('page_cache/general/mode', $originalMode);
+        $store->setConfig('page_cache/general/enabled', $originalEnabled);
+    }
+
+    expect(pageCacheHeaderValue($response, 'X-Maho-Cache'))->toBe('BYPASS')
+        ->and(pageCacheHeaderValue($response, 'X-Maho-Cache-Bypass'))->toBe('url_index_failure')
+        ->and($meta)->toBeFalse();
+});

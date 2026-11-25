@@ -1,6 +1,6 @@
 # 功能规格：Maho 页面缓存统计面板
 
-> 状态：已交付@v0.3.0；0.5.5 菜单移至一级 Page Cache，内容改为四个标准报表 grid（分页、列过滤、CSV/Excel XML 导出），并新增 Warm Now
+> 状态：已交付@v0.3.0；0.5.5 菜单移至一级 Page Cache，内容改为四个标准后台 grid（分页、列过滤、CSV/Excel XML 导出），并新增 Warm Now
 > 关联 PRD：FR-16
 > 关联 ADR：ADR-0013
 > 分支：`feat/page-cache-stats`（待创建）
@@ -144,7 +144,7 @@ cleanup：
 
 ### 3.5 后台面板
 
-菜单：`Reports > Page Cache`。
+菜单：`System > Page Cache`（0.9.x；0.3.0 原为 `Reports > Page Cache`）。
 
 ACL：`admin/report/page_cache`。
 
@@ -214,7 +214,7 @@ ACL：`admin/report/page_cache`。
 - 表：`page_cache_stat`、`page_cache_stat_hourly`，通过声明式 `sql/schema.php` 创建。
 - 记录：hit/miss/bypass/revalidated/dynamic/purge/flush/warmup；响应后批量写入；admin 前台事件跳过，系统事件不带 admin 路径。
 - rollup/cleanup：`page_cache_stats_rollup` 每小时，`page_cache_stats_cleanup` 每天。
-- 面板：`Reports > Page Cache`，ACL `admin/report/page_cache`，24 小时/7 天/30 天、store 过滤、hit rate、PHP duration、trend、top missed、recent events。
+- 面板：`System > Page Cache`，ACL `admin/report/page_cache`，24 小时/7 天/30 天、store 过滤、hit rate、PHP duration、trend、top missed、recent events。
 - 测试：`StatTest` 12 项；全量 137 passed（342 assertions）。
 - 实机（SQLite）：24 小时视图 71.4% hit rate、2 misses；7 天视图 62.5%、3 misses，趋势按天显示 `2026-11-21` 和 `2026-11-24`；30 天视图 70.0%、3 misses、8 bypasses，`/old-page/` 进入 top missed；最近事件显示 `flush / cache_clean`。配置行显示开关、raw 30 天、rollup 365 天和最近 rollup 时间。
 - 查询参数：`/page-cache-test/?utm_source=acceptance&x=1` 记录的路径为 `/page-cache-test/`。
@@ -241,7 +241,7 @@ ACL：`admin/report/page_cache`。
 
 ### AC-12.3 面板
 
-- `Reports > Page Cache` 可打开，ACL 生效。
+- `System > Page Cache` 可打开，ACL 生效。
 - 24 小时、7 天、30 天范围可切换。
 - hit rate、平均 PHP 耗时、miss、bypass、趋势、top missed URL、最近 flush/purge 显示正确。
 - 面板明确标注只统计 PHP 侧，不包含静态/代理/CDN 命中。
@@ -264,7 +264,7 @@ ACL：`admin/report/page_cache`。
 ### 已确认
 
 1. **第一版记录服务端耗时，不记录浏览器 TTFB**。面板标注“PHP 服务端耗时”。
-2. **菜单放 `Reports > Page Cache`**，ACL `admin/report/page_cache`。
+2. **菜单放 `System > Page Cache`**（0.3.0 原为 `Reports > Page Cache`，0.9.x 移到 System），ACL `admin/report/page_cache`。
 3. **原始数据保留 30 天，rollup 保留 365 天，均可配置**。
 4. **统计默认关闭**，开启后每次 PHP 命中/未命中最多一次批量写入。
 5. **只统计 PHP 侧**，静态文件、代理和 CDN 命中不计入。

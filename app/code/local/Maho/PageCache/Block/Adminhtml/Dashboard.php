@@ -22,7 +22,7 @@ class Maho_PageCache_Block_Adminhtml_Dashboard extends Mage_Adminhtml_Block_Widg
             $this->addButton('configuration', [
                 'label' => Mage::helper('page_cache')->__('Configuration'),
                 'onclick' => 'setLocation(\'' . $this->getConfigUrl() . '\')',
-                'class' => 'scalable',
+                'class' => 'd-btn d-btn-sm d-btn-ghost',
             ]);
         }
     }
@@ -36,13 +36,24 @@ class Maho_PageCache_Block_Adminhtml_Dashboard extends Mage_Adminhtml_Block_Widg
     public function getTabsHtml(): string
     {
         if (!$this->getChild('tabs')) {
-            $this->setChild(
-                'tabs',
-                $this->getLayout()->createBlock('page_cache/adminhtml_dashboard_tabs'),
-            );
+            $tabs = $this->getLayout()->createBlock('page_cache/adminhtml_dashboard_tabs');
+            $tabs->setFilterHtml($this->getFilterHtml());
+            $this->setChild('tabs', $tabs);
         }
 
         return $this->getChildHtml('tabs');
+    }
+
+    public function getFilterHtml(): string
+    {
+        if (!$this->getChild('dashboard_filter')) {
+            $this->setChild(
+                'dashboard_filter',
+                $this->getLayout()->createBlock('page_cache/adminhtml_dashboard_filter'),
+            );
+        }
+
+        return $this->getChildHtml('dashboard_filter');
     }
 
     public function getWarmUrl(): string
@@ -159,6 +170,14 @@ class Maho_PageCache_Block_Adminhtml_Dashboard extends Mage_Adminhtml_Block_Widg
     public function getWarmupQueueStats(): array
     {
         return Mage::getSingleton('page_cache/warmQueue')->getStats();
+    }
+
+    /**
+     * @return array<string, int|float|string|null>
+     */
+    public function getSummaryStats(): array
+    {
+        return Mage::getSingleton('page_cache/stat')->getSummary($this->getDays(), $this->getStoreId());
     }
 
     public function isWarmupLockHeld(): bool

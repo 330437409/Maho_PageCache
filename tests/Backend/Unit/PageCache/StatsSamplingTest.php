@@ -34,6 +34,29 @@ function statsSamplingSet(string $mode, float $rate = 0.05): void
     Mage::app()->getStore()->setConfig('page_cache/stats/sample_rate', (string) $rate);
 }
 
+function statsSamplingRenderDashboard(): string
+{
+    $design = Mage::getDesign();
+    $area = $design->getArea();
+    $package = $design->getPackageName();
+    $themes = [];
+    foreach (['layout', 'template', 'skin', 'locale', 'default'] as $type) {
+        $themes[$type] = $design->getTheme($type);
+    }
+
+    try {
+        $design->setArea('adminhtml')->setPackageName('default')->setTheme('default');
+        $block = Mage::app()->getLayout()->createBlock('page_cache/adminhtml_dashboard');
+        $block->setTemplate('maho/pagecache/dashboard.phtml');
+        return $block->toHtml();
+    } finally {
+        $design->setArea($area)->setPackageName($package);
+        foreach ($themes as $type => $theme) {
+            $design->setTheme($type, $theme);
+        }
+    }
+}
+
 beforeEach(function () {
     statsSamplingClean();
     Mage::app()->getStore()->setConfig('page_cache/stats/enabled', '0');
@@ -118,28 +141,23 @@ it('clamps the sample rate', function () {
 
 it('renders the sampled warning on the dashboard template', function () {
     statsSamplingSet(Maho_PageCache_Model_Stat::MODE_SAMPLED, 0.05);
-    $design = Mage::getDesign();
-    $area = $design->getArea();
-    $package = $design->getPackageName();
-    $themes = [];
-    foreach (['layout', 'template', 'skin', 'locale', 'default'] as $type) {
-        $themes[$type] = $design->getTheme($type);
-    }
-
-    try {
-        $design->setArea('adminhtml')->setPackageName('default')->setTheme('default');
-        $block = Mage::app()->getLayout()->createBlock('page_cache/adminhtml_dashboard');
-        $block->setTemplate('maho/pagecache/dashboard.phtml');
-        $html = $block->toHtml();
-    } finally {
-        $design->setArea($area)->setPackageName($package);
-        foreach ($themes as $type => $theme) {
-            $design->setTheme($type, $theme);
-        }
-    }
+    $html = statsSamplingRenderDashboard();
 
     expect($html)->toContain('Statistics are sampled at 5%')
-        ->and($html)->toContain('Enabled (Sampled 5%)');
+        ->and($html)->toContain('Sampled 5%');
+});
+
+it('renders the overview above the report tabs without a summary grid', function () {
+    statsSamplingSet(Maho_PageCache_Model_Stat::MODE_FULL);
+    $html = statsSamplingRenderDashboard();
+
+    expect($html)->toContain('pc-status-grid')
+        ->and($html)->toContain('pc-tabs-bar')
+        ->and($html)->toContain('id="filter_form"')
+        ->and($html)->toContain('Invalidation Log')
+        ->and($html)->not->toContain('>Overview<')
+        ->and($html)->not->toContain('page_cache_summary_grid')
+        ->and($html)->not->toContain('Summary CSV');
 });
 
 it('shows the statistics mode and sample rate on the dashboard', function () {

@@ -28,5 +28,6 @@
 | 0022 | URL 索引按 context 保存变体 | 已接受，0.6.1 / 0.7.0 |
 | 0023 | Stats 使用请求级采样，系统事件不采样 | 已接受，0.7.0 Phase 4 |
 | 0024 | Purge 使用 DB outbox 和 per-target ack | 已接受，FR-22（0.8.0） |
+| 0025 | FR-20 保持暂停，不实现 session cookie 命中 | 已接受，FR-20 回滚为暂停 |
 
 新增 ADR 时复制 `_template.md`，顺序编号。已被取代的 ADR 不删除，状态改为“已被 ADR-NNNN 取代”。

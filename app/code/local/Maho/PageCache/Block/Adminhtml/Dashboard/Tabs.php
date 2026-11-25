@@ -18,18 +18,12 @@ class Maho_PageCache_Block_Adminhtml_Dashboard_Tabs extends Mage_Adminhtml_Block
         parent::_construct();
         $this->setId('page_cache_tabs');
         $this->setDestElementId('page_cache_tab_content');
-        $this->setTemplate('widget/tabshoriz.phtml');
+        $this->setTemplate('maho/pagecache/tabs.phtml');
     }
 
     #[\Override]
     protected function _beforeToHtml()
     {
-        $this->addTab('summary', [
-            'label' => $this->__('Overview'),
-            'content' => $this->getLayout()
-                ->createBlock('page_cache/adminhtml_dashboard_tab_summary')
-                ->toHtml(),
-        ]);
         $this->addTab('trend', [
             'label' => $this->__('Trend'),
             'content' => $this->getLayout()
@@ -49,7 +43,7 @@ class Maho_PageCache_Block_Adminhtml_Dashboard_Tabs extends Mage_Adminhtml_Block
                 ->toHtml(),
         ]);
         $this->addTab('invalidations', [
-            'label' => $this->__('Invalidations'),
+            'label' => $this->__('Invalidation Log'),
             'content' => $this->getLayout()
                 ->createBlock('page_cache/adminhtml_dashboard_tab_invalidations')
                 ->toHtml(),
