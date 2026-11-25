@@ -479,6 +479,9 @@ class Maho_PageCache_Service_Warm
         }
     }
 
+    /**
+     * @return array{at: int, processed: int, warmed: int, skipped: int, failed: int, dropped: int, remaining: int}
+     */
     public function consumeQueue(int $limit = 0): array
     {
         $summary = $this->emptySummary();
