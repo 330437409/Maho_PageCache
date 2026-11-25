@@ -48,6 +48,12 @@ class Maho_PageCache_Block_Adminhtml_Dashboard_Tabs extends Mage_Adminhtml_Block
                 ->createBlock('page_cache/adminhtml_dashboard_tab_recent')
                 ->toHtml(),
         ]);
+        $this->addTab('invalidations', [
+            'label' => $this->__('Invalidations'),
+            'content' => $this->getLayout()
+                ->createBlock('page_cache/adminhtml_dashboard_tab_invalidations')
+                ->toHtml(),
+        ]);
 
         return parent::_beforeToHtml();
     }

@@ -209,6 +209,19 @@ class Maho_PageCache_Model_UrlIndex
         }
     }
 
+    public function countUrls(): int
+    {
+        try {
+            $read = $this->read();
+            return (int) $read->fetchOne(
+                $read->select()->from($this->urlTable(), ['total' => 'COUNT(*)']),
+            );
+        } catch (\Throwable $e) {
+            Mage::logException($e);
+            return 0;
+        }
+    }
+
     public function setVersion(int $urlId, int $version): void
     {
         try {

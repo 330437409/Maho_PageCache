@@ -31,6 +31,10 @@ class PageCachePurge extends BaseMahoCommand
         int $limit = 100,
         #[Option(description: 'Only process entries that contain this tag', name: 'tag')]
         ?string $tag = null,
+        #[Option(description: 'Outbox target to process', name: 'target')]
+        string $target = 'proxy',
+        #[Option(description: 'Reset failed rows for this target before processing', name: 'retry-failed')]
+        bool $retryFailed = false,
     ): int {
         if (!$this->isModuleActive('Maho_PageCache')) {
             $output->writeln('<error>The Maho_PageCache module is not active.</error>');
@@ -40,19 +44,14 @@ class PageCachePurge extends BaseMahoCommand
         $this->initMaho();
 
         $queue = Mage::getModel('page_cache/purgeQueue');
-        $entries = $queue->getEntries();
-
-        if ($tag !== null && $tag !== '') {
-            $entries = array_filter(
-                $entries,
-                static fn(array $entry): bool => in_array($tag, $entry['tags'], true)
-                    || in_array('*', $entry['tags'], true),
-            );
+        if ($retryFailed) {
+            $retried = $queue->retryFailed($target);
+            $output->writeln(sprintf('Reset %d failed outbox row(s) for target %s.', $retried, $target));
         }
 
-        if ($limit > 0) {
-            $entries = array_slice($entries, 0, $limit, true);
-        }
+        $entries = $dryRun
+            ? $queue->getPending($target, $limit, $tag, true)
+            : $queue->claim($target, $limit, $tag);
 
         if ($entries === []) {
             $output->writeln('Nothing to purge.');
@@ -70,15 +69,20 @@ class PageCachePurge extends BaseMahoCommand
         }
 
         if ($result['processed'] === 0) {
-            $output->writeln('<error>Purge failed. The queue was left in place; see var/log for details.</error>');
+            $output->writeln('<error>Purge failed. The outbox rows were kept and scheduled for retry; see var/log for details.</error>');
             return Command::FAILURE;
         }
 
-        $output->writeln(sprintf('Processed %d queue entr(y/ies), %d URL(s).', $result['processed'], count($result['urls'])));
+        $output->writeln(sprintf(
+            'Processed %d queue entr(y/ies), %d URL(s), %d failed.',
+            $result['processed'],
+            count($result['urls']),
+            $result['failed'],
+        ));
         if ($result['file'] !== null) {
             $output->writeln('Purge file: ' . $result['file']);
         }
 
-        return Command::SUCCESS;
+        return $result['failed'] > 0 ? Command::FAILURE : Command::SUCCESS;
     }
 }

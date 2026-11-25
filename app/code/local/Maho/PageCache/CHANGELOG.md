@@ -2,6 +2,19 @@
 
 All notable changes to `Maho_PageCache` are recorded here.
 
+## 0.8.0 (2026-11-25)
+
+### Added
+
+- Purge delivery now uses the `page_cache_purge_outbox` table instead of cache entries. Each target has its own row, claim lease, attempts, backoff, ack and failed state, so a cache flush or process restart no longer drops pending purges.
+- `page-cache:purge:status` reports pending, processing, failed and delivered rows, the oldest pending age and the last error. `page-cache:purge` adds `--target` and `--retry-failed`.
+- A full proxy purge is queued on upgrade from 0.7.0, because the old cache-based queue is cleared by `./maho migrate`.
+- Invalidation audit records tag and full invalidations in `page_cache_invalidation_log`, with area, cron job, type, reason, total and sample tags, affected URL count, purge/warm queue result, store and mode. The admin `Invalidations` tab supports filtering, CSV/Excel export and bulk delete; retention cleanup runs daily.
+
+### Changed
+
+- `page-cache:purge` claims outbox rows and acks after the event or purge file hand-off. Failed rows retry with exponential backoff and remain visible after the maximum attempts.
+
 ## 0.7.0 (2026-11-25)
 
 ### Known issue

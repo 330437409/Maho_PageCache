@@ -2,7 +2,7 @@
 <config>
     <modules>
         <Maho_PageCache>
-            <version>0.7.0</version>
+            <version>0.8.0</version>
         </Maho_PageCache>
     </modules>
     <global>
@@ -28,6 +28,12 @@
                     <warmup_queue>
                         <table>page_cache_warmup_queue</table>
                     </warmup_queue>
+                    <purge_outbox>
+                        <table>page_cache_purge_outbox</table>
+                    </purge_outbox>
+                    <invalidation_log>
+                        <table>page_cache_invalidation_log</table>
+                    </invalidation_log>
                     <url>
                         <table>page_cache_url</table>
                     </url>
@@ -108,6 +114,18 @@ catalog_product_view]]></session_skip_routes>
             <proxy>
                 <context_mode>cookie</context_mode>
             </proxy>
+            <audit>
+                <enabled>0</enabled>
+                <retention_days>30</retention_days>
+                <sample_tags>20</sample_tags>
+            </audit>
+            <purge>
+                <max_attempts>5</max_attempts>
+                <retry_delay>60</retry_delay>
+                <stale_after>3600</stale_after>
+                <retention_days>7</retention_days>
+                <lease_seconds>300</lease_seconds>
+            </purge>
             <dynamic>
                 <injection>ajax</injection>
                 <ttl>0</ttl>

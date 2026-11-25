@@ -777,7 +777,7 @@ class Maho_PageCache_Model_Observer
         }
 
         try {
-            Mage::getService('page_cache/invalidator')->invalidateProductIds($productIds);
+            Mage::getService('page_cache/invalidator')->invalidateProductIds($productIds, 'stock');
             $write = Mage::getSingleton('core/resource')->getConnection('core_write');
             $write->delete(
                 $this->stockPendingTable(),
@@ -803,7 +803,7 @@ class Maho_PageCache_Model_Observer
         }
 
         try {
-            Mage::getService('page_cache/invalidator')->invalidateProductIds($productIds);
+            Mage::getService('page_cache/invalidator')->invalidateProductIds($productIds, 'product');
         } catch (\Throwable $e) {
             Mage::logException($e);
             $this->invalidateAll();
@@ -820,11 +820,11 @@ class Maho_PageCache_Model_Observer
         try {
             $product = $observer->getProduct();
             if (is_numeric($product)) {
-                Mage::getService('page_cache/invalidator')->invalidateProductIds([(int) $product]);
+                Mage::getService('page_cache/invalidator')->invalidateProductIds([(int) $product], 'catalog_rule');
                 return;
             }
             if ($product instanceof Mage_Catalog_Model_Product) {
-                Mage::getService('page_cache/invalidator')->invalidateProductIds([(int) $product->getId()]);
+                Mage::getService('page_cache/invalidator')->invalidateProductIds([(int) $product->getId()], 'catalog_rule');
                 return;
             }
 
@@ -839,7 +839,7 @@ class Maho_PageCache_Model_Observer
             }
             $productIds = $read->fetchCol($select);
             if (is_array($productIds) && $productIds !== []) {
-                Mage::getService('page_cache/invalidator')->invalidateProductIds($productIds);
+                Mage::getService('page_cache/invalidator')->invalidateProductIds($productIds, 'catalog_rule');
             }
         } catch (\Throwable $e) {
             Mage::logException($e);
@@ -872,7 +872,7 @@ class Maho_PageCache_Model_Observer
                 );
             }
             if (is_array($productIds) && $productIds !== []) {
-                Mage::getService('page_cache/invalidator')->invalidateProductIds($productIds);
+                Mage::getService('page_cache/invalidator')->invalidateProductIds($productIds, 'import');
             }
         } catch (\Throwable $e) {
             Mage::logException($e);
@@ -962,6 +962,53 @@ class Maho_PageCache_Model_Observer
     {
         try {
             Mage::getSingleton('page_cache/stat')->cleanup();
+        } catch (\Throwable $e) {
+            Mage::logException($e);
+        }
+    }
+
+    #[\Maho\Config\CronJob('page_cache_purge_stale_alert', schedule: '10 * * * *')]
+    public function alertStalePurges(): void
+    {
+        try {
+            $status = Mage::getModel('page_cache/purgeQueue')->getStatus(Maho_PageCache_Model_PurgeQueue::TARGET_PROXY);
+            $staleAfter = Mage::helper('page_cache')->getPurgeStaleAfter();
+            if ($status['oldest_pending'] !== null && time() - $status['oldest_pending'] > $staleAfter) {
+                Mage::log(
+                    sprintf(
+                        'Page cache purge outbox has a pending row older than %d seconds (target proxy, pending %d, failed %d).',
+                        $staleAfter,
+                        $status['pending'],
+                        $status['failed'],
+                    ),
+                    Mage::LOG_WARNING,
+                    'page-cache-purge.log',
+                );
+            }
+        } catch (\Throwable $e) {
+            Mage::logException($e);
+        }
+    }
+
+    #[\Maho\Config\CronJob('page_cache_purge_cleanup', schedule: '25 3 * * *')]
+    public function cleanupPurgeOutbox(): void
+    {
+        try {
+            Mage::getModel('page_cache/purgeQueue')->cleanup(
+                Mage::helper('page_cache')->getPurgeRetentionDays(),
+            );
+        } catch (\Throwable $e) {
+            Mage::logException($e);
+        }
+    }
+
+    #[\Maho\Config\CronJob('page_cache_audit_cleanup', schedule: '35 3 * * *')]
+    public function cleanupInvalidationLog(): void
+    {
+        try {
+            Mage::getSingleton('page_cache/invalidationLog')->cleanup(
+                Mage::helper('page_cache')->getAuditRetentionDays(),
+            );
         } catch (\Throwable $e) {
             Mage::logException($e);
         }

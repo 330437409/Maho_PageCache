@@ -209,6 +209,67 @@
                         </context_mode>
                     </fields>
                 </proxy>
+                <purge translate="label">
+                    <label>Purge Outbox</label>
+                    <frontend_type>text</frontend_type>
+                    <sort_order>18</sort_order>
+                    <expanded>0</expanded>
+                    <show_in_default>1</show_in_default>
+                    <show_in_website>0</show_in_website>
+                    <show_in_store>0</show_in_store>
+                    <fields>
+                        <max_attempts translate="label comment">
+                            <label>Max Attempts</label>
+                            <comment>How many times a purge hand-off is tried before the row is marked failed.</comment>
+                            <frontend_type>text</frontend_type>
+                            <validate>validate-number validate-greater-than-zero</validate>
+                            <sort_order>10</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>0</show_in_website>
+                            <show_in_store>0</show_in_store>
+                        </max_attempts>
+                        <retry_delay translate="label comment">
+                            <label>Retry Delay (seconds)</label>
+                            <comment>Base delay for exponential backoff. The delay doubles after each failed attempt.</comment>
+                            <frontend_type>text</frontend_type>
+                            <validate>validate-number validate-greater-than-zero</validate>
+                            <sort_order>20</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>0</show_in_website>
+                            <show_in_store>0</show_in_store>
+                        </retry_delay>
+                        <stale_after translate="label comment">
+                            <label>Stale After (seconds)</label>
+                            <comment>Log a warning when the oldest pending purge is older than this. Default is 3600.</comment>
+                            <frontend_type>text</frontend_type>
+                            <validate>validate-number validate-greater-than-zero</validate>
+                            <sort_order>30</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>0</show_in_website>
+                            <show_in_store>0</show_in_store>
+                        </stale_after>
+                        <retention_days translate="label comment">
+                            <label>Retention (days)</label>
+                            <comment>How long delivered and failed outbox rows are kept for status. Default is 7.</comment>
+                            <frontend_type>text</frontend_type>
+                            <validate>validate-number validate-greater-than-zero</validate>
+                            <sort_order>40</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>0</show_in_website>
+                            <show_in_store>0</show_in_store>
+                        </retention_days>
+                        <lease_seconds translate="label comment">
+                            <label>Processing Lease (seconds)</label>
+                            <comment>A claimed row returns to pending when its lease expires. Default is 300.</comment>
+                            <frontend_type>text</frontend_type>
+                            <validate>validate-number validate-greater-than-zero</validate>
+                            <sort_order>50</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>0</show_in_website>
+                            <show_in_store>0</show_in_store>
+                        </lease_seconds>
+                    </fields>
+                </purge>
                 <dynamic translate="label">
                     <label>Dynamic Blocks</label>
                     <frontend_type>text</frontend_type>
@@ -388,6 +449,47 @@
                         </auth_password>
                     </fields>
                 </warmup>
+                <audit translate="label">
+                    <label>Invalidation Audit</label>
+                    <frontend_type>text</frontend_type>
+                    <sort_order>52</sort_order>
+                    <expanded>0</expanded>
+                    <show_in_default>1</show_in_default>
+                    <show_in_website>0</show_in_website>
+                    <show_in_store>0</show_in_store>
+                    <fields>
+                        <enabled translate="label comment">
+                            <label>Enable Invalidation Audit</label>
+                            <comment>Record tag and full invalidations in the page cache audit table. Independent from request statistics.</comment>
+                            <frontend_type>select</frontend_type>
+                            <source_model>adminhtml/system_config_source_yesno</source_model>
+                            <sort_order>10</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>0</show_in_website>
+                            <show_in_store>0</show_in_store>
+                        </enabled>
+                        <retention_days translate="label comment">
+                            <label>Retention (days)</label>
+                            <comment>How long invalidation records are kept. Default is 30.</comment>
+                            <frontend_type>text</frontend_type>
+                            <validate>validate-number validate-greater-than-zero</validate>
+                            <sort_order>20</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>0</show_in_website>
+                            <show_in_store>0</show_in_store>
+                        </retention_days>
+                        <sample_tags translate="label comment">
+                            <label>Sample Tags</label>
+                            <comment>Maximum number of tag names stored per record. The total count is always stored. Default is 20.</comment>
+                            <frontend_type>text</frontend_type>
+                            <validate>validate-number validate-greater-than-zero</validate>
+                            <sort_order>30</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>0</show_in_website>
+                            <show_in_store>0</show_in_store>
+                        </sample_tags>
+                    </fields>
+                </audit>
                 <static translate="label">
                     <label>Static Export</label>
                     <frontend_type>text</frontend_type>

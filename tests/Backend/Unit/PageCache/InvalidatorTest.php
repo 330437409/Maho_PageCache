@@ -19,6 +19,10 @@ beforeEach(function () {
     Mage::app()->getStore()->setConfig('page_cache/general/mode', 'proxy');
     Mage::app()->getCache()->cleanType('page_cache');
     Mage::getModel('page_cache/urlIndex')->clear();
+    Mage::getSingleton('core/resource')->getConnection('core_write')->delete(
+        Mage::getSingleton('core/resource')->getTableName('page_cache/invalidation_log'),
+        '1=1',
+    );
 });
 
 afterEach(function () {
@@ -30,6 +34,10 @@ afterEach(function () {
         '1=1',
     );
     Mage::getModel('page_cache/urlIndex')->clear();
+    Mage::getSingleton('core/resource')->getConnection('core_write')->delete(
+        Mage::getSingleton('core/resource')->getTableName('page_cache/invalidation_log'),
+        '1=1',
+    );
     Mage::app()->getCache()->cleanType('page_cache');
 });
 
@@ -431,4 +439,43 @@ it('falls back to a full invalidation when the url index fails', function () {
     } finally {
         $write->query('ALTER TABLE ' . $backup . ' RENAME TO ' . $table);
     }
+});
+
+it('records tag invalidations in the audit log', function () {
+    Mage::app()->getStore()->setConfig('page_cache/audit/enabled', '1');
+    $context = invalidatorStaticContext('/audit-tag.html');
+    invalidatorIndex($context, ['catalog_product_1']);
+
+    (new Maho_PageCache_Service_Invalidator())->invalidateTags(['catalog_product_1']);
+
+    $read = Mage::getSingleton('core/resource')->getConnection('core_read');
+    $row = $read->fetchRow(
+        $read->select()->from(Mage::getSingleton('core/resource')->getTableName('page_cache/invalidation_log')),
+    );
+
+    expect($row['area'])->toBe('cli')
+        ->and($row['invalidation_type'])->toBe('product')
+        ->and($row['reason'])->toBe('catalog_product_1')
+        ->and((int) $row['tag_count'])->toBe(1)
+        ->and((int) $row['affected_urls'])->toBe(1)
+        ->and((int) $row['purge_queued'])->toBe(1)
+        ->and($row['mode'])->toBe('proxy');
+});
+
+it('records full invalidations with the url count before clearing', function () {
+    Mage::app()->getStore()->setConfig('page_cache/audit/enabled', '1');
+    invalidatorIndex(invalidatorStaticContext('/audit-full-a.html'), ['tag_a']);
+    invalidatorIndex(invalidatorStaticContext('/audit-full-b.html'), ['tag_b']);
+
+    (new Maho_PageCache_Service_Invalidator())->invalidateAll('config');
+
+    $read = Mage::getSingleton('core/resource')->getConnection('core_read');
+    $row = $read->fetchRow(
+        $read->select()->from(Mage::getSingleton('core/resource')->getTableName('page_cache/invalidation_log')),
+    );
+
+    expect($row['invalidation_type'])->toBe('config')
+        ->and($row['reason'])->toBe('config')
+        ->and((int) $row['affected_urls'])->toBe(2)
+        ->and((int) $row['purge_queued'])->toBe(1);
 });

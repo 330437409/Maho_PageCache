@@ -43,3 +43,38 @@ it('filters an in-memory report collection with like and number ranges', functio
     expect($collection->getSize())->toBe(1)
         ->and($collection->getFirstItem()->getName())->toBe('Beta');
 });
+
+it('renders the invalidation audit grid', function () {
+    Mage::app()->getStore()->setConfig('page_cache/audit/enabled', '1');
+    Mage::getSingleton('page_cache/invalidationLog')->record([
+        'area' => 'admin',
+        'type' => 'product',
+        'reason' => 'catalog_product_1',
+        'tags' => ['catalog_product_1'],
+        'affected_urls' => 2,
+        'purge_queued' => true,
+        'mode' => 'proxy',
+    ]);
+    $design = Mage::getDesign();
+    $area = $design->getArea();
+    $package = $design->getPackageName();
+    $themes = [];
+    foreach (['layout', 'template', 'skin', 'locale', 'default'] as $type) {
+        $themes[$type] = $design->getTheme($type);
+    }
+
+    try {
+        $design->setArea('adminhtml')->setPackageName('default')->setTheme('default');
+        $html = Mage::app()->getLayout()
+            ->createBlock('page_cache/adminhtml_dashboard_tab_invalidations')
+            ->toHtml();
+    } finally {
+        $design->setArea($area)->setPackageName($package);
+        foreach ($themes as $type => $theme) {
+            $design->setTheme($type, $theme);
+        }
+    }
+
+    expect($html)->toContain('Tag Sample')
+        ->and($html)->toContain('catalog_product_1');
+});

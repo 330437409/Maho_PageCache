@@ -46,6 +46,14 @@ class Maho_PageCache_Helper_Data extends Mage_Core_Helper_Abstract
     public const XML_PATH_MAX_FILTER_DEPTH = 'page_cache/general/max_filter_depth';
     public const XML_PATH_MAX_PATH_SEGMENTS = 'page_cache/general/max_path_segments';
     public const XML_PATH_STATIC_ENABLED = 'page_cache/static/enabled';
+    public const XML_PATH_AUDIT_ENABLED = 'page_cache/audit/enabled';
+    public const XML_PATH_AUDIT_RETENTION_DAYS = 'page_cache/audit/retention_days';
+    public const XML_PATH_AUDIT_SAMPLE_TAGS = 'page_cache/audit/sample_tags';
+    public const XML_PATH_PURGE_MAX_ATTEMPTS = 'page_cache/purge/max_attempts';
+    public const XML_PATH_PURGE_RETRY_DELAY = 'page_cache/purge/retry_delay';
+    public const XML_PATH_PURGE_STALE_AFTER = 'page_cache/purge/stale_after';
+    public const XML_PATH_PURGE_RETENTION_DAYS = 'page_cache/purge/retention_days';
+    public const XML_PATH_PURGE_LEASE_SECONDS = 'page_cache/purge/lease_seconds';
     public const XML_PATH_STATS_ENABLED = 'page_cache/stats/enabled';
     public const XML_PATH_STATS_MODE = 'page_cache/stats/mode';
     public const XML_PATH_STATS_SAMPLE_RATE = 'page_cache/stats/sample_rate';
@@ -280,6 +288,53 @@ class Maho_PageCache_Helper_Data extends Mage_Core_Helper_Abstract
     public function getStaticExportEnabled(): bool
     {
         return Mage::getStoreConfigFlag(self::XML_PATH_STATIC_ENABLED);
+    }
+
+    public function getAuditEnabled(): bool
+    {
+        return Mage::getStoreConfigFlag(self::XML_PATH_AUDIT_ENABLED);
+    }
+
+    public function getAuditRetentionDays(): int
+    {
+        $days = (int) Mage::getStoreConfig(self::XML_PATH_AUDIT_RETENTION_DAYS);
+        return $days > 0 ? $days : 30;
+    }
+
+    public function getAuditSampleTags(): int
+    {
+        $count = (int) Mage::getStoreConfig(self::XML_PATH_AUDIT_SAMPLE_TAGS);
+        return $count > 0 ? $count : 20;
+    }
+
+    public function getPurgeMaxAttempts(): int
+    {
+        $attempts = (int) Mage::getStoreConfig(self::XML_PATH_PURGE_MAX_ATTEMPTS);
+        return $attempts > 0 ? $attempts : 5;
+    }
+
+    public function getPurgeRetryDelay(): int
+    {
+        $delay = (int) Mage::getStoreConfig(self::XML_PATH_PURGE_RETRY_DELAY);
+        return $delay > 0 ? $delay : 60;
+    }
+
+    public function getPurgeStaleAfter(): int
+    {
+        $seconds = (int) Mage::getStoreConfig(self::XML_PATH_PURGE_STALE_AFTER);
+        return $seconds > 0 ? $seconds : 3600;
+    }
+
+    public function getPurgeRetentionDays(): int
+    {
+        $days = (int) Mage::getStoreConfig(self::XML_PATH_PURGE_RETENTION_DAYS);
+        return $days > 0 ? $days : 7;
+    }
+
+    public function getPurgeLeaseSeconds(): int
+    {
+        $seconds = (int) Mage::getStoreConfig(self::XML_PATH_PURGE_LEASE_SECONDS);
+        return $seconds > 0 ? $seconds : 300;
     }
 
     public function getStatsEnabled(): bool

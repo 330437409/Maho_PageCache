@@ -13,8 +13,8 @@ declare(strict_types=1);
 class Maho_PageCache_Service_Purge
 {
     /**
-     * @param array<string, array{urls: list<string>, tags: list<string>, mode: string, created_at: int}> $entries
-     * @return array{urls: list<string>, tags: list<string>, processed: int, dry_run: bool, file: string|null}
+     * @param array<int|string, array{urls: list<string>, tags: list<string>, mode: string, created_at: int, attempts?: int}> $entries
+     * @return array{urls: list<string>, tags: list<string>, processed: int, failed: int, dry_run: bool, file: string|null}
      */
     public function process(array $entries, bool $dryRun = false): array
     {
@@ -41,6 +41,7 @@ class Maho_PageCache_Service_Purge
                 'urls' => $urls,
                 'tags' => $tags,
                 'processed' => 0,
+                'failed' => 0,
                 'dry_run' => true,
                 'file' => null,
             ];
@@ -55,10 +56,19 @@ class Maho_PageCache_Service_Purge
             $file = $this->writePurgeFile($urls, $tags);
         } catch (\Throwable $e) {
             Mage::logException($e);
+            $queue = Mage::getSingleton('page_cache/purgeQueue');
+            foreach (array_keys($entries) as $id) {
+                try {
+                    $queue->fail((string) $id, $e->getMessage());
+                } catch (\Throwable $failError) {
+                    Mage::logException($failError);
+                }
+            }
             return [
                 'urls' => $urls,
                 'tags' => $tags,
                 'processed' => 0,
+                'failed' => count($entries),
                 'dry_run' => false,
                 'file' => null,
             ];
@@ -68,8 +78,9 @@ class Maho_PageCache_Service_Purge
         $removed = 0;
         foreach (array_keys($entries) as $id) {
             try {
-                $queue->remove($id);
-                $removed++;
+                if ($queue->ack((string) $id)) {
+                    $removed++;
+                }
             } catch (\Throwable $e) {
                 Mage::logException($e);
             }
@@ -90,6 +101,7 @@ class Maho_PageCache_Service_Purge
             'urls' => $urls,
             'tags' => $tags,
             'processed' => $removed,
+            'failed' => count($entries) - $removed,
             'dry_run' => false,
             'file' => $file,
         ];

@@ -60,13 +60,13 @@ class Maho_PageCache_Service_Invalidator
             Mage::logException($e);
         }
 
-        $this->invalidateProductIds($productIds);
+        $this->invalidateProductIds($productIds, 'stock');
     }
 
     /**
      * @param list<int|string> $productIds
      */
-    public function invalidateProductIds(array $productIds): void
+    public function invalidateProductIds(array $productIds, string $type = 'product'): void
     {
         $productIds = array_values(array_unique(array_filter(
             array_map(intval(...), $productIds),
@@ -83,13 +83,13 @@ class Maho_PageCache_Service_Invalidator
         $this->invalidateTags(array_map(
             static fn(int $productId): string => 'catalog_product_' . $productId,
             $productIds,
-        ));
+        ), $type);
     }
 
     /**
      * @param list<string> $tags
      */
-    public function invalidateTags(array $tags): void
+    public function invalidateTags(array $tags, string $type = ''): void
     {
         $tags = array_values(array_unique(array_filter($tags, static fn(mixed $tag): bool => is_string($tag) && $tag !== '')));
         if ($tags === []) {
@@ -190,6 +190,16 @@ class Maho_PageCache_Service_Invalidator
                 $this->warmQueue()->enqueue($storeUrls, (int) $storeId, $reason);
             }
         }
+
+        $this->recordAudit([
+            'type' => $type !== '' ? $type : $this->inferType($tags),
+            'reason' => implode(',', array_slice($tags, 0, 3)),
+            'tags' => $tags,
+            'affected_urls' => count($urls),
+            'purge_queued' => $urls !== [] && $this->helper()->getMode() === Maho_PageCache_Helper_Data::MODE_PROXY,
+            'warm_queued' => $warmUrls !== [] && $this->helper()->getWarmupEnabled(),
+            'mode' => $this->helper()->getMode(),
+        ]);
     }
 
     public function invalidateCatalogRule(Mage_CatalogRule_Model_Rule $rule): void
@@ -223,11 +233,12 @@ class Maho_PageCache_Service_Invalidator
         foreach ($this->getCategoryIdsForProducts($productIds) as $categoryId) {
             $tags[] = 'catalog_category_' . $categoryId;
         }
-        $this->invalidateTags($tags);
+        $this->invalidateTags($tags, 'catalog_rule');
     }
 
     public function invalidateAll(string $reason = 'full'): void
     {
+        $affectedUrls = $this->urlIndex()->countUrls();
         $nextGlobalVersion = max($this->version()->getGlobal() + 1, time());
         try {
             $this->urlIndex()->clear();
@@ -250,6 +261,81 @@ class Maho_PageCache_Service_Invalidator
             $reason,
         );
         Mage::getSingleton('page_cache/stat')->flush();
+
+        $this->recordAudit([
+            'type' => $this->fullType($reason),
+            'reason' => $reason,
+            'tags' => [],
+            'tag_count' => 0,
+            'affected_urls' => $affectedUrls,
+            'purge_queued' => $this->helper()->getMode() === Maho_PageCache_Helper_Data::MODE_PROXY,
+            'warm_queued' => false,
+            'mode' => $this->helper()->getMode(),
+        ]);
+    }
+
+    /**
+     * @param array{
+     *     area?: string,
+     *     cron_job?: string|null,
+     *     type?: string,
+     *     reason?: string|null,
+     *     tags?: list<string>,
+     *     tag_count?: int,
+     *     affected_urls?: int,
+     *     purge_queued?: bool,
+     *     warm_queued?: bool,
+     *     store_id?: int,
+     *     mode?: string|null
+     * } $data
+     */
+    private function recordAudit(array $data): void
+    {
+        try {
+            Mage::getSingleton('page_cache/invalidationLog')->record($data);
+        } catch (\Throwable $e) {
+            Mage::logException($e);
+        }
+    }
+
+    /**
+     * @param list<string> $tags
+     */
+    private function inferType(array $tags): string
+    {
+        $types = [];
+        foreach ($tags as $tag) {
+            if (str_starts_with($tag, 'catalog_product_')) {
+                $types['product'] = true;
+            } elseif (str_starts_with($tag, 'catalog_category_')) {
+                $types['category'] = true;
+            } elseif (str_starts_with($tag, 'cms_')) {
+                $types['cms'] = true;
+            } else {
+                $types['tag'] = true;
+            }
+        }
+
+        foreach (['product', 'category', 'cms'] as $type) {
+            if (isset($types[$type])) {
+                return $type;
+            }
+        }
+
+        return 'tag';
+    }
+
+    private function fullType(string $reason): string
+    {
+        return match (true) {
+            str_starts_with($reason, 'catalog_rule') => 'catalog_rule',
+            $reason === 'stock_index' => 'stock',
+            $reason === 'import' => 'import',
+            $reason === 'config' => 'config',
+            $reason === 'sales_rule' => 'sales_rule',
+            $reason === 'mass_update' => 'mass_update',
+            default => 'full',
+        };
     }
 
     /**

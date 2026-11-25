@@ -70,6 +70,29 @@ class Maho_PageCache_Adminhtml_PageCacheController extends Mage_Adminhtml_Contro
         $this->exportGrid('recent', 'excel');
     }
 
+    #[\Maho\Config\Route('/admin/page_cache/exportInvalidationsCsv')]
+    public function exportInvalidationsCsvAction(): void
+    {
+        $this->exportGrid('invalidations', 'csv');
+    }
+
+    #[\Maho\Config\Route('/admin/page_cache/exportInvalidationsExcel')]
+    public function exportInvalidationsExcelAction(): void
+    {
+        $this->exportGrid('invalidations', 'excel');
+    }
+
+    #[\Maho\Config\Route('/admin/page_cache/massDeleteInvalidations', methods: ['POST'])]
+    public function massDeleteInvalidationsAction(): void
+    {
+        $ids = (array) $this->getRequest()->getParam('log_ids', []);
+        $deleted = Mage::getSingleton('page_cache/invalidationLog')->delete($ids);
+        Mage::getSingleton('adminhtml/session')->addSuccess(
+            Mage::helper('page_cache')->__('Deleted %d invalidation record(s).', $deleted),
+        );
+        $this->_redirect('*/*/stats');
+    }
+
     private function exportGrid(string $key, string $format): void
     {
         $aliases = [
@@ -77,6 +100,7 @@ class Maho_PageCache_Adminhtml_PageCacheController extends Mage_Adminhtml_Contro
             'trend' => 'page_cache/adminhtml_dashboard_tab_trend',
             'top_missed' => 'page_cache/adminhtml_dashboard_tab_topMissed',
             'recent' => 'page_cache/adminhtml_dashboard_tab_recent',
+            'invalidations' => 'page_cache/adminhtml_dashboard_tab_invalidations',
         ];
         if (!isset($aliases[$key])) {
             $this->_forward('noroute');

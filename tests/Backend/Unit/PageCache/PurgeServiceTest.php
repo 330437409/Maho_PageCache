@@ -13,10 +13,12 @@ uses(MahoBackendTestCase::class);
 
 beforeEach(function () {
     Mage::app()->getCache()->cleanType('page_cache');
+    Mage::getModel('page_cache/purgeQueue')->clear();
 });
 
 afterEach(function () {
     Mage::app()->getCache()->cleanType('page_cache');
+    Mage::getModel('page_cache/purgeQueue')->clear();
 });
 
 it('returns URLs on a dry run and keeps the queue', function () {

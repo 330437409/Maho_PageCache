@@ -18,21 +18,35 @@
 
 ```bash
 ./maho page-cache:status
+./maho page-cache:purge:status
+./maho page-cache:purge:status --check
 ```
 
 记录：
 
 - `Mode`
 - `Global version`
-- `Purge queue`
+- `Purge queue`（Pending / Processing / Failed / Delivered）
+- `Oldest pending`、最近成功和最近失败
 - `Stock pending` 的数量和 oldest 年龄
 - `Warmup` 队列和最近一次结果
 - `PHP counters (today)` 或 `counters unavailable`
+
+`page-cache:purge:status --check` 在 pending 超过 `page_cache/purge/stale_after` 或存在 failed 行时返回非零，可直接接监控。
+
+### 2.1.1 Purge outbox
+
+- `Pending` 长期不降：检查 `page-cache:purge` 是否在跑，事件/文件消费者是否失败；看 `Last error` 和 `var/log/page-cache-purge.log`。
+- `Failed`：修复下游后执行 `./maho page-cache:purge --retry-failed`。
+- `Processing` 长期不降：worker 可能崩溃，`page_cache/purge/lease_seconds` 后会回到 pending。
+- `Delivered` 增长：`page_cache_purge_cleanup` 每天按 `retention_days` 清理。
+- ack 只表示事件/文件 hand-off 成功，不代表代理真的清掉；代理侧仍要有自己的失败监控。
 
 ### 2.2 日志
 
 ```bash
 tail -n 200 var/log/page-cache-stock.log
+tail -n 200 var/log/page-cache-purge.log
 grep -i page_cache var/log/exception.log | tail -n 50
 ```
 
@@ -51,8 +65,11 @@ grep -i page_cache var/log/exception.log | tail -n 50
 - PHP 平均耗时
 - top missed URL
 - 最近 flush / purge / warmup
+- `Invalidations` tab：area、cron job、类型、reason、tag 样本、影响 URL 数、purge/warm 入队
 
 统计关闭时，记录 `counters unavailable`，不要用缓存计数代替。采样模式下面板显示 `Sampled` 和采样率，hit rate 与总量是估算值；`purge`、`flush`、`warmup` 仍为完整记录。
+
+失效审计默认关闭，独立于统计。开启后按 `page_cache/audit/retention_days` 清理；写入失败只记日志，不影响页面。
 
 ### 2.4 cron
 
@@ -66,6 +83,9 @@ grep -i page_cache var/log/exception.log | tail -n 50
 - `page_cache_static_cleanup`，每 5 分钟
 - `page_cache_stats_rollup`，每小时第 5 分
 - `page_cache_stats_cleanup`，每天 03:15
+- `page_cache_purge_stale_alert`，每小时第 10 分
+- `page_cache_purge_cleanup`，每天 03:25
+- `page_cache_audit_cleanup`，每天 03:35
 - `page_cache_warmup`，每分钟
 
 ## 3. 接入现有监控

@@ -1,6 +1,6 @@
 # 产品需求文档（PRD）：Maho 页面缓存
 
-> 状态：0.7.0 已发布@v0.7.0（dist）：RFC-007 Phase 1 CacheEnvelope 和 PERF-02 压缩配置、Phase 2 Context Index 迁移和旧表清理、Phase 3 Warmup 安全补强、Phase 4 Stats 采样、Dynamic 边界与 Proxy Models 验证、PERF-04 Cookie 规范化文档已实现；0.6.1 FR-21 和审计 P1 修复已实现；Phase 5 完成，dist 三库 CI 通过；G9 保留 Known issue。0.5.5 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付；0.5.1 cache integrity 修复、0.5.2 tag 索引重构、0.5.3 P1 加固与性能优化、0.5.4 stock pending 监控和 0.5.5 监控指标导出与后台报表已交付。
+> 状态：0.8.0 已发布@v0.8.0（dist）：FR-22 purge DB outbox、per-target ack/重试、`page-cache:purge:status` 和 stale 告警；FR-23 失效审计表、后台 Invalidations tab、导出和 retention 已交付。0.7.0 已发布@v0.7.0（dist）：RFC-007 Phase 1 CacheEnvelope 和 PERF-02 压缩配置、Phase 2 Context Index 迁移和旧表清理、Phase 3 Warmup 安全补强、Phase 4 Stats 采样、Dynamic 边界与 Proxy Models 验证、PERF-04 Cookie 规范化文档已实现；0.6.1 FR-21 和审计 P1 修复已实现；Phase 5 完成，dist 三库 CI 通过；G9 保留 Known issue。0.5.5 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付；0.5.1 cache integrity 修复、0.5.2 tag 索引重构、0.5.3 P1 加固与性能优化、0.5.4 stock pending 监控和 0.5.5 监控指标导出与后台报表已交付。
 > 模块：`Maho_PageCache`
 > 代码路径：`app/code/local/Maho/PageCache`
 > 关联 spec：`docs/specs/page-cache.md`
@@ -87,14 +87,14 @@ Maho 目前有 Symfony Cache 对象缓存（file/redis），但没有内置的 H
 | FR-19 | 多节点：Redis 共享版本、per-node purge fan-out 与状态、本地/共享两级缓存同时失效、静态文件共享存储或节点级预热 | P3 | 计划 |
 | FR-20 | session cookie 安全命中：默认关闭的 opt-in，仅 local 模式对购物车为空、未登录、无消息且渲染不写 session 的匿名请求做短 TTL 缓存；proxy/revalidating 保持 bypass；需 ADR-0019 安全评审 | P2 | 暂停（等待 session 只读 API） |
 | FR-21 | Tag 预算与 overflow tag：proxy `X-Cache-Tags` 超过预算时保留宽 tag，商品 tag 用 overflow tag 代替，purge 自动带上 overflow tag | P3 | 已实现，待 0.7.0 发版 |
-| FR-22 | Purge 持久化投递：DB outbox、per-target ack/重试/退避、`page-cache:purge:status` 和 stale 告警 | P3 | 计划 |
-| FR-23 | 失效审计日志：记录 area/cron、失效类型、reason、tag 总数与样本、影响 URL 数、purge/warm 入队；后台筛选/导出/retention | P3 | 计划 |
+| FR-22 | Purge 持久化投递：DB outbox、per-target ack/重试/退避、`page-cache:purge:status` 和 stale 告警 | P3 | 已交付@v0.8.0 |
+| FR-23 | 失效审计日志：记录 area/cron、失效类型、reason、tag 总数与样本、影响 URL 数、purge/warm 入队；后台筛选/导出/retention | P3 | 已交付@v0.8.0 |
 | FR-24 | 预热调度升级：滑动窗口并发、活跃产品/分类 URL 源、后台进度、cache flush 后仍有效的锁 | P3 | 计划 |
 | FR-25 | Proxy SWR/grace：proxy 模式 `stale-while-revalidate` 和 grace 配置，降低 TTL 到期回源峰值 | P3 | 计划 |
 
-> 状态取值：计划 / 开发中 / 已交付@vX.Y.Z / 暂停。第一期和第二期已交付 0.2.0；第三期静态导出和统计面板已交付 0.3.0；定时预热已交付 0.4.0；服务器端动态块占位符已交付 0.5.0；请求级代理模型已实现，随 0.7.0 发版。0.6.1 的 FR-21 和审计 P1 修复（Context 级 URL 索引、Warm URL allowlist）已并入 0.7.0。0.7.0 由 RFC-007 接管（性能与架构优化，不新增 FR）；Phase 1 CacheEnvelope 和 PERF-02 压缩配置、Phase 2 Context Index 迁移和旧表清理、Phase 3 Warmup 安全补强、Phase 4 Stats 采样、Dynamic 边界与 Proxy Models 验证、PERF-04 Cookie 规范化文档已实现；Phase 5 本地验证完成，三库 CI 和 G9 仍开放，待发版；FR-22/FR-23 顺延到 0.8.0，FR-19 到 0.9.0，FR-24/FR-25 到 0.10.0；FR-26 作为独立开发工具候选，暂不登记。静态文件导出、统计面板和定时预热分别见 ADR-0012、ADR-0013、ADR-0014，代理模型见 ADR-0020。第三期拆解见 `.tmp/brainstorm-phase3-2026-11-23.md`，线路图见 `.tmp/page-cache-roadmap-2026-11-24.md`。
+> 状态取值：计划 / 开发中 / 已交付@vX.Y.Z / 暂停。第一期和第二期已交付 0.2.0；第三期静态导出和统计面板已交付 0.3.0；定时预热已交付 0.4.0；服务器端动态块占位符已交付 0.5.0；请求级代理模型已实现，随 0.7.0 发版。0.6.1 的 FR-21 和审计 P1 修复（Context 级 URL 索引、Warm URL allowlist）已并入 0.7.0。0.7.0 由 RFC-007 接管（性能与架构优化，不新增 FR）；Phase 1 CacheEnvelope 和 PERF-02 压缩配置、Phase 2 Context Index 迁移和旧表清理、Phase 3 Warmup 安全补强、Phase 4 Stats 采样、Dynamic 边界与 Proxy Models 验证、PERF-04 Cookie 规范化文档已实现；0.7.0 已发布@v0.7.0（dist），dist 三库 CI 通过；G9 作为 Known issue 保留；FR-22/FR-23 顺延到 0.8.0，FR-19 到 0.9.0，FR-24/FR-25 到 0.10.0；FR-26 作为独立开发工具候选，暂不登记。静态文件导出、统计面板和定时预热分别见 ADR-0012、ADR-0013、ADR-0014，代理模型见 ADR-0020。第三期拆解见 `.tmp/brainstorm-phase3-2026-11-23.md`，线路图见 `.tmp/page-cache-roadmap-2026-11-24.md`。
 
-> 版本节奏（2026-11-24 起）：0.6.1 FR-21 + 审计 P1（并入 0.7.0）；0.7.0 RFC-007 性能与架构（已发布@v0.7.0）；0.8.0 FR-22/FR-23；0.9.0 FR-19；0.10.0 FR-24/FR-25；1.0.0 FR-26（可选）。
+> 版本节奏（2026-11-24 起）：0.6.1 FR-21 + 审计 P1（并入 0.7.0）；0.7.0 RFC-007 性能与架构（已发布@v0.7.0）；0.8.0 FR-22/FR-23（已交付@v0.8.0）；0.9.0 FR-19；0.10.0 FR-24/FR-25；1.0.0 FR-26（可选）。
 
 ## 5. 非功能需求（NFR）
 
@@ -223,7 +223,7 @@ Maho 目前有 Symfony Cache 对象缓存（file/redis），但没有内置的 H
 
 - 统计表记录 hit/miss/bypass/revalidated、route、store、mode、PHP 耗时、flush/purge/warmup 原因。
 - 小时 rollup 生效，原始数据按保留天数清理。
-- 一级菜单 `Page Cache` 使用 Overview、Trend、Top Missed URLs、Recent Events 四个标准报表 grid，显示 hit rate、PHP 耗时、趋势、top missed URL 和最近 flush；ACL 保留 `admin/report/page_cache`，页面提供 `Warm Now` 和 `Configuration` 按钮。
+- 一级菜单 `Page Cache` 使用 Overview、Trend、Top Missed URLs、Recent Events、Invalidations 五个标准报表 grid，显示 hit rate、PHP 耗时、趋势、top missed URL、最近 flush 和失效审计；ACL 保留 `admin/report/page_cache`，页面提供 `Warm Now` 和 `Configuration` 按钮。
 - admin 前台请求不记录，避免 secret key 进入统计。
 - 统计写入失败不影响页面响应，不记录完整 query 或 PII。
 

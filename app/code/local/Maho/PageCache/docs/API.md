@@ -1,6 +1,6 @@
 # 接口文档：Maho 页面缓存
 
-> 状态：0.7.0 已发布@v0.7.0（dist）：RFC-007 Phase 1 CacheEnvelope 和 PERF-02 压缩配置、Phase 2 Context Index 迁移和旧表清理、Phase 3 Warmup 安全补强、Phase 4 Stats 采样、Dynamic 边界与 Proxy Models 验证、PERF-04 Cookie 规范化文档已实现；0.6.1 FR-21 和审计 P1 修复已实现；Phase 5 完成，dist 三库 CI 通过；G9 保留 Known issue。0.5.5 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付；0.5.1 cache integrity 修复、0.5.2 tag 索引重构、0.5.3 P1 加固与性能优化、0.5.4 stock pending 监控和 0.5.5 监控指标导出与后台报表已交付。
+> 状态：0.8.0 已发布@v0.8.0（dist）：FR-22 purge DB outbox、per-target ack/重试、`page-cache:purge:status` 和 stale 告警。0.7.0 已发布@v0.7.0（dist）：RFC-007 Phase 1 CacheEnvelope 和 PERF-02 压缩配置、Phase 2 Context Index 迁移和旧表清理、Phase 3 Warmup 安全补强、Phase 4 Stats 采样、Dynamic 边界与 Proxy Models 验证、PERF-04 Cookie 规范化文档已实现；0.6.1 FR-21 和审计 P1 修复已实现；Phase 5 完成，dist 三库 CI 通过；G9 保留 Known issue。0.5.5 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付；0.5.1 cache integrity 修复、0.5.2 tag 索引重构、0.5.3 P1 加固与性能优化、0.5.4 stock pending 监控和 0.5.5 监控指标导出与后台报表已交付。
 > 关联 PRD：`docs/PRD.md`
 > 关联架构：`docs/ARCHITECTURE.md`
 
@@ -28,6 +28,14 @@
 | `page_cache/local/compression_level` | text | 6 | gzip 级别 1 到 9 |
 | `page_cache/general/stock_pending_warn_age` | text | 3600 | stock pending 年龄告警阈值秒数，0 关闭 |
 | `page_cache/proxy/context_mode` | select | `cookie` | `cookie` 依赖代理遵守 `Vary: Cookie`；`default` 只缓存默认 store 或 URL 带 store code 的请求，`___store` cookie 切换 bypass |
+| `page_cache/audit/enabled` | yes/no | 0 | 失效审计开关 |
+| `page_cache/audit/retention_days` | text | 30 | 审计保留天数 |
+| `page_cache/audit/sample_tags` | text | 20 | 每条记录保存的 tag 样本数 |
+| `page_cache/purge/max_attempts` | text | 5 | purge 最大投递次数 |
+| `page_cache/purge/retry_delay` | text | 60 | 退避基数秒 |
+| `page_cache/purge/stale_after` | text | 3600 | pending 年龄告警阈值秒 |
+| `page_cache/purge/retention_days` | text | 7 | delivered/failed 保留天数 |
+| `page_cache/purge/lease_seconds` | text | 300 | processing lease 秒 |
 | `page_cache/dynamic/injection` | select | `ajax` | 动态块注入方式：`ajax` 或 `esi` |
 | `page_cache/dynamic/ttl` | text | 0 | 显式标记可缓存的动态块响应秒数，0 不缓存 |
 | `page_cache/dynamic/server_side` | yes/no | 0 | local 命中服务器端重建开关 |
@@ -277,7 +285,7 @@ var/page-cache/static/{store_code}/{public_path}.gz
 
 ### 3.8 统计面板
 
-一级菜单 `Page Cache`，ACL 保留 `admin/report/page_cache`。页面提供 `Warm Now`（处理一个预热队列批次）和 `Configuration` 按钮。统计内容使用四个标准报表 tab：Overview、Trend、Top Missed URLs、Recent Events，每个 tab 是一张 `Mage_Adminhtml_Block_Widget_Grid`，带分页、列过滤和 CSV/Excel XML 导出。
+一级菜单 `Page Cache`，ACL 保留 `admin/report/page_cache`。页面提供 `Warm Now`（处理一个预热队列批次）和 `Configuration` 按钮。统计内容使用五个标准报表 tab：Overview、Trend、Top Missed URLs、Recent Events、Invalidations，每个 tab 是一张 `Mage_Adminhtml_Block_Widget_Grid`，带分页、列过滤和 CSV/Excel XML 导出。`Invalidations` 记录 area、cron job、类型、reason、tag 总数和样本、影响 URL 数、purge/warm 入队、store 和 mode，支持批量删除。
 
 - 范围：24 小时、7 天、30 天；可按 store 过滤。
 - 指标：hit rate、PHP 平均耗时、miss、bypass、trend、top missed URL、最近 flush/purge/warmup。
@@ -370,21 +378,34 @@ PHP counters: unavailable (statistics disabled)
 
 | 选项 | 说明 |
 |---|---|
-| `--dry-run` | 只列出 URL，不删除队列 |
-| `--limit=N` | 最多处理 N 条，默认 100 |
+| `--dry-run` | 只列出 pending URL，不 claim |
+| `--limit=N` | 最多 claim N 条，默认 100 |
 | `--tag=tag` | 只处理指定 tag 相关的 URL |
+| `--target=proxy` | 选择 outbox target |
+| `--retry-failed` | 先把 failed 行重置为 pending |
 
 处理流程：
 
-1. 读取队列。
+1. 从 `page_cache_purge_outbox` claim pending 行，写 `processing` 和 lease。
 2. 去重 URL。
 3. 触发 `maho_page_cache_purge_urls` 事件，payload `{urls, tags, mode}`。
 4. 同时写 `var/page-cache/purge-<timestamp>.txt`，供外部消费者读取。
-5. 成功后删除队列条目，失败保留并记录日志。
-6. URL 为 `*` 表示全量 purge，消费者必须清空该模式的全部缓存对象。
-7. 按 tag purge 时，商品 tag 会附带 `page_cache_overflow_product`，非商品 tag 会附带 `page_cache_overflow`；消费者按 tag 清理时必须处理这两个 tag。
+5. 成功后 ack，状态变 `delivered`。
+6. 失败后 `attempts++`，按指数退避回到 `pending`；达到上限变 `failed`。
+7. lease 过期或进程崩溃后，下一次 claim 会恢复行。
+8. URL 为 `*` 表示全量 purge，消费者必须清空该模式的全部缓存对象。
+9. 按 tag purge 时，商品 tag 会附带 `page_cache_overflow_product`，非商品 tag 会附带 `page_cache_overflow`；消费者按 tag 清理时必须处理这两个 tag。
 
-purge entry 保留 24 小时，queue index 保留 25 小时。index 不会先于 entry 过期，避免待处理条目失去索引。
+delivered/failed 行按 `page_cache/purge/retention_days` 清理；pending 不受 retention 影响。
+
+### 5.3.1 `page-cache:purge:status`
+
+```bash
+./maho page-cache:purge:status
+./maho page-cache:purge:status --target=proxy --check
+```
+
+显示 pending、processing、failed、delivered、oldest pending、最近成功/失败和最近错误。`--check` 在存在 stale pending 或 failed 时返回退出码 1。
 
 计数契约：
 
@@ -420,7 +441,7 @@ purge entry 保留 24 小时，queue index 保留 25 小时。index 不会先于
 - `maho_page_cache_stock_pending_oldest_seconds`
 - `maho_page_cache_stock_pending_stale`
 - `maho_page_cache_stock_pending_warn_age_seconds`
-- `maho_page_cache_purge_queue`
+- `maho_page_cache_purge_queue`（pending outbox 行数）
 - `maho_page_cache_warmup_queue`
 - `maho_page_cache_hit_today` / `miss` / `bypass` / `revalidated`
 - `maho_page_cache_enabled` / `stats_enabled` / `warmup_enabled`
@@ -441,13 +462,13 @@ payload：
 ]
 ```
 
-监听者可以调用 Varnish、Cloudflare、Fastly 或自建脚本。事件不保证顺序，URL 已去重。
+监听者可以调用 Varnish、Cloudflare、Fastly 或自建脚本。事件不保证顺序，URL 已去重。事件/文件 hand-off 成功后模块 ack outbox 行；hand-off 失败会退避重试。ack 只表示 hand-off 成功，代理侧仍应保证幂等。
 
 ## 7. 缓存类型
 
 模块声明缓存类型 `page_cache`，出现在 `System > Cache Management`。
 
-- 清理该类型会清空页面缓存元数据、URL 索引、版本和 purge 队列。
+- 清理该类型会清空页面缓存元数据、URL 索引和版本；purge outbox 在 DB 中，不随缓存清理丢失。
 - 关闭该类型等同于关闭模块的缓存读写。
 - 缓存类型使用 `PAGE_CACHE` tag。
 

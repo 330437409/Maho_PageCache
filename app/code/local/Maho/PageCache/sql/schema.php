@@ -94,6 +94,61 @@ return function (SchemaEditor $schema): void {
 
     $schema->addTable(
         Table::editor()
+            ->setUnquotedName('page_cache_invalidation_log')
+            ->addColumn(Schema::column('log_id', Types::INTEGER, unsigned: true, autoincrement: true))
+            ->addColumn(Schema::column('area', Types::STRING, length: 16, default: 'frontend'))
+            ->addColumn(Schema::column('cron_job', Types::STRING, length: 64, notNull: false))
+            ->addColumn(Schema::column('invalidation_type', Types::STRING, length: 32, default: 'tag'))
+            ->addColumn(Schema::column('reason', Types::STRING, length: 255, notNull: false))
+            ->addColumn(Schema::column('tag_count', Types::INTEGER, unsigned: true, default: 0))
+            ->addColumn(Schema::column('sample_tags', Types::TEXT))
+            ->addColumn(Schema::column('affected_urls', Types::INTEGER, unsigned: true, default: 0))
+            ->addColumn(Schema::column('purge_queued', Types::SMALLINT, unsigned: true, default: 0))
+            ->addColumn(Schema::column('warm_queued', Types::SMALLINT, unsigned: true, default: 0))
+            ->addColumn(Schema::column('store_id', Types::SMALLINT, unsigned: true, default: 0))
+            ->addColumn(Schema::column('mode', Types::STRING, length: 16, notNull: false))
+            ->addColumn(Schema::column('created_at', Types::DATETIME_IMMUTABLE))
+            ->addPrimaryKeyConstraint(
+                PrimaryKeyConstraint::editor()->setUnquotedColumnNames('log_id')->create(),
+            )
+            ->addIndex(Index::editor()->setUnquotedColumnNames('created_at'))
+            ->addIndex(Index::editor()->setUnquotedColumnNames('area', 'created_at'))
+            ->addIndex(Index::editor()->setUnquotedColumnNames('invalidation_type', 'created_at'))
+            ->setComment('Page Cache Invalidation Audit Log')
+            ->create(),
+    );
+
+    $schema->addTable(
+        Table::editor()
+            ->setUnquotedName('page_cache_purge_outbox')
+            ->addColumn(Schema::column('outbox_id', Types::INTEGER, unsigned: true, autoincrement: true))
+            ->addColumn(Schema::column('target', Types::STRING, length: 32, default: 'proxy'))
+            ->addColumn(Schema::column('dedupe_key', Types::STRING, length: 64))
+            ->addColumn(Schema::column('mode', Types::STRING, length: 16, default: 'proxy'))
+            ->addColumn(Schema::column('urls', Types::TEXT))
+            ->addColumn(Schema::column('tags', Types::TEXT))
+            ->addColumn(Schema::column('status', Types::STRING, length: 16, default: 'pending'))
+            ->addColumn(Schema::column('attempts', Types::SMALLINT, unsigned: true, default: 0))
+            ->addColumn(Schema::column('available_at', Types::DATETIME_IMMUTABLE))
+            ->addColumn(Schema::column('locked_at', Types::DATETIME_IMMUTABLE, notNull: false))
+            ->addColumn(Schema::column('locked_by', Types::STRING, length: 64, notNull: false))
+            ->addColumn(Schema::column('last_error', Types::STRING, length: 255, notNull: false))
+            ->addColumn(Schema::column('delivered_at', Types::DATETIME_IMMUTABLE, notNull: false))
+            ->addColumn(Schema::column('created_at', Types::DATETIME_IMMUTABLE))
+            ->addColumn(Schema::column('updated_at', Types::DATETIME_IMMUTABLE))
+            ->addPrimaryKeyConstraint(
+                PrimaryKeyConstraint::editor()->setUnquotedColumnNames('outbox_id')->create(),
+            )
+            ->addIndex(Index::editor()->setUnquotedColumnNames('target', 'status', 'available_at'))
+            ->addIndex(Index::editor()->setUnquotedColumnNames('status', 'created_at'))
+            ->addIndex(Index::editor()->setUnquotedColumnNames('dedupe_key'))
+            ->addIndex(Index::editor()->setUnquotedColumnNames('updated_at'))
+            ->setComment('Page Cache Purge Outbox')
+            ->create(),
+    );
+
+    $schema->addTable(
+        Table::editor()
             ->setUnquotedName('page_cache_url')
             ->addColumn(Schema::column('url_id', Types::INTEGER, unsigned: true, autoincrement: true))
             ->addColumn(Schema::column('url_hash', Types::STRING, length: 64))
