@@ -380,8 +380,8 @@
                             <show_in_store>0</show_in_store>
                         </batch_size>
                         <delay_ms translate="label comment">
-                            <label>Delay Between Batches (ms)</label>
-                            <comment>Pause between concurrent request batches. Default is 500. Set 0 to disable.</comment>
+                            <label>Delay Between Request Starts (ms)</label>
+                            <comment>Minimum interval between starting two warmup requests. Default is 500. Set 0 to disable.</comment>
                             <frontend_type>text</frontend_type>
                             <validate>validate-number</validate>
                             <sort_order>30</sort_order>

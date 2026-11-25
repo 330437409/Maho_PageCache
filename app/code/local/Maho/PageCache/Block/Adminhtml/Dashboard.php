@@ -152,4 +152,25 @@ class Maho_PageCache_Block_Adminhtml_Dashboard extends Mage_Adminhtml_Block_Widg
     {
         return Mage::helper('page_cache')->getWarmupBatchSize();
     }
+
+    /**
+     * @return array{pending: int, due: int, oldest_seconds: int|null}
+     */
+    public function getWarmupQueueStats(): array
+    {
+        return Mage::getSingleton('page_cache/warmQueue')->getStats();
+    }
+
+    public function isWarmupLockHeld(): bool
+    {
+        return Mage::getSingleton('core/lock')->isHeld(Maho_PageCache_Service_Warm::WARMUP_LOCK);
+    }
+
+    /**
+     * @return array{at: int, processed: int, warmed: int, skipped: int, failed: int, dropped: int, remaining: int}|null
+     */
+    public function getLastWarmRun(): ?array
+    {
+        return Mage::getService('page_cache/warm')->getLastRun();
+    }
 }

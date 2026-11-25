@@ -29,7 +29,7 @@
 - `Purge queue`（Pending / Processing / Failed / Delivered）
 - `Oldest pending`、最近成功和最近失败
 - `Stock pending` 的数量和 oldest 年龄
-- `Warmup` 队列和最近一次结果
+- `Warmup` 队列的 pending、due、oldest、锁状态和最近一次 processed/warmed/skipped/failed/dropped/remaining
 - `PHP counters (today)` 或 `counters unavailable`
 
 `page-cache:purge:status --check` 在 pending 超过 `page_cache/purge/stale_after` 或存在 failed 行时返回非零，可直接接监控。
@@ -86,7 +86,7 @@ grep -i page_cache var/log/exception.log | tail -n 50
 - `page_cache_purge_stale_alert`，每小时第 10 分
 - `page_cache_purge_cleanup`，每天 03:25
 - `page_cache_audit_cleanup`，每天 03:35
-- `page_cache_warmup`，每分钟
+- `page_cache_warmup`，每分钟（滑动窗口消费）
 
 ## 3. 接入现有监控
 

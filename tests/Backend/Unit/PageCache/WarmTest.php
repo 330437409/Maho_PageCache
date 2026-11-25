@@ -419,3 +419,120 @@ it('does not request a child sitemap outside the store origins', function () {
     expect($urls)->toBe(['https://example.com/from-child'])
         ->and($service->requests)->toBe(['https://example.com/child.xml']);
 });
+
+it('collects active product and category urls and skips redirects', function () {
+    $makeProduct = static function (int $status): Mage_Catalog_Model_Product {
+        $product = Mage::getModel('catalog/product');
+        $product->setStoreId(0)
+            ->setSku('warm-active-' . uniqid())
+            ->setName('Warm Active ' . uniqid())
+            ->setPrice(10)
+            ->setWeight(1)
+            ->setStatus($status)
+            ->setVisibility(Mage_Catalog_Model_Product_Visibility::VISIBILITY_BOTH)
+            ->setTypeId(Mage_Catalog_Model_Product_Type::TYPE_SIMPLE)
+            ->setAttributeSetId((int) $product->getDefaultAttributeSetId())
+            ->setWebsiteIds([1])
+            ->setStockData(['use_config_manage_stock' => 0, 'manage_stock' => 1, 'qty' => 10, 'is_in_stock' => 1])
+            ->save();
+        return $product;
+    };
+    $makeCategory = static function (int $active): Mage_Catalog_Model_Category {
+        $parent = Mage::getModel('catalog/category')->load(2);
+        $category = Mage::getModel('catalog/category');
+        $category->setStoreId(0)
+            ->setName('Warm Category ' . uniqid())
+            ->setPath($parent->getPath())
+            ->setParentId((int) $parent->getId())
+            ->setIsActive($active)
+            ->setAttributeSetId((int) $category->getDefaultAttributeSetId())
+            ->save();
+        return $category;
+    };
+
+    $active = $makeProduct(Mage_Catalog_Model_Product_Status::STATUS_ENABLED);
+    $disabled = $makeProduct(Mage_Catalog_Model_Product_Status::STATUS_DISABLED);
+    $redirect = $makeProduct(Mage_Catalog_Model_Product_Status::STATUS_ENABLED);
+    $category = $makeCategory(1);
+    $inactiveCategory = $makeCategory(0);
+    $paths = [
+        'warm-active-' . uniqid() => ['catalog/product/view/id/' . $active->getId(), $active->getId(), null, ''],
+        'warm-disabled-' . uniqid() . '.html' => ['catalog/product/view/id/' . $disabled->getId(), $disabled->getId(), null, ''],
+        'warm-redirect-' . uniqid() . '.html' => ['catalog/product/view/id/' . $redirect->getId(), $redirect->getId(), null, 'RP'],
+        'warm-category-' . uniqid() . '.html' => ['catalog/category/view/id/' . $category->getId(), null, $category->getId(), ''],
+        'warm-inactive-category-' . uniqid() . '.html' => ['catalog/category/view/id/' . $inactiveCategory->getId(), null, $inactiveCategory->getId(), ''],
+    ];
+    $write = Mage::getSingleton('core/resource')->getConnection('core_write');
+    $table = Mage::getSingleton('core/resource')->getTableName('core/url_rewrite');
+
+    try {
+        foreach ($paths as $requestPath => [$target, $productId, $categoryId, $options]) {
+            $write->insert($table, [
+                'store_id' => 1,
+                'id_path' => 'warm/' . $requestPath,
+                'request_path' => $requestPath,
+                'target_path' => $target,
+                'is_system' => 1,
+                'options' => $options,
+                'product_id' => $productId,
+                'category_id' => $categoryId,
+            ]);
+        }
+
+        $urls = (new Maho_PageCache_Service_Warm())->collectActiveCatalogUrls(1, 20);
+
+        expect($urls)->toContain('https://example.com/' . array_key_first($paths) . '/')
+            ->and($urls)->toContain('https://example.com/' . array_keys($paths)[3])
+            ->and($urls)->not->toContain('https://example.com/' . array_keys($paths)[1])
+            ->and($urls)->not->toContain('https://example.com/' . array_keys($paths)[2])
+            ->and($urls)->not->toContain('https://example.com/' . array_keys($paths)[4]);
+    } finally {
+        $write->delete($table, ['request_path IN (?)' => array_keys($paths)]);
+        foreach ([$active, $disabled, $redirect] as $product) {
+            try {
+                $product->delete();
+            } catch (\Throwable) {
+            }
+        }
+        foreach ([$category, $inactiveCategory] as $category) {
+            try {
+                $category->delete();
+            } catch (\Throwable) {
+            }
+        }
+    }
+});
+
+it('keeps the warmup lock across a page cache flush', function () {
+    $lock = Mage::getSingleton('core/lock');
+    expect($lock->acquire('page_cache_warmup_queue'))->toBeTrue();
+
+    try {
+        Mage::app()->getCache()->cleanType('page_cache');
+        expect($lock->isHeld('page_cache_warmup_queue'))->toBeTrue();
+    } finally {
+        $lock->release('page_cache_warmup_queue');
+    }
+});
+
+it('releases the warmup lock when the queue run fails', function () {
+    $queue = Mage::getModel('page_cache/warmQueue');
+    $queue->clear();
+    $queue->enqueue(['https://example.com/fail'], 1, 'test');
+    $lock = Mage::getSingleton('core/lock');
+    $service = new class extends Maho_PageCache_Service_Warm {
+        #[\Override]
+        public function warm(array $urls, int $concurrency, int $delayMs = 0): array
+        {
+            throw new \RuntimeException('warm failed');
+        }
+    };
+
+    try {
+        $service->consumeQueue();
+        expect($lock->isHeld('page_cache_warmup_queue'))->toBeFalse();
+    } finally {
+        $lock->release('page_cache_warmup_queue');
+        $queue->clear();
+    }
+});

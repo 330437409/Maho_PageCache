@@ -1,6 +1,6 @@
 # 接口文档：Maho 页面缓存
 
-> 状态：0.8.0 已发布@v0.8.0（dist）：FR-22 purge DB outbox、per-target ack/重试、`page-cache:purge:status` 和 stale 告警；FR-23 失效审计表、后台 Invalidations tab、导出和 retention；Static Export 生产配置和 nginx/Caddy benchmark 已完成。0.7.0 已发布@v0.7.0（dist）：RFC-007 Phase 1 CacheEnvelope 和 PERF-02 压缩配置、Phase 2 Context Index 迁移和旧表清理、Phase 3 Warmup 安全补强、Phase 4 Stats 采样、Dynamic 边界与 Proxy Models 验证、PERF-04 Cookie 规范化文档已实现；0.6.1 FR-21 和审计 P1 修复已实现；Phase 5 完成，dist 三库 CI 通过；G9 保留 Known issue。0.5.5 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付；0.5.1 cache integrity 修复、0.5.2 tag 索引重构、0.5.3 P1 加固与性能优化、0.5.4 stock pending 监控和 0.5.5 监控指标导出与后台报表已交付。
+> 状态：0.9.0 已发布@v0.9.0（dist）：FR-24 预热滑动窗口、活跃商品/分类 URL 源、后台 warmup 进度和锁状态。0.8.0 已发布@v0.8.0（dist）：FR-22 purge DB outbox、per-target ack/重试、`page-cache:purge:status` 和 stale 告警；FR-23 失效审计表、后台 Invalidations tab、导出和 retention；Static Export 生产配置和 nginx/Caddy benchmark 已完成。0.7.0 已发布@v0.7.0（dist）：RFC-007 Phase 1 CacheEnvelope 和 PERF-02 压缩配置、Phase 2 Context Index 迁移和旧表清理、Phase 3 Warmup 安全补强、Phase 4 Stats 采样、Dynamic 边界与 Proxy Models 验证、PERF-04 Cookie 规范化文档已实现；0.6.1 FR-21 和审计 P1 修复已实现；Phase 5 完成，dist 三库 CI 通过；G9 原 Local HIT 目标由 Static Export 替代并达成。0.5.5 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付；0.5.1 cache integrity 修复、0.5.2 tag 索引重构、0.5.3 P1 加固与性能优化、0.5.4 stock pending 监控和 0.5.5 监控指标导出与后台报表已交付。
 > 关联 PRD：`docs/PRD.md`
 > 关联架构：`docs/ARCHITECTURE.md`
 
@@ -347,6 +347,7 @@ PHP counters: unavailable (statistics disabled)
 ./maho page-cache:warm --sitemap
 ./maho page-cache:warm --url=https://example.com/ --url=https://example.com/category.html
 ./maho page-cache:warm --sitemap --limit=100 --concurrency=4
+./maho page-cache:warm --active --store=1 --limit=100
 ./maho page-cache:warm --sitemap --dry-run
 ./maho page-cache:warm --queue
 ./maho page-cache:warm --queue --dry-run
@@ -358,14 +359,18 @@ PHP counters: unavailable (statistics disabled)
 | 选项 | 说明 |
 |---|---|
 | `--sitemap` | 从已生成的 sitemap 读取 URL |
+| `--active` | 从商品/分类 URL 重写读取活跃页面 |
+| `--store=N` | `--active` 使用的 store ID，0 表示当前 store |
 | `--url=URL` | 显式 URL，可重复 |
 | `--limit=N` | 最多预热 N 个 URL，默认 100 |
 | `--concurrency=N` | 并发数，0 使用配置 |
-| `--delay=N` | 批次间隔毫秒，仅手工 sitemap/URL 预热；默认取配置 |
-| `--queue` | 消费预热队列；不能和 `--sitemap` 或 `--url` 同时使用 |
+| `--delay=N` | 请求启动间隔毫秒，仅手工预热；默认取配置。完成一个请求立即补下一个 |
+| `--queue` | 消费预热队列；不能和 `--sitemap`、`--active` 或 `--url` 同时使用 |
 | `--dry-run` | 只列出 URL，不发请求；`--queue` 时列出队列中的 URL |
 
-`X-Maho-Cache: BYPASS`、3xx、404/410、401/403 和其他永久 4xx 记为 skipped；429、5xx 和网络错误记为 failed。有 failed 时手工 sitemap/URL 命令返回非零；`--queue` 输出汇总并返回成功，失败行由 cron 继续重试。
+`X-Maho-Cache: BYPASS`、3xx、404/410、401/403 和其他永久 4xx 记为 skipped；429、5xx 和网络错误记为 failed。有 failed 时手工 sitemap/URL/active 命令返回非零；`--queue` 输出汇总并返回成功，失败行由 cron 继续重试。
+
+`--active` 只读取当前 store 下 enabled 且可见的商品、is_active 分类，以及 `options` 为空的系统 URL 重写；目录式路径自动补尾斜杠。
 
 ### 5.3 `page-cache:purge`
 

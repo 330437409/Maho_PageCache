@@ -181,3 +181,21 @@ it('clears every row', function () {
 
     expect($queue->count())->toBe(0);
 });
+
+it('reports pending, due and oldest warmup rows', function () {
+    $queue = Mage::getModel('page_cache/warmQueue');
+    $queue->enqueue(['https://example.com/a'], 1, 'test');
+    $queue->enqueue(['https://example.com/b'], 1, 'test');
+    $rows = $queue->peek(2);
+    Mage::getSingleton('core/resource')->getConnection('core_write')->update(
+        Mage::getSingleton('core/resource')->getTableName('page_cache/warmup_queue'),
+        ['available_at' => gmdate('Y-m-d H:i:s', time() + 300)],
+        ['queue_id = ?' => (int) $rows[1]['queue_id']],
+    );
+
+    $stats = $queue->getStats();
+
+    expect($stats['pending'])->toBe(2)
+        ->and($stats['due'])->toBe(1)
+        ->and($stats['oldest_seconds'])->toBeGreaterThanOrEqual(0);
+});

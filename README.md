@@ -1,6 +1,6 @@
 # Maho_PageCache
 
-Standalone distribution of the Maho page cache module, version 0.8.0.
+Standalone distribution of the Maho page cache module, version 0.9.0.
 
 The repository mirrors the paths the module owns in a Maho installation:
 

@@ -1,6 +1,6 @@
 # 架构文档：Maho 页面缓存
 
-> 状态：0.8.0 已发布@v0.8.0（dist）：FR-22 purge DB outbox、per-target ack/重试、`page-cache:purge:status` 和 stale 告警；FR-23 失效审计表、后台 Invalidations tab、导出和 retention；Static Export 生产配置和 nginx/Caddy benchmark 已完成。0.7.0 已发布@v0.7.0（dist）：RFC-007 Phase 1 CacheEnvelope 和 PERF-02 压缩配置、Phase 2 Context Index 迁移和旧表清理、Phase 3 Warmup 安全补强、Phase 4 Stats 采样、Dynamic 边界与 Proxy Models 验证、PERF-04 Cookie 规范化文档已实现；0.6.1 FR-21 和审计 P1 修复已实现；Phase 5 完成，dist 三库 CI 通过；G9 保留 Known issue。0.5.5 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付；0.5.1 cache integrity 修复、0.5.2 tag 索引重构、0.5.3 P1 加固与性能优化、0.5.4 stock pending 监控和 0.5.5 监控指标导出与后台报表已交付。
+> 状态：0.9.0 已发布@v0.9.0（dist）：FR-24 预热滑动窗口、活跃商品/分类 URL 源、后台 warmup 进度和锁状态。0.8.0 已发布@v0.8.0（dist）：FR-22 purge DB outbox、per-target ack/重试、`page-cache:purge:status` 和 stale 告警；FR-23 失效审计表、后台 Invalidations tab、导出和 retention；Static Export 生产配置和 nginx/Caddy benchmark 已完成。0.7.0 已发布@v0.7.0（dist）：RFC-007 Phase 1 CacheEnvelope 和 PERF-02 压缩配置、Phase 2 Context Index 迁移和旧表清理、Phase 3 Warmup 安全补强、Phase 4 Stats 采样、Dynamic 边界与 Proxy Models 验证、PERF-04 Cookie 规范化文档已实现；0.6.1 FR-21 和审计 P1 修复已实现；Phase 5 完成，dist 三库 CI 通过；G9 原 Local HIT 目标由 Static Export 替代并达成。0.5.5 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付；0.5.1 cache integrity 修复、0.5.2 tag 索引重构、0.5.3 P1 加固与性能优化、0.5.4 stock pending 监控和 0.5.5 监控指标导出与后台报表已交付。
 > 模块：`Maho_PageCache`
 > 关联 PRD：`docs/PRD.md`
 > 关联 spec：`docs/specs/page-cache.md`
@@ -244,7 +244,9 @@ local 服务器端占位符：
 
 - 从已生成的 sitemap、显式 `--url` 或两者合并取 URL。
 - 去重、过滤非 HTTP(S)、按 `--limit` 截断。
-- 用 Symfony HttpClient 并发请求，默认并发取 `page_cache/warmup/concurrency`，批次之间等待 `page_cache/warmup/delay_ms`。请求前校验 store origin 或 `page_cache/warmup/allowed_hosts`；`max_redirects=0`，不跟随重定向。
+- 有 ext-curl 时用 `curl_multi` 做滑动窗口：最多 `page_cache/warmup/concurrency` 个进行中请求，完成一个立即补下一个；`page_cache/warmup/delay_ms` 是请求启动间隔。没有 ext-curl 或测试注入客户端时回退到 Symfony HttpClient chunk。
+- `--active` 从当前 store 的活跃商品/分类 URL 重写读取页面，过滤 disabled、不可见、非活跃分类和 301 重写，目录式 URL 补尾斜杠。
+- 请求前校验 store origin 或 `page_cache/warmup/allowed_hosts`；`max_redirects=0`，不跟随重定向。
 - 不发送 cookie；basic auth 从配置读取。
 - `X-Maho-Cache: BYPASS`、3xx、404/410、401/403 和其他永久 4xx 记为 skipped；429、5xx 和网络错误记为 failed。
 - `--dry-run` 只列出 URL；有 failed 时命令返回非零。

@@ -4,7 +4,7 @@ Maho 的 HTTP 页面缓存集成层。第一期支持 `proxy` 和 `revalidating`
 
 ## 状态
 
-0.8.0 已发布@v0.8.0（dist）：FR-22 purge DB outbox、per-target ack/重试、`page-cache:purge:status` 和 stale 告警；FR-23 失效审计表、后台 Invalidations tab、导出和 retention；Static Export 生产配置和 nginx/Caddy benchmark 已完成。0.7.0 已发布@v0.7.0（dist）：RFC-007 Phase 1 CacheEnvelope 和 PERF-02 压缩配置、Phase 2 Context Index 迁移和旧表清理、Phase 3 Warmup 安全补强、Phase 4 Stats 采样、Dynamic 边界与 Proxy Models 验证、PERF-04 Cookie 规范化文档已实现；0.6.1 FR-21 和审计 P1 修复已实现；Phase 5 完成，dist 三库 CI 通过；G9 保留 Known issue。0.5.5 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付；0.5.1 cache integrity 修复、0.5.2 tag 索引重构、0.5.3 P1 加固与性能优化、0.5.4 stock pending 监控和 0.5.5 监控指标导出与后台报表已交付，累计包含第一期的 HTTP 集成层、proxy/revalidating 两种模式、session skip、tag 失效、purge 队列、配置和 CLI，第二期的 `local` 模式、Ajax/ESI 动态块和 `page-cache:warm`，第三期的静态文件导出、统计面板、定时预热、服务器端动态块占位符和请求级代理模型，以及 0.5.1 的 cache integrity 修复、0.5.2 的 tag 索引重构、0.5.3 的 P1 加固与性能优化、0.5.4 的 stock pending 监控和 0.5.5 的监控指标导出与 Page Cache 后台报表。
+0.9.0 已发布@v0.9.0（dist）：FR-24 预热滑动窗口、活跃商品/分类 URL 源、后台 warmup 进度和锁状态，以及 Static Export 生产配置已完成。0.8.0 已发布@v0.8.0（dist）：FR-22 purge DB outbox、per-target ack/重试、`page-cache:purge:status` 和 stale 告警；FR-23 失效审计表、后台 Invalidations tab、导出和 retention；Static Export 生产配置和 nginx/Caddy benchmark 已完成。0.7.0 已发布@v0.7.0（dist）：RFC-007 Phase 1 CacheEnvelope 和 PERF-02 压缩配置、Phase 2 Context Index 迁移和旧表清理、Phase 3 Warmup 安全补强、Phase 4 Stats 采样、Dynamic 边界与 Proxy Models 验证、PERF-04 Cookie 规范化文档已实现；0.6.1 FR-21 和审计 P1 修复已实现；Phase 5 完成，dist 三库 CI 通过；G9 原 Local HIT 目标由 Static Export 替代并达成。0.5.5 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付；0.5.1 cache integrity 修复、0.5.2 tag 索引重构、0.5.3 P1 加固与性能优化、0.5.4 stock pending 监控和 0.5.5 监控指标导出与后台报表已交付，累计包含第一期的 HTTP 集成层、proxy/revalidating 两种模式、session skip、tag 失效、purge 队列、配置和 CLI，第二期的 `local` 模式、Ajax/ESI 动态块和 `page-cache:warm`，第三期的静态文件导出、统计面板、定时预热、服务器端动态块占位符和请求级代理模型，以及 0.5.1 的 cache integrity 修复、0.5.2 的 tag 索引重构、0.5.3 的 P1 加固与性能优化、0.5.4 的 stock pending 监控和 0.5.5 的监控指标导出与 Page Cache 后台报表。
 
 - 第一期：HTTP 集成层，`proxy` + `revalidating`。0.2.0 已交付。
 - 第二期：`local` 模式、整页 HTML 缓存、Ajax/ESI 动态块、缓存预热。0.2.0 已交付。
@@ -49,6 +49,7 @@ Maho 的 HTTP 页面缓存集成层。第一期支持 `proxy` 和 `revalidating`
 - `docs/specs/page-cache-08-purge-outbox.md`：0.8.0 purge outbox 规格。
 - `docs/specs/page-cache-08-invalidation-audit.md`：0.8.0 失效审计规格。
 - `docs/specs/page-cache-08-static-export-production.md`：0.8.x Static Export 生产化规格。
+- `docs/specs/page-cache-09-warmup-scheduling.md`：0.9.0 预热调度升级规格。
 - `docs/deployment/static-export.md`：Static Export 的 nginx/Caddy 生产配置。
 - `docs/benchmark/0.8.0-static-export.md`：0.8.x Static Export 基准。
 - `docs/adr/0024-purge-outbox.md`：Purge DB outbox 决策。
@@ -140,9 +141,11 @@ local 命中时，显式标记的 leaf block 可以在服务器端重建，不�
 
 - 队列按 URL 去重，有上限；超过上限时淘汰最旧行。
 - 404、redirect、bypass、401/403 和其他永久 4xx 跳过；429、5xx 和网络错误重试，超过次数后移出。
-- 支持批次大小、并发、批次间隔、最大尝试次数、重试间隔和 basic auth。
-- `page-cache:status` 显示队列长度和最近汇总；`page-cache:warm --queue` 手工补跑。
-- 全量失效清空队列，不自动全站预热；全站预热继续用 `--sitemap`。
+- 支持批次大小、并发、请求启动间隔、最大尝试次数、重试间隔和 basic auth。
+- 滑动窗口并发：完成一个请求立即启动下一个，慢 URL 不阻塞整批。
+- `page-cache:warm --active` 从商品/分类 URL 重写读取活跃页面，按 store、状态、可见性和 301 过滤，目录式 URL 自动补尾斜杠。
+- `page-cache:status` 和 dashboard 显示 pending、due、oldest、锁状态和最近汇总；`page-cache:warm --queue` 手工补跑。
+- 全量失效清空队列，不自动全站预热；全站预热用 `--active` 或 `--sitemap`。
 
 ## CLI
 
@@ -157,6 +160,7 @@ local 命中时，显式标记的 leaf block 可以在服务器端重建，不�
 ./maho page-cache:purge:status
 ./maho page-cache:purge:status --check
 ./maho page-cache:warm --sitemap --limit=100
+./maho page-cache:warm --active --store=1 --limit=100
 ./maho page-cache:warm --queue --dry-run
 ./maho page-cache:warm --queue --limit=100
 ./maho page-cache:warm --url=https://example.com/ --url=https://example.com/category.html

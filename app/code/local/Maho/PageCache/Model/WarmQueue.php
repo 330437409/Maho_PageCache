@@ -157,6 +157,36 @@ class Maho_PageCache_Model_WarmQueue
         }
     }
 
+    /**
+     * @return array{pending: int, due: int, oldest_seconds: int|null}
+     */
+    public function getStats(): array
+    {
+        try {
+            $read = $this->read();
+            $pending = (int) $read->fetchOne($read->select()->from($this->table(), ['COUNT(*)']));
+            $due = (int) $read->fetchOne(
+                $read->select()
+                    ->from($this->table(), ['COUNT(*)'])
+                    ->where('available_at <= ?', gmdate('Y-m-d H:i:s')),
+            );
+            $oldest = $read->fetchOne(
+                $read->select()->from($this->table(), ['created_at'])->order('created_at ASC')->limit(1),
+            );
+
+            return [
+                'pending' => $pending,
+                'due' => $due,
+                'oldest_seconds' => is_string($oldest) && $oldest !== ''
+                    ? max(0, time() - (int) strtotime($oldest . ' UTC'))
+                    : null,
+            ];
+        } catch (\Throwable $e) {
+            Mage::logException($e);
+            return ['pending' => 0, 'due' => 0, 'oldest_seconds' => null];
+        }
+    }
+
     public function count(): int
     {
         try {

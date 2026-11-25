@@ -30,6 +30,10 @@ class PageCacheWarm extends BaseMahoCommand
         OutputInterface $output,
         #[Option(description: 'Read URLs from the generated sitemaps')]
         bool $sitemap = false,
+        #[Option(description: 'Read active product and category URLs from URL rewrites')]
+        bool $active = false,
+        #[Option(description: 'Store ID for --active, 0 uses the current store', name: 'store')]
+        int $store = 0,
         #[Option(description: 'URL to warm (repeatable)', name: 'url')]
         array $urls = [],
         #[Option(description: 'Maximum number of URLs to warm', name: 'limit')]
@@ -40,7 +44,7 @@ class PageCacheWarm extends BaseMahoCommand
         bool $dryRun = false,
         #[Option(description: 'Process the warmup queue instead of a sitemap or URL list', name: 'queue')]
         bool $queue = false,
-        #[Option(description: 'Delay between request batches in milliseconds (manual warm only)', name: 'delay')]
+        #[Option(description: 'Delay between request starts in milliseconds (manual warm only)', name: 'delay')]
         ?int $delay = null,
     ): int {
         if (!$this->isModuleActive('Maho_PageCache')) {
@@ -50,12 +54,12 @@ class PageCacheWarm extends BaseMahoCommand
 
         $this->initMaho();
 
-        if ($queue && ($sitemap || $urls !== [])) {
-            $output->writeln('<error>Pass --queue without --sitemap or --url.</error>');
+        if ($queue && ($sitemap || $active || $urls !== [])) {
+            $output->writeln('<error>Pass --queue without --sitemap, --active or --url.</error>');
             return Command::FAILURE;
         }
-        if (!$queue && !$sitemap && $urls === []) {
-            $output->writeln('<error>Pass --queue, --sitemap, at least one --url, or a combination of the last two.</error>');
+        if (!$queue && !$sitemap && !$active && $urls === []) {
+            $output->writeln('<error>Pass --queue, --sitemap, --active, at least one --url, or a combination.</error>');
             return Command::FAILURE;
         }
 
@@ -93,7 +97,7 @@ class PageCacheWarm extends BaseMahoCommand
 
         /** @var \Maho_PageCache_Service_Warm $service */
         $service = Mage::getService('page_cache/warm');
-        $urls = $service->collectUrls($urls, $sitemap, max(1, $limit));
+        $urls = $service->collectUrls($urls, $sitemap, max(1, $limit), $active, $store);
         if ($urls === []) {
             $output->writeln('<comment>No URLs to warm.</comment>');
             return Command::SUCCESS;

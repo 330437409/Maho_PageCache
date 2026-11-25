@@ -15,7 +15,7 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 class Maho_PageCache_Service_Warm
 {
-    private const string WARMUP_LOCK = 'page_cache_warmup_queue';
+    public const string WARMUP_LOCK = 'page_cache_warmup_queue';
 
     /**
      * @return list<string>
@@ -56,11 +56,25 @@ class Maho_PageCache_Service_Warm
      * @param list<string> $explicitUrls
      * @return list<string>
      */
-    public function collectUrls(array $explicitUrls, bool $includeSitemap, int $limit): array
-    {
+    public function collectUrls(
+        array $explicitUrls,
+        bool $includeSitemap,
+        int $limit,
+        bool $includeActive = false,
+        int $storeId = 0,
+    ): array {
         $urls = $explicitUrls;
         if ($includeSitemap) {
             $urls = array_merge($urls, $this->getSitemapUrls());
+        }
+        if ($includeActive) {
+            $urls = array_merge(
+                $urls,
+                $this->collectActiveCatalogUrls(
+                    $storeId > 0 ? $storeId : (int) Mage::app()->getStore()->getId(),
+                    max(1, $limit),
+                ),
+            );
         }
 
         $policy = $this->urlPolicy();
@@ -72,6 +86,85 @@ class Maho_PageCache_Service_Warm
         ));
 
         return array_slice(array_values(array_unique($urls)), 0, max(1, $limit));
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function collectActiveCatalogUrls(int $storeId, int $limit): array
+    {
+        if ($storeId <= 0) {
+            return [];
+        }
+
+        try {
+            $store = $storeId === (int) Mage::app()->getStore()->getId()
+                ? Mage::app()->getStore()
+                : Mage::app()->getStore($storeId);
+            $base = rtrim((string) $store->getConfig(Mage_Core_Model_Store::XML_PATH_UNSECURE_BASE_URL), '/');
+            if ($base === '') {
+                $base = rtrim((string) $store->getBaseUrl(Mage_Core_Model_Store::URL_TYPE_LINK, false), '/');
+            }
+            if ($base === '') {
+                return [];
+            }
+
+            $productIds = Mage::getResourceModel('catalog/product_collection')
+                ->setStoreId($storeId)
+                ->addAttributeToFilter('status', Mage_Catalog_Model_Product_Status::STATUS_ENABLED)
+                ->addAttributeToFilter('visibility', ['in' => [2, 3, 4]])
+                ->getAllIds();
+            $categoryIds = Mage::getResourceModel('catalog/category_collection')
+                ->setStoreId($storeId)
+                ->addAttributeToFilter('is_active', 1)
+                ->getAllIds();
+
+            $read = Mage::getSingleton('core/resource')->getConnection('core_read');
+            $table = Mage::getSingleton('core/resource')->getTableName('core/url_rewrite');
+            $baseSelect = static fn() => $read->select()
+                ->from(['u' => $table], ['request_path'])
+                ->where('u.store_id = ?', $storeId)
+                ->where('u.is_system = ?', 1)
+                ->where('u.options IS NULL OR u.options = ?', '')
+                ->where('u.request_path IS NOT NULL')
+                ->where('u.request_path <> ?', '');
+
+            $paths = [];
+            if ($productIds !== []) {
+                $select = $baseSelect()
+                    ->where('u.product_id IN (?)', $productIds)
+                    ->where('u.target_path LIKE ?', 'catalog/product/view/%');
+                $paths = array_merge($paths, $read->fetchCol($select));
+            }
+            if ($categoryIds !== []) {
+                $select = $baseSelect()
+                    ->where('u.category_id IN (?)', $categoryIds)
+                    ->where('u.target_path LIKE ?', 'catalog/category/view/%');
+                $paths = array_merge($paths, $read->fetchCol($select));
+            }
+
+            $urls = [];
+            foreach ($paths as $path) {
+                if (!is_string($path) || $path === '') {
+                    continue;
+                }
+                $path = '/' . ltrim($path, '/');
+                if (!str_ends_with($path, '/') && pathinfo($path, PATHINFO_EXTENSION) === '') {
+                    $path .= '/';
+                }
+                $url = $base . $path;
+                if ($this->urlPolicy()->isAllowed($url)) {
+                    $urls[$url] = true;
+                }
+            }
+
+            $urls = array_keys($urls);
+            sort($urls, SORT_STRING);
+            return array_slice($urls, 0, max(1, $limit));
+        } catch (\Throwable $e) {
+            Mage::logException($e);
+            return [];
+        }
     }
 
     /**
@@ -138,11 +231,45 @@ class Maho_PageCache_Service_Warm
      */
     public function warm(array $urls, int $concurrency, int $delayMs = 0): array
     {
-        $client = $this->createClient();
         $concurrency = max(1, $concurrency);
         $delayMs = max(0, $delayMs);
         $result = ['warmed' => [], 'skipped' => [], 'failed' => []];
 
+        $queue = [];
+        foreach ($urls as $url) {
+            if (!$this->urlPolicy()->isAllowed($url)) {
+                $result['skipped'][$url] = 'disallowed_host';
+                continue;
+            }
+            $queue[] = $url;
+        }
+
+        if ($queue !== []) {
+            $headers = $this->requestHeaders();
+            $result = $this->useCurlMulti()
+                ? $this->warmCurl($queue, $concurrency, $delayMs, $headers)
+                : $this->warmChunks($queue, $concurrency, $delayMs, $headers);
+        }
+
+        $this->recordWarmupStat($result);
+
+        return $result;
+    }
+
+    protected function useCurlMulti(): bool
+    {
+        if (!function_exists('curl_multi_init')) {
+            return false;
+        }
+
+        return new \ReflectionMethod($this, 'createClient')->getDeclaringClass()->getName() === self::class;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function requestHeaders(): array
+    {
         $headers = [
             'Accept' => 'text/html,application/xhtml+xml',
             'User-Agent' => 'Maho-PageCache-Warm/1.0',
@@ -152,14 +279,156 @@ class Maho_PageCache_Service_Warm
             $headers['Authorization'] = 'Basic ' . base64_encode($auth['user'] . ':' . $auth['password']);
         }
 
+        return $headers;
+    }
+
+    /**
+     * @param list<string> $urls
+     * @param array<string, string> $headers
+     * @return array{warmed: list<string>, skipped: array<string, string>, failed: array<string, string>}
+     */
+    private function warmCurl(array $urls, int $concurrency, int $delayMs, array $headers): array
+    {
+        $result = ['warmed' => [], 'skipped' => [], 'failed' => []];
+        $queue = array_values($urls);
+        $total = count($queue);
+        $next = 0;
+        $lastStart = 0.0;
+        $multi = curl_multi_init();
+        $active = [];
+        $cacheHeaders = [];
+
+        $startNext = function () use (
+            &$next,
+            &$lastStart,
+            &$active,
+            &$cacheHeaders,
+            $queue,
+            $total,
+            $concurrency,
+            $delayMs,
+            $headers,
+            $multi,
+            &$result,
+        ): bool {
+            if ($next >= $total || count($active) >= $concurrency) {
+                return false;
+            }
+
+            $url = $queue[$next++];
+            if ($delayMs > 0 && $lastStart > 0.0) {
+                $wait = $delayMs / 1000 - (microtime(true) - $lastStart);
+                if ($wait > 0) {
+                    usleep((int) round($wait * 1_000_000));
+                }
+            }
+            $lastStart = microtime(true);
+
+            $handle = curl_init($url);
+            if ($handle === false) {
+                $result['failed'][$url] = 'could not create curl handle';
+                return true;
+            }
+
+            $id = spl_object_id($handle);
+            $cacheHeaders[$id] = '';
+            $headerLines = [];
+            foreach ($headers as $name => $value) {
+                $headerLines[] = $name . ': ' . $value;
+            }
+
+            curl_setopt_array($handle, [
+                CURLOPT_FOLLOWLOCATION => false,
+                CURLOPT_MAXREDIRS => 0,
+                CURLOPT_CONNECTTIMEOUT => 10,
+                CURLOPT_TIMEOUT => 30,
+                CURLOPT_HTTPHEADER => $headerLines,
+                CURLOPT_HEADERFUNCTION => static function ($handle, string $line) use (&$cacheHeaders, $id): int {
+                    if (stripos($line, 'X-Maho-Cache:') === 0) {
+                        $cacheHeaders[$id] = trim(substr($line, 14));
+                    }
+                    return strlen($line);
+                },
+                CURLOPT_WRITEFUNCTION => static fn($handle, string $data): int => strlen($data),
+            ]);
+
+            curl_multi_add_handle($multi, $handle);
+            $active[$id] = ['handle' => $handle, 'url' => $url];
+
+            return true;
+        };
+
+        try {
+            while ($next < $total || $active !== []) {
+                while ($next < $total && count($active) < $concurrency) {
+                    if (!$startNext()) {
+                        break;
+                    }
+                }
+
+                do {
+                    $status = curl_multi_exec($multi, $running);
+                } while ($status === CURLM_CALL_MULTI_PERFORM);
+
+                if ($status !== CURLM_OK) {
+                    foreach ($active as $item) {
+                        $result['failed'][$item['url']] = 'curl multi error ' . $status;
+                        curl_multi_remove_handle($multi, $item['handle']);
+                    }
+                    $active = [];
+                    break;
+                }
+
+                if ($active !== []) {
+                    if (curl_multi_select($multi, 1.0) === -1) {
+                        usleep(1000);
+                    }
+                }
+
+                while (($info = curl_multi_info_read($multi)) !== false) {
+                    $handle = $info['handle'];
+                    $id = spl_object_id($handle);
+                    $url = (string) ($active[$id]['url'] ?? '');
+                    unset($active[$id]);
+
+                    $error = curl_error($handle);
+                    $httpCode = (int) curl_getinfo($handle, CURLINFO_RESPONSE_CODE);
+                    if ($error !== '') {
+                        $result['failed'][$url] = $error;
+                    } else {
+                        $this->classifyResponse($url, $httpCode, $cacheHeaders[$id] ?? '', $result);
+                    }
+
+                    curl_multi_remove_handle($multi, $handle);
+                    unset($cacheHeaders[$id]);
+                }
+            }
+        } finally {
+            foreach ($active as $item) {
+                curl_multi_remove_handle($multi, $item['handle']);
+            }
+            curl_multi_close($multi);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Symfony HttpClient fallback for tests and environments without ext-curl.
+     *
+     * @param list<string> $urls
+     * @param array<string, string> $headers
+     * @return array{warmed: list<string>, skipped: array<string, string>, failed: array<string, string>}
+     */
+    private function warmChunks(array $urls, int $concurrency, int $delayMs, array $headers): array
+    {
+        $client = $this->createClient();
+        $result = ['warmed' => [], 'skipped' => [], 'failed' => []];
         $chunks = array_chunk($urls, $concurrency);
+
         foreach ($chunks as $index => $chunk) {
             $responses = [];
             foreach ($chunk as $url) {
-                if (!$this->urlPolicy()->isAllowed($url)) {
-                    $result['skipped'][$url] = 'disallowed_host';
-                    continue;
-                }
                 try {
                     $responses[$url] = $client->request('GET', $url, ['headers' => $headers]);
                 } catch (\Throwable $e) {
@@ -173,22 +442,7 @@ class Maho_PageCache_Service_Warm
                     $responseHeaders = $response->getHeaders(false);
                     $response->getContent(false);
                     $cache = strtoupper((string) ($responseHeaders['x-maho-cache'][0] ?? ''));
-
-                    if ($status === 200 && $cache !== 'BYPASS') {
-                        $result['warmed'][] = $url;
-                    } elseif ($status === 200) {
-                        $result['skipped'][$url] = 'bypass';
-                    } elseif ($status >= 300 && $status < 400) {
-                        $result['skipped'][$url] = 'redirect';
-                    } elseif ($status === 404 || $status === 410) {
-                        $result['skipped'][$url] = 'not_found';
-                    } elseif ($status === 401 || $status === 403) {
-                        $result['skipped'][$url] = 'forbidden';
-                    } elseif ($status === 429 || $status >= 500) {
-                        $result['failed'][$url] = 'HTTP ' . $status;
-                    } else {
-                        $result['skipped'][$url] = 'http_' . $status;
-                    }
+                    $this->classifyResponse($url, $status, $cache, $result);
                 } catch (\Throwable $e) {
                     $result['failed'][$url] = $e->getMessage();
                 }
@@ -199,14 +453,32 @@ class Maho_PageCache_Service_Warm
             }
         }
 
-        $this->recordWarmupStat($result);
-
         return $result;
     }
 
     /**
-     * @return array{at: int, processed: int, warmed: int, skipped: int, failed: int, dropped: int, remaining: int}
+     * @param array{warmed: list<string>, skipped: array<string, string>, failed: array<string, string>} $result
      */
+    private function classifyResponse(string $url, int $status, string $cache, array &$result): void
+    {
+        $cache = strtoupper($cache);
+        if ($status === 200 && $cache !== 'BYPASS') {
+            $result['warmed'][] = $url;
+        } elseif ($status === 200) {
+            $result['skipped'][$url] = 'bypass';
+        } elseif ($status >= 300 && $status < 400) {
+            $result['skipped'][$url] = 'redirect';
+        } elseif ($status === 404 || $status === 410) {
+            $result['skipped'][$url] = 'not_found';
+        } elseif ($status === 401 || $status === 403) {
+            $result['skipped'][$url] = 'forbidden';
+        } elseif ($status === 429 || $status >= 500) {
+            $result['failed'][$url] = 'HTTP ' . $status;
+        } else {
+            $result['skipped'][$url] = 'http_' . $status;
+        }
+    }
+
     public function consumeQueue(int $limit = 0): array
     {
         $summary = $this->emptySummary();

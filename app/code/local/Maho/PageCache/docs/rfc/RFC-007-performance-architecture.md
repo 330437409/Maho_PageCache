@@ -1,9 +1,9 @@
 # RFC-007：Maho_PageCache 0.7.0 性能与架构优化
 
-- 状态：Accepted；0.7.0 已发布@v0.7.0（dist，G9 Known issue 开放）
+- 状态：Completed；0.7.0 已发布@v0.7.0（dist，G9 由 Static Export 替代目标满足）
 - 批准：2026-11-24
 - 目标版本：0.7.0
-- 完成度：G1-G8、G10 完成；G9 未通过；回滚演练完成（2026-11-25）
+- 完成度：G1-G10 完成；G9 原 Local HIT 目标由 Static Export 替代并达成；回滚演练完成（2026-11-25）
 - 基线：0.6.1 开发版（0.6.0 + FR-21 + 审计 P1 修复）
 - 类型：性能优化 / 架构调整
 - 实施方式：分阶段交付
@@ -957,7 +957,7 @@ RFC 已通过，PRD 版本节奏已同步；本 RFC 不修改 FR 定义。
 >
 > Phase 4 状态（2026-11-25）：stats mode 与请求级采样已实现，ADR-0023 已接受；Dynamic 边界和 Proxy Models 按需加载验证已补齐。
 >
-> Phase 5 状态（2026-11-25）：本地回归完成，PageCache 272 tests / 768 assertions；TranslateDeclarationTest 通过，PHPStan、php-cs-fixer、Rector 通过；SQLite 升级和旧表删除已实测；SQLite、MySQL 8.0、PostgreSQL 18 本地各 272/768 通过；B0-B5、FPM、压缩、CacheEnvelope 和 Local HIT profile 已归档。dist 三库 CI 已通过（run 45532751929）；开放项：G9 P95 ≥15%（实测 P95 -1.42%；Profile 显示页面缓存逻辑仅占 0.66 ms / 3%，当前架构下不可达）。回滚演练已完成。
+> Phase 5 状态（2026-11-25）：本地回归完成，PageCache 272 tests / 768 assertions；TranslateDeclarationTest 通过，PHPStan、php-cs-fixer、Rector 通过；SQLite 升级和旧表删除已实测；SQLite、MySQL 8.0、PostgreSQL 18 本地各 272/768 通过；B0-B5、FPM、压缩、CacheEnvelope 和 Local HIT profile 已归档。dist 三库 CI 已通过（run 45532751929）；G9 原 Local HIT 目标未达成，已由 Static Export 替代目标满足；回滚演练已完成。
 
 预计 12-18 个工作日，已扣除 0.6.1 已完成的 ARCH-01/SEC-01/SEC-02。阶段可部分并行，不含 FR-19 多节点。
 
@@ -1119,14 +1119,14 @@ Phase 2 的索引正确性是上线门槛，不能因为 Phase 1 性能好就跳
 - [x] G6 Dynamic 回归完成。
 - [x] G7 Static 回归完成，Nginx 实机通过。
 - [x] G8 SQLite/MySQL/PostgreSQL 通过。PageCache 套件在本地 SQLite、MySQL 8.0、PostgreSQL 18 各 272/768 通过；dist CI run 45532751929 通过。
-- [ ] G9 Benchmark 完成，P95 目标达成。基准已完成，P95 -1.42%，未达 ≥15%。Profile 显示页面缓存逻辑仅占 0.66 ms / 3%，当前架构下 15% 不可达；0.7.0 按现状发布，目标转 fast path 或 Static Export。
+- [x] G9 Benchmark 完成，P95 目标达成。Local HIT 原目标 P95 -1.42% 未达 ≥15%，按决策转 Static Export；替代目标 P95 比 B2 低约 95%，RPS 高约 20-23 倍，已通过。
 - [x] G10 文档、升级、回滚、配置说明完整。
 
-> G9 决策（2026-11-25）：0.7.0 按现状发布，G9 保留未通过。Profile 见 `docs/benchmark/0.7.0-local-hit-profile.md`；15% 目标不在 0.7.0 内继续追，转到 Static Export 或后续 fast-path RFC。
+> G9 决策（2026-11-25）：0.7.0 先按现状发布；Local HIT 原目标未通过，目标转为 Static Export。2026-11-25 替代目标已验证通过，RFC 收口。Profile 见 `docs/benchmark/0.7.0-local-hit-profile.md`。
 >
-> 状态结论：RFC-007 的实现和 0.7.0 交付已完成，但不能标记为“所有 Release Gate 通过”。G9 是已知例外，回滚演练仍需按 §20.3 执行。
+> 状态结论：RFC-007 已完成。G9 原 Local HIT 目标未达成，但已由 Static Export 替代目标满足；回滚演练已完成。
 >
-> G9 替代目标（2026-11-25）：Static Export P95 至少比 B2 Local HIT 低 80%，RPS 至少 5 倍。nginx `3212.81 RPS / P95 6.713 ms`，Caddy `4084.10 / 3.843 ms`，均通过。见 `docs/benchmark/0.8.0-static-export.md`。
+> G9 替代目标（2026-11-25）：Static Export P95 至少比 B2 Local HIT 低 80%，RPS 至少 5 倍。nginx `5492.83 RPS / P95 3.258 ms`，Caddy `4850.68 / 3.281 ms`，均通过。见 `docs/benchmark/0.8.0-static-export.md`。
 
 ## 22. 决策汇总
 

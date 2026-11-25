@@ -75,6 +75,27 @@
     <span><?= $this->__('Last rollup') ?>: <?= $this->getLastRollupBucket() === null ? $this->__('n/a') : $this->escapeHtml($this->getLastRollupBucket()) ?></span>
 </div>
 
+<?php
+$warmStats = $this->getWarmupQueueStats();
+$lastWarm = $this->getLastWarmRun();
+?>
+<div class="flex flex-wrap gap-x-6 gap-y-1 text-sm opacity-80 mb-4">
+    <span><?= $this->__('Warmup queue') ?>: <?= (int) $warmStats['pending'] ?> <?= $this->__('pending') ?>, <?= (int) $warmStats['due'] ?> <?= $this->__('due') ?></span>
+    <span><?= $this->__('Oldest pending') ?>: <?= $warmStats['oldest_seconds'] === null ? $this->__('n/a') : (int) $warmStats['oldest_seconds'] . 's' ?></span>
+    <span><?= $this->__('Warmup lock') ?>: <?= $this->isWarmupLockHeld() ? $this->__('Held') : $this->__('Free') ?></span>
+    <?php if ($lastWarm !== null): ?>
+        <span><?= $this->__(
+            'Last warmup: processed=%d warmed=%d skipped=%d failed=%d dropped=%d remaining=%d',
+            $lastWarm['processed'],
+            $lastWarm['warmed'],
+            $lastWarm['skipped'],
+            $lastWarm['failed'],
+            $lastWarm['dropped'],
+            $lastWarm['remaining'],
+        ) ?></span>
+    <?php endif; ?>
+</div>
+
 <?= $this->getTabsHtml() ?>
 <div id="page_cache_tab_content"></div>
 

@@ -78,3 +78,34 @@ it('renders the invalidation audit grid', function () {
     expect($html)->toContain('Tag Sample')
         ->and($html)->toContain('catalog_product_1');
 });
+
+it('renders the warmup queue and lock state on the dashboard', function () {
+    Mage::app()->getStore()->setConfig('page_cache/warmup/enabled', '1');
+    $queue = Mage::getModel('page_cache/warmQueue');
+    $queue->clear();
+    $queue->enqueue(['https://example.com/warm-a'], 1, 'test');
+    $queue->enqueue(['https://example.com/warm-b'], 1, 'test');
+    $design = Mage::getDesign();
+    $area = $design->getArea();
+    $package = $design->getPackageName();
+    $themes = [];
+    foreach (['layout', 'template', 'skin', 'locale', 'default'] as $type) {
+        $themes[$type] = $design->getTheme($type);
+    }
+
+    try {
+        $design->setArea('adminhtml')->setPackageName('default')->setTheme('default');
+        $html = Mage::app()->getLayout()
+            ->createBlock('page_cache/adminhtml_dashboard')
+            ->toHtml();
+    } finally {
+        $design->setArea($area)->setPackageName($package);
+        foreach ($themes as $type => $theme) {
+            $design->setTheme($type, $theme);
+        }
+        $queue->clear();
+    }
+
+    expect($html)->toContain('Warmup queue')
+        ->and($html)->toContain('Warmup lock');
+});
