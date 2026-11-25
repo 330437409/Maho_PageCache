@@ -1,6 +1,6 @@
 # 接口文档：Maho 页面缓存
 
-> 状态：0.9.0 已发布@v0.9.0（dist）：FR-24 预热滑动窗口、活跃商品/分类 URL 源、后台 warmup 进度和锁状态。0.8.0 已发布@v0.8.0（dist）：FR-22 purge DB outbox、per-target ack/重试、`page-cache:purge:status` 和 stale 告警；FR-23 失效审计表、后台 Invalidations tab、导出和 retention；Static Export 生产配置和 nginx/Caddy benchmark 已完成。0.7.0 已发布@v0.7.0（dist）：RFC-007 Phase 1 CacheEnvelope 和 PERF-02 压缩配置、Phase 2 Context Index 迁移和旧表清理、Phase 3 Warmup 安全补强、Phase 4 Stats 采样、Dynamic 边界与 Proxy Models 验证、PERF-04 Cookie 规范化文档已实现；0.6.1 FR-21 和审计 P1 修复已实现；Phase 5 完成，dist 三库 CI 通过；G9 原 Local HIT 目标由 Static Export 替代并达成。0.5.5 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付；0.5.1 cache integrity 修复、0.5.2 tag 索引重构、0.5.3 P1 加固与性能优化、0.5.4 stock pending 监控和 0.5.5 监控指标导出与后台报表已交付。
+> 状态：0.9.1 已发布@v0.9.1（dist）：监控指标补强、全量预热 runbook，以及统计 rollup、活跃 URL、purge 指标、legacy session cookie、catalog rule、Warm Now 异步和 gzip/动态块加固。 0.9.0 已发布@v0.9.0（dist）：FR-24 预热滑动窗口、活跃商品/分类 URL 源、后台 warmup 进度和锁状态。0.8.0 已发布@v0.8.0（dist）：FR-22 purge DB outbox、per-target ack/重试、`page-cache:purge:status` 和 stale 告警；FR-23 失效审计表、后台 Invalidations tab、导出和 retention；Static Export 生产配置和 nginx/Caddy benchmark 已完成。0.7.0 已发布@v0.7.0（dist）：RFC-007 Phase 1 CacheEnvelope 和 PERF-02 压缩配置、Phase 2 Context Index 迁移和旧表清理、Phase 3 Warmup 安全补强、Phase 4 Stats 采样、Dynamic 边界与 Proxy Models 验证、PERF-04 Cookie 规范化文档已实现；0.6.1 FR-21 和审计 P1 修复已实现；Phase 5 完成，dist 三库 CI 通过；G9 原 Local HIT 目标由 Static Export 替代并达成。0.5.5 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付；0.5.1 cache integrity 修复、0.5.2 tag 索引重构、0.5.3 P1 加固与性能优化、0.5.4 stock pending 监控和 0.5.5 监控指标导出与后台报表已交付。
 > 关联 PRD：`docs/PRD.md`
 > 关联架构：`docs/ARCHITECTURE.md`
 
@@ -45,7 +45,7 @@
 | `page_cache/warmup/enabled` | yes/no | 0 | 调度预热开关 |
 | `page_cache/warmup/concurrency` | text | 4 | `page-cache:warm` 和预热队列默认并发 |
 | `page_cache/warmup/batch_size` | text | 50 | 单次 cron 最大 URL 数 |
-| `page_cache/warmup/delay_ms` | text | 500 | 并发批次之间的等待毫秒数，0 关闭 |
+| `page_cache/warmup/delay_ms` | text | 500 | 请求启动间隔毫秒数，0 关闭；无 ext-curl 的 Symfony 回退路径按批次间隔 |
 | `page_cache/warmup/max_attempts` | text | 3 | 最大失败次数 |
 | `page_cache/warmup/retry_delay` | text | 300 | 重试基础间隔秒，乘以 attempts |
 | `page_cache/warmup/queue_limit` | text | 10000 | 预热队列上限 |
@@ -286,7 +286,7 @@ var/page-cache/static/{store_code}/{public_path}.gz
 
 ### 3.8 统计面板
 
-一级菜单 `Page Cache`，ACL 保留 `admin/report/page_cache`。页面提供 `Warm Now`（处理一个预热队列批次）和 `Configuration` 按钮。统计内容使用五个标准报表 tab：Overview、Trend、Top Missed URLs、Recent Events、Invalidations，每个 tab 是一张 `Mage_Adminhtml_Block_Widget_Grid`，带分页、列过滤和 CSV/Excel XML 导出。`Invalidations` 记录 area、cron job、类型、reason、tag 总数和样本、影响 URL 数、purge/warm 入队、store 和 mode，支持批量删除。
+一级菜单 `Page Cache`，ACL 保留 `admin/report/page_cache`。页面提供 `Warm Now`（投递一个预热队列批次任务）和 `Configuration` 按钮。统计内容使用五个标准报表 tab：Overview、Trend、Top Missed URLs、Recent Events、Invalidations，每个 tab 是一张 `Mage_Adminhtml_Block_Widget_Grid`，带分页、列过滤和 CSV/Excel XML 导出。`Invalidations` 记录 area、cron job、类型、reason、tag 总数和样本、影响 URL 数、purge/warm 入队、store 和 mode，支持批量删除。
 
 - 范围：24 小时、7 天、30 天；可按 store 过滤。
 - 指标：hit rate、PHP 平均耗时、miss、bypass、trend、top missed URL、最近 flush/purge/warmup。
@@ -364,13 +364,13 @@ PHP counters: unavailable (statistics disabled)
 | `--url=URL` | 显式 URL，可重复 |
 | `--limit=N` | 最多预热 N 个 URL，默认 100 |
 | `--concurrency=N` | 并发数，0 使用配置 |
-| `--delay=N` | 请求启动间隔毫秒，仅手工预热；默认取配置。完成一个请求立即补下一个 |
+| `--delay=N` | 请求启动间隔毫秒，仅手工预热；默认取配置。有 ext-curl 时完成一个请求立即补下一个，无 ext-curl 回退按批次间隔 |
 | `--queue` | 消费预热队列；不能和 `--sitemap`、`--active` 或 `--url` 同时使用 |
 | `--dry-run` | 只列出 URL，不发请求；`--queue` 时列出队列中的 URL |
 
 `X-Maho-Cache: BYPASS`、3xx、404/410、401/403 和其他永久 4xx 记为 skipped；429、5xx 和网络错误记为 failed。有 failed 时手工 sitemap/URL/active 命令返回非零；`--queue` 输出汇总并返回成功，失败行由 cron 继续重试。
 
-`--active` 只读取当前 store 下 enabled 且可见的商品、is_active 分类，以及 `options` 为空的系统 URL 重写；目录式路径自动补尾斜杠。
+`--active` 只读取当前 store 下 enabled 且可见的商品、is_active 分类，以及 `options` 为空的系统 URL 重写；目录式路径自动补尾斜杠。基址使用 store 的 link URL，因此会保留 store code 并使用 secure frontend 的 HTTPS 地址；收集失败返回非零。
 
 ### 5.3 `page-cache:purge`
 
@@ -439,7 +439,7 @@ delivered/failed 行按 `page_cache/purge/retention_days` 清理；pending 不�
 | `--format=prometheus` | Prometheus 文本格式，默认 |
 | `--format=json` | JSON，适合 Zabbix、Nagios、脚本 |
 | `--format=text` | 一行 key=value，适合简单探针 |
-| `--check` | stock pending 超过告警阈值时返回退出码 1 |
+| `--check` | stock pending 超过告警阈值、任一 target 的 purge 行超过 stale 阈值或存在 failed purge 行时返回退出码 1 |
 
 指标：
 
@@ -447,12 +447,22 @@ delivered/failed 行按 `page_cache/purge/retention_days` 清理；pending 不�
 - `maho_page_cache_stock_pending_oldest_seconds`
 - `maho_page_cache_stock_pending_stale`
 - `maho_page_cache_stock_pending_warn_age_seconds`
-- `maho_page_cache_purge_queue`（pending outbox 行数）
-- `maho_page_cache_warmup_queue`
+- `maho_page_cache_purge_queue` / `purge_pending`（所有 target 的 pending outbox 行数）
+- `maho_page_cache_purge_processing`
+- `maho_page_cache_purge_failed`（所有 target）
+- `maho_page_cache_purge_oldest_seconds`（所有 target）
+- `maho_page_cache_purge_stale`
+- `maho_page_cache_purge_target_count`
+- `maho_page_cache_purge_target_pending{target="..."}` / `_failed` / `_oldest_seconds`（每个 target 的明细）
+- `maho_page_cache_warmup_queue` / `warmup_pending`
+- `maho_page_cache_warmup_due`
+- `maho_page_cache_warmup_oldest_seconds`
+- `maho_page_cache_warmup_lock`
+- `maho_page_cache_invalidation_24h`
 - `maho_page_cache_hit_today` / `miss` / `bypass` / `revalidated`
 - `maho_page_cache_enabled` / `stats_enabled` / `warmup_enabled`
 
-计数来自 `page_cache_stat`；统计关闭时 counter 为 0，`stats_enabled` 为 0。
+计数来自 `page_cache_stat`；统计关闭时 counter 为 0，`stats_enabled` 为 0。`invalidation_24h` 统计审计表最近 24 小时的行数，审计关闭时不增加。purge 聚合指标统计所有 outbox target；`page-cache:purge:status` 仍按 `--target` 查看单个 target。
 
 ## 6. Purge 事件
 

@@ -148,6 +148,7 @@ class Maho_PageCache_Model_Stat
         try {
             $read = $this->read();
             $write = $this->write();
+            $maxRolledUp = $read->fetchOne($read->select()->from($rollupTable, ['MAX(bucket)']));
             $select = $read->select()
                 ->from($rawTable, [
                     'hour_bucket',
@@ -161,6 +162,9 @@ class Maho_PageCache_Model_Stat
                 ->where('hour_bucket < ?', $currentHour)
                 ->where('created_at < ?', $currentHour)
                 ->group(['hour_bucket', 'store_id', 'event_type', 'route']);
+            if (is_string($maxRolledUp) && $maxRolledUp !== '') {
+                $select->where('hour_bucket > ?', $maxRolledUp);
+            }
             $rows = $read->fetchAll($select);
 
             $write->beginTransaction();
@@ -203,10 +207,6 @@ class Maho_PageCache_Model_Stat
                     $processed++;
                 }
 
-                $write->delete($rawTable, [
-                    'hour_bucket < ?' => $currentHour,
-                    'created_at < ?' => $currentHour,
-                ]);
                 $write->commit();
             } catch (\Throwable $e) {
                 $write->rollBack();

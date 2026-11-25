@@ -117,7 +117,7 @@ it('strips the query and caps unrealistic durations', function () {
         ->and((int) $row['duration_ms'])->toBe(60000);
 });
 
-it('rolls up old buckets and leaves the current bucket', function () {
+it('rolls up old buckets without deleting the raw rows', function () {
     $write = Mage::getSingleton('core/resource')->getConnection('core_write');
     $old = gmdate('Y-m-d H:00:00', time() - 7200);
     $current = gmdate('Y-m-d H:00:00');
@@ -135,7 +135,7 @@ it('rolls up old buckets and leaves the current bucket', function () {
 
     expect($processed)->toBeGreaterThan(0)
         ->and($rollup)->toHaveCount(2)
-        ->and($raw)->toHaveCount(1);
+        ->and($raw)->toHaveCount(3);
 
     $processedAgain = (new Maho_PageCache_Model_Stat())->rollup();
     $rollupAgain = $read->fetchAll($read->select()->from(statHourlyTable()));
@@ -263,4 +263,56 @@ it('returns summary, trend and top missed paths', function () {
         ->and($trend)->not->toBeEmpty()
         ->and($top[0]['url_path'])->toBe('/p.html')
         ->and((int) $top[0]['miss_count'])->toBe(2);
+});
+
+it('keeps historical reports after rollup and does not double count hourly rows', function () {
+    $write = Mage::getSingleton('core/resource')->getConnection('core_write');
+    $old = gmdate('Y-m-d H:i:s', time() - 3 * 86400);
+    $bucket = substr($old, 0, 13) . ':00:00';
+    $write->insertMultiple(statTable(), [
+        [
+            'event_type' => 'hit',
+            'route' => 'catalog_product_view',
+            'url_path' => '/p.html',
+            'store_id' => 1,
+            'mode' => 'local',
+            'duration_ms' => 10,
+            'reason' => null,
+            'hour_bucket' => $bucket,
+            'created_at' => $old,
+        ],
+        [
+            'event_type' => 'miss',
+            'route' => 'catalog_product_view',
+            'url_path' => '/p.html',
+            'store_id' => 1,
+            'mode' => 'local',
+            'duration_ms' => 20,
+            'reason' => null,
+            'hour_bucket' => $bucket,
+            'created_at' => $old,
+        ],
+    ]);
+
+    $stat = new Maho_PageCache_Model_Stat();
+    $stat->rollup();
+    $stat->rollup();
+
+    $read = Mage::getSingleton('core/resource')->getConnection('core_read');
+    $rawCount = (int) $read->fetchOne($read->select()->from(statTable(), ['COUNT(*)']));
+    $hourly = $read->fetchAll($read->select()->from(statHourlyTable())->order('event_type ASC'));
+    $hourlyHit = array_values(array_filter(
+        $hourly,
+        static fn(array $row): bool => (string) $row['event_type'] === 'hit',
+    ));
+
+    expect($rawCount)->toBe(2)
+        ->and($stat->getSummary(7, 1)['hit'])->toBe(1)
+        ->and($stat->getSummary(7, 1)['miss'])->toBe(1)
+        ->and($stat->getTrend(7, 1))->toHaveCount(1)
+        ->and($stat->getTrend(7, 1)[0]['hit'])->toBe(1)
+        ->and($stat->getTopMissed(7, 1))->toHaveCount(1)
+        ->and($stat->getTopMissed(7, 1)[0]['miss_count'])->toBe(1)
+        ->and($hourlyHit)->toHaveCount(1)
+        ->and((int) $hourlyHit[0]['event_count'])->toBe(1);
 });

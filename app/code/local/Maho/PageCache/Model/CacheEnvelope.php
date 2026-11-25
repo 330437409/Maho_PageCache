@@ -60,8 +60,16 @@ class Maho_PageCache_Model_CacheEnvelope
             return null;
         }
 
+        $maxSize = Mage::helper('page_cache')->getHtmlMaxSize();
+        if (strlen($entry['html']) >= 4) {
+            $size = unpack('V', substr($entry['html'], -4));
+            if (is_array($size) && (int) ($size[1] ?? 0) > $maxSize) {
+                return null;
+            }
+        }
+
         $decoded = function_exists('gzdecode') ? @gzdecode($entry['html']) : false;
-        if (!is_string($decoded) || $decoded === '') {
+        if (!is_string($decoded) || $decoded === '' || strlen($decoded) > $maxSize) {
             return null;
         }
 

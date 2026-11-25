@@ -100,6 +100,22 @@ class Maho_PageCache_Model_InvalidationLog
         return $this->write()->delete($this->table(), ['log_id IN (?)' => array_slice($ids, 0, 1000)]);
     }
 
+    public function countRecent(int $hours = 24): int
+    {
+        try {
+            $cutoff = gmdate('Y-m-d H:i:s', time() - max(1, $hours) * 3600);
+            $read = $this->read();
+            return (int) $read->fetchOne(
+                $read->select()
+                    ->from($this->table(), ['COUNT(*)'])
+                    ->where('created_at >= ?', $cutoff),
+            );
+        } catch (\Throwable $e) {
+            Mage::logException($e);
+            return 0;
+        }
+    }
+
     public function cleanup(int $days = 30): int
     {
         $cutoff = gmdate('Y-m-d H:i:s', time() - max(1, $days) * 86400);

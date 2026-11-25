@@ -224,7 +224,12 @@ class Maho_PageCache_Model_HtmlCache
             return null;
         }
 
-        Mage::getSingleton('page_cache/urlIndex')->add($context, $entry['tags'], $versions['url']);
+        if (!$this->urlIndex()->add($context, $entry['tags'], $versions['url'])) {
+            $this->cache()->remove($key->getMetaKey($urlHash));
+            $this->remove($context, $versions);
+            return null;
+        }
+
         $this->addIndex($urlHash, $context->getHash(), $ttl + 3600);
         $entry['html'] = $html;
         return $entry;
@@ -345,6 +350,11 @@ class Maho_PageCache_Model_HtmlCache
     protected function cache(): Mage_Core_Model_Cache
     {
         return Mage::app()->getCache();
+    }
+
+    protected function urlIndex(): Maho_PageCache_Model_UrlIndex
+    {
+        return Mage::getSingleton('page_cache/urlIndex');
     }
 
     private function key(): Maho_PageCache_Model_Key

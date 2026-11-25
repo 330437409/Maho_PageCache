@@ -478,7 +478,15 @@ class Maho_PageCache_Model_Observer
                 array_merge(['PAGE_CACHE'], $key->getCacheTags($tags)),
                 $ttl + 3600,
             );
-            Mage::getSingleton('page_cache/urlIndex')->add($context, $tags, $urlVersion);
+            if (!Mage::getSingleton('page_cache/urlIndex')->add($context, $tags, $urlVersion)) {
+                Mage::app()->getCache()->remove($key->getMetaKey($urlHash));
+                $service->applyBypass('url_index_failure', $helper->isDebugHeaders());
+                Mage::getModel('page_cache/counter')->increment(
+                    Maho_PageCache_Model_Counter::RESULT_BYPASS,
+                    'url_index_failure',
+                );
+                return;
+            }
             $service->apply($context, $ttl, $tags, $helper->isDebugHeaders(), $urlVersion);
             Mage::getModel('page_cache/counter')->increment(Maho_PageCache_Model_Counter::RESULT_MISS);
         } catch (\Throwable $e) {
@@ -971,13 +979,14 @@ class Maho_PageCache_Model_Observer
     public function alertStalePurges(): void
     {
         try {
-            $status = Mage::getModel('page_cache/purgeQueue')->getStatus(Maho_PageCache_Model_PurgeQueue::TARGET_PROXY);
+            $status = Mage::getModel('page_cache/purgeQueue')->getAggregateStatus();
             $staleAfter = Mage::helper('page_cache')->getPurgeStaleAfter();
             if ($status['oldest_pending'] !== null && time() - $status['oldest_pending'] > $staleAfter) {
                 Mage::log(
                     sprintf(
-                        'Page cache purge outbox has a pending row older than %d seconds (target proxy, pending %d, failed %d).',
+                        'Page cache purge outbox has a pending row older than %d seconds (targets %d, pending %d, failed %d).',
                         $staleAfter,
+                        count($status['targets']),
                         $status['pending'],
                         $status['failed'],
                     ),

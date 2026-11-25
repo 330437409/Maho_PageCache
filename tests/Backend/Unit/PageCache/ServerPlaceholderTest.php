@@ -122,6 +122,20 @@ it('does not wrap a block whose type is not allowed', function () {
     expect($result)->toBeNull();
 });
 
+it('keeps the anonymous html when the cached block type is no longer allowed', function () {
+    [$context, $result] = serverPlaceholderMarker();
+    Mage::app()->getStore()->setConfig('page_cache/dynamic/server_types', 'cms/block');
+
+    $html = Mage::getService('page_cache/dynamic')->renderServerBlocks(
+        $result['html'],
+        ['dynamic_blocks' => [$result['id'] => $result['definition']]],
+        $context,
+    );
+
+    expect($html)->toContain('<span>anonymous</span>')
+        ->and($html)->not->toContain('live');
+});
+
 it('renders the live block on a local hit', function () {
     [$context, $result] = serverPlaceholderMarker();
 

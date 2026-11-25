@@ -225,6 +225,10 @@ class Maho_PageCache_Service_Invalidator
             $this->invalidateAll('catalog_rule_empty');
             return;
         }
+        if (count($productIds) > self::MAX_TAGGED_ENTITIES) {
+            $this->invalidateAll('catalog_rule_mass');
+            return;
+        }
 
         $tags = [];
         foreach ($productIds as $productId) {
@@ -232,6 +236,10 @@ class Maho_PageCache_Service_Invalidator
         }
         foreach ($this->getCategoryIdsForProducts($productIds) as $categoryId) {
             $tags[] = 'catalog_category_' . $categoryId;
+        }
+        if (count($tags) > self::MAX_TAGGED_ENTITIES) {
+            $this->invalidateAll('catalog_rule_mass');
+            return;
         }
         $this->invalidateTags($tags, 'catalog_rule');
     }

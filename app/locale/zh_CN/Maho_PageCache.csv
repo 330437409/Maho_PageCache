@@ -103,3 +103,5 @@
 "Last warmup: processed=%d warmed=%d skipped=%d failed=%d dropped=%d remaining=%d","最近预热：processed=%d warmed=%d skipped=%d failed=%d dropped=%d remaining=%d"
 "Delay Between Request Starts (ms)","请求启动间隔（毫秒）"
 "Minimum interval between starting two warmup requests. Default is 500. Set 0 to disable.","两次预热请求启动之间的最小间隔。默认 500。设为 0 关闭。"
+"Warmup queued. The queue worker will process one batch.","预热已入队，队列进程将处理一个批次。"
+"Warmup could not be queued. Check the logs and try again.","预热入队失败，请检查日志后重试。"

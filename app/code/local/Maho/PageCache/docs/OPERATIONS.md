@@ -32,7 +32,7 @@
 - `Warmup` 队列的 pending、due、oldest、锁状态和最近一次 processed/warmed/skipped/failed/dropped/remaining
 - `PHP counters (today)` 或 `counters unavailable`
 
-`page-cache:purge:status --check` 在 pending 超过 `page_cache/purge/stale_after` 或存在 failed 行时返回非零，可直接接监控。
+`page-cache:purge:status --check` 按 `--target` 检查单个 target；`page-cache:monitor` 的 purge 指标聚合所有 target，并额外输出每个 target 的 pending/failed/oldest 序列。
 
 ### 2.1.1 Purge outbox
 
@@ -88,6 +88,44 @@ grep -i page_cache var/log/exception.log | tail -n 50
 - `page_cache_audit_cleanup`，每天 03:35
 - `page_cache_warmup`，每分钟（滑动窗口消费）
 
+### 2.5 全量预热
+
+cron 只消费 tag 失效写入的队列，不会自动全量预热。部署、`cache:flush` 或首次上线后，需要手工跑一次 `--active`。
+
+先确认 URL 数量和范围：
+
+```bash
+./maho page-cache:warm --active --store=1 --limit=1000000 --dry-run | tail -1
+```
+
+`--limit` 是硬上限，不是分页偏移；重复用小 limit 跑只会预热同一批排在前面的 URL。全量预热时把 limit 设为不小于活跃 URL 总数。
+
+低峰执行，从默认并发 4 开始：
+
+```bash
+time ./maho page-cache:warm --active --store=1 --limit=1000000 --concurrency=4
+```
+
+- 有 failed 时命令返回非零；3xx、404/410、401/403 和其他永久 4xx 记为 skipped，不重试。
+- 目录式 URL 自动补尾斜杠；`.html` 站点保持原路径。
+- 只请求 store base URL 和 `page_cache/warmup/allowed_hosts` 中的 origin，不跟随重定向。
+- 源站 CPU 或数据库压力高时降低 `--concurrency`，或用 `--delay` 增加请求启动间隔（无 ext-curl 时回退为批次间隔）。
+- 手工全量预热不持有 warmup 队列锁，可能和 cron 消费重叠。队列 `due` 较高时先让 cron 清空，再跑全量。
+- 静态导出页面只在静态文件仍存在时不需要预热；`cache:flush` 或失效后静态文件已删除，预热用于让请求回源 PHP 并重新生成静态文件。
+
+跑完检查：
+
+```bash
+./maho page-cache:status
+./maho page-cache:monitor --format=text --check
+```
+
+每次全量预热记录一行：
+
+| 日期 | store | limit | concurrency | 耗时 | warmed | skipped | failed | 备注 |
+|---|---|---|---|---|---|---|---|---|
+|  |  |  |  |  |  |  |  |  |
+
 ## 3. 接入现有监控
 
 ### 3.1 Prometheus textfile
@@ -113,6 +151,24 @@ groups:
       - alert: MahoPageCacheHitRateLow
         expr: (maho_page_cache_hit_today + maho_page_cache_revalidated_today) / clamp_min(maho_page_cache_hit_today + maho_page_cache_miss_today + maho_page_cache_revalidated_today, 1) < 0.5
         for: 30m
+      - alert: MahoPageCachePurgeFailed
+        expr: maho_page_cache_purge_failed > 0
+        for: 5m
+      - alert: MahoPageCachePurgeTargetFailed
+        expr: maho_page_cache_purge_target_failed > 0
+        for: 5m
+      - alert: MahoPageCachePurgeStale
+        expr: maho_page_cache_purge_stale == 1
+        for: 15m
+      - alert: MahoPageCacheWarmupBacklog
+        expr: maho_page_cache_warmup_due > 100
+        for: 15m
+      - alert: MahoPageCacheWarmupLockStuck
+        expr: maho_page_cache_warmup_lock == 1
+        for: 30m
+      - alert: MahoPageCacheInvalidationSpike
+        expr: maho_page_cache_invalidation_24h > 500
+        for: 10m
 ```
 
 `stats_enabled=0` 时 counter 为 0，不要让 hit rate 告警误报。
@@ -124,7 +180,7 @@ groups:
 ```
 
 - 退出码 0：正常
-- 退出码 1：stock pending 超过告警阈值
+- 退出码 1：stock pending 超过告警阈值，或 purge 超过 stale 阈值，或存在 failed purge 行
 - 输出一行 key=value，可直接作为 check 结果
 
 JSON 模式适合自定义采集：

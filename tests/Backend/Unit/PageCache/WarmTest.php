@@ -26,7 +26,10 @@ function warmupTestQueueClean(): void
 
 beforeEach(function () {
     Mage::app()->getStore()->setConfig('web/unsecure/base_url', 'https://example.com/');
+    Mage::app()->getStore()->setConfig('web/unsecure/base_link_url', 'https://example.com/');
     Mage::app()->getStore()->setConfig('web/secure/base_url', 'https://example.com/');
+    Mage::app()->getStore()->setConfig('web/secure/base_link_url', 'https://example.com/');
+    Mage::app()->getStore()->setConfig('web/url/use_store', '0');
     Mage::getService('page_cache/urlPolicy')->reset();
     Mage::app()->getStore()->setConfig('page_cache/warmup/enabled', '1');
     Mage::app()->getStore()->setConfig('page_cache/warmup/batch_size', '10');
@@ -479,7 +482,7 @@ it('collects active product and category urls and skips redirects', function () 
             ]);
         }
 
-        $urls = (new Maho_PageCache_Service_Warm())->collectActiveCatalogUrls(1, 20);
+        $urls = (new Maho_PageCache_Service_Warm())->collectActiveCatalogUrls(1, 5000);
 
         expect($urls)->toContain('https://example.com/' . array_key_first($paths) . '/')
             ->and($urls)->toContain('https://example.com/' . array_keys($paths)[3])
@@ -535,4 +538,54 @@ it('releases the warmup lock when the queue run fails', function () {
         $lock->release('page_cache_warmup_queue');
         $queue->clear();
     }
+});
+
+it('builds the warmup base from the secure link url and keeps the store code', function () {
+    $store = Mage::app()->getStore();
+    $paths = [
+        'web/url/use_store',
+        'web/unsecure/base_url',
+        'web/unsecure/base_link_url',
+        'web/secure/base_url',
+        'web/secure/base_link_url',
+        'web/secure/use_in_frontend',
+    ];
+    $original = [];
+    foreach ($paths as $path) {
+        $original[$path] = $store->getConfig($path);
+    }
+
+    $service = new class extends Maho_PageCache_Service_Warm {
+        public function base(Mage_Core_Model_Store $store): string
+        {
+            return $this->getStoreBaseUrl($store);
+        }
+    };
+
+    try {
+        $store->setConfig('web/url/use_store', '1');
+        $store->setConfig('web/unsecure/base_url', 'http://example.com/');
+        $store->setConfig('web/unsecure/base_link_url', 'http://example.com/');
+        $store->setConfig('web/secure/base_url', 'https://example.com/');
+        $store->setConfig('web/secure/base_link_url', 'https://example.com/');
+        $store->setConfig('web/secure/use_in_frontend', '1');
+
+        expect($service->base($store))->toBe('https://example.com/default');
+    } finally {
+        foreach ($original as $path => $value) {
+            $store->setConfig($path, (string) $value);
+        }
+    }
+});
+
+it('fails loudly when active url collection fails', function () {
+    $service = new class extends Maho_PageCache_Service_Warm {
+        protected function getStoreBaseUrl(Mage_Core_Model_Store $store): string
+        {
+            throw new RuntimeException('database is down');
+        }
+    };
+
+    expect(static fn(): array => $service->collectActiveCatalogUrls(1, 10))
+        ->toThrow(RuntimeException::class, 'database is down');
 });

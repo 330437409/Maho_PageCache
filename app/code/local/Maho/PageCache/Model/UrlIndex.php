@@ -23,7 +23,7 @@ class Maho_PageCache_Model_UrlIndex
     /**
      * @param list<string> $tags
      */
-    public function add(Maho_PageCache_Model_Context $context, array $tags, int $version): void
+    public function add(Maho_PageCache_Model_Context $context, array $tags, int $version): bool
     {
         $tags = $this->normalizeTags($tags);
         $urlHash = $context->getUrlHash();
@@ -106,12 +106,14 @@ class Maho_PageCache_Model_UrlIndex
             }
 
             $write->commit();
+            return true;
         } catch (\Throwable $e) {
             try {
                 $write->rollBack();
             } catch (\Throwable) {
             }
             Mage::logException($e);
+            return false;
         }
     }
 

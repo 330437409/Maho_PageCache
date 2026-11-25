@@ -17,6 +17,8 @@ class Maho_PageCache_Service_Warm
 {
     public const string WARMUP_LOCK = 'page_cache_warmup_queue';
 
+    private const int ACTIVE_ID_CHUNK = 500;
+
     /**
      * @return list<string>
      */
@@ -101,50 +103,88 @@ class Maho_PageCache_Service_Warm
             $store = $storeId === (int) Mage::app()->getStore()->getId()
                 ? Mage::app()->getStore()
                 : Mage::app()->getStore($storeId);
-            $base = rtrim((string) $store->getConfig(Mage_Core_Model_Store::XML_PATH_UNSECURE_BASE_URL), '/');
-            if ($base === '') {
-                $base = rtrim((string) $store->getBaseUrl(Mage_Core_Model_Store::URL_TYPE_LINK, false), '/');
-            }
+            $base = $this->getStoreBaseUrl($store);
             if ($base === '') {
                 return [];
             }
 
-            $productIds = Mage::getResourceModel('catalog/product_collection')
+            $limit = max(1, $limit);
+            $urls = [];
+            $productCollection = Mage::getResourceModel('catalog/product_collection')
                 ->setStoreId($storeId)
                 ->addAttributeToFilter('status', Mage_Catalog_Model_Product_Status::STATUS_ENABLED)
-                ->addAttributeToFilter('visibility', ['in' => [2, 3, 4]])
-                ->getAllIds();
-            $categoryIds = Mage::getResourceModel('catalog/category_collection')
-                ->setStoreId($storeId)
-                ->addAttributeToFilter('is_active', 1)
-                ->getAllIds();
+                ->addAttributeToFilter('visibility', ['in' => [2, 3, 4]]);
+            $this->collectActiveRewriteUrls(
+                $productCollection,
+                'product_id',
+                'catalog/product/view/',
+                $storeId,
+                $base,
+                $limit,
+                $urls,
+            );
 
-            $read = Mage::getSingleton('core/resource')->getConnection('core_read');
-            $table = Mage::getSingleton('core/resource')->getTableName('core/url_rewrite');
-            $baseSelect = static fn() => $read->select()
+            if (count($urls) < $limit) {
+                $categoryCollection = Mage::getResourceModel('catalog/category_collection')
+                    ->setStoreId($storeId)
+                    ->addAttributeToFilter('is_active', 1);
+                $this->collectActiveRewriteUrls(
+                    $categoryCollection,
+                    'category_id',
+                    'catalog/category/view/',
+                    $storeId,
+                    $base,
+                    $limit,
+                    $urls,
+                );
+            }
+
+            $urls = array_keys($urls);
+            sort($urls, SORT_STRING);
+            return array_slice($urls, 0, $limit);
+        } catch (\Throwable $e) {
+            Mage::logException($e);
+            throw $e;
+        }
+    }
+
+    /**
+     * @param array<string, true> $urls
+     */
+    private function collectActiveRewriteUrls(
+        Mage_Catalog_Model_Resource_Collection_Abstract $collection,
+        string $column,
+        string $targetPrefix,
+        int $storeId,
+        string $base,
+        int $limit,
+        array &$urls,
+    ): void {
+        $read = Mage::getSingleton('core/resource')->getConnection('core_read');
+        $table = Mage::getSingleton('core/resource')->getTableName('core/url_rewrite');
+        $offset = 0;
+
+        do {
+            $ids = $collection->getAllIds(self::ACTIVE_ID_CHUNK, $offset);
+            $ids = array_values(array_filter(
+                array_map(intval(...), is_array($ids) ? $ids : []),
+                static fn(int $id): bool => $id > 0,
+            ));
+            if ($ids === []) {
+                return;
+            }
+
+            $select = $read->select()
                 ->from(['u' => $table], ['request_path'])
                 ->where('u.store_id = ?', $storeId)
                 ->where('u.is_system = ?', 1)
                 ->where('u.options IS NULL OR u.options = ?', '')
                 ->where('u.request_path IS NOT NULL')
-                ->where('u.request_path <> ?', '');
+                ->where('u.request_path <> ?', '')
+                ->where('u.' . $column . ' IN (?)', $ids)
+                ->where('u.target_path LIKE ?', $targetPrefix . '%');
 
-            $paths = [];
-            if ($productIds !== []) {
-                $select = $baseSelect()
-                    ->where('u.product_id IN (?)', $productIds)
-                    ->where('u.target_path LIKE ?', 'catalog/product/view/%');
-                $paths = array_merge($paths, $read->fetchCol($select));
-            }
-            if ($categoryIds !== []) {
-                $select = $baseSelect()
-                    ->where('u.category_id IN (?)', $categoryIds)
-                    ->where('u.target_path LIKE ?', 'catalog/category/view/%');
-                $paths = array_merge($paths, $read->fetchCol($select));
-            }
-
-            $urls = [];
-            foreach ($paths as $path) {
+            foreach ($read->fetchCol($select) as $path) {
                 if (!is_string($path) || $path === '') {
                     continue;
                 }
@@ -156,15 +196,13 @@ class Maho_PageCache_Service_Warm
                 if ($this->urlPolicy()->isAllowed($url)) {
                     $urls[$url] = true;
                 }
+                if (count($urls) >= $limit) {
+                    return;
+                }
             }
 
-            $urls = array_keys($urls);
-            sort($urls, SORT_STRING);
-            return array_slice($urls, 0, max(1, $limit));
-        } catch (\Throwable $e) {
-            Mage::logException($e);
-            return [];
-        }
+            $offset += count($ids);
+        } while (count($ids) === self::ACTIVE_ID_CHUNK);
     }
 
     /**
@@ -664,6 +702,33 @@ class Maho_PageCache_Service_Warm
             $message .= '; failed=' . implode(',', array_slice(array_keys($failed), 0, 3));
         }
         Mage::log($message, Mage::LOG_INFO, 'page-cache-warmup.log');
+    }
+
+    protected function getStoreBaseUrl(Mage_Core_Model_Store $store): string
+    {
+        $secure = (bool) $store->getConfig(Mage_Core_Model_Store::XML_PATH_SECURE_IN_FRONTEND)
+            && str_starts_with(
+                strtolower((string) $store->getConfig(Mage_Core_Model_Store::XML_PATH_SECURE_BASE_URL)),
+                'https://',
+            );
+        $base = (string) $store->getConfig($secure ? 'web/secure/base_link_url' : 'web/unsecure/base_link_url');
+        if ($base === '') {
+            $base = (string) $store->getConfig(
+                $secure
+                    ? Mage_Core_Model_Store::XML_PATH_SECURE_BASE_URL
+                    : Mage_Core_Model_Store::XML_PATH_UNSECURE_BASE_URL,
+            );
+        }
+        if ($base === '' && $secure) {
+            $base = (string) $store->getConfig(Mage_Core_Model_Store::XML_PATH_UNSECURE_BASE_URL);
+        }
+
+        $base = rtrim($base, '/');
+        if ($base !== '' && $store->getStoreInUrl()) {
+            $base .= '/' . $store->getCode();
+        }
+
+        return $base;
     }
 
     private function key(): Maho_PageCache_Model_Key

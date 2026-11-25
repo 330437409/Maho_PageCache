@@ -199,3 +199,5 @@
 "Last warmup: processed=%d warmed=%d skipped=%d failed=%d dropped=%d remaining=%d","Last warmup: processed=%d warmed=%d skipped=%d failed=%d dropped=%d remaining=%d"
 "Delay Between Request Starts (ms)","Delay Between Request Starts (ms)"
 "Minimum interval between starting two warmup requests. Default is 500. Set 0 to disable.","Minimum interval between starting two warmup requests. Default is 500. Set 0 to disable."
+"Warmup queued. The queue worker will process one batch.","Warmup queued. The queue worker will process one batch."
+"Warmup could not be queued. Check the logs and try again.","Warmup could not be queued. Check the logs and try again."

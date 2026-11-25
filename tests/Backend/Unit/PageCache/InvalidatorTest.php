@@ -17,6 +17,7 @@ beforeEach(function () {
     Mage::getService('page_cache/urlPolicy')->reset();
     Mage::app()->getStore()->setConfig('page_cache/general/enabled', '1');
     Mage::app()->getStore()->setConfig('page_cache/general/mode', 'proxy');
+    Mage::app()->getStore()->setConfig('page_cache/warmup/enabled', '0');
     Mage::app()->getCache()->cleanType('page_cache');
     Mage::getModel('page_cache/urlIndex')->clear();
     Mage::getSingleton('core/resource')->getConnection('core_write')->delete(
@@ -295,6 +296,37 @@ it('invalidates the products and categories matched by a catalog rule', function
 
     expect((new Maho_PageCache_Model_Version())->getUrl($productContext->getUrlHash()))->toBe(2)
         ->and((new Maho_PageCache_Model_Version())->getUrl($categoryContext->getUrlHash()))->toBe(2);
+});
+
+it('falls back to a full flush when a catalog rule matches too many entities', function () {
+    $invalidator = new class extends Maho_PageCache_Service_Invalidator {
+        public array $calls = [];
+
+        protected function getCategoryIdsForProducts(array $productIds): array
+        {
+            return [];
+        }
+
+        public function invalidateTags(array $tags, string $type = ''): void
+        {
+            $this->calls[] = 'tags:' . count($tags);
+        }
+
+        public function invalidateAll(string $reason = 'full'): void
+        {
+            $this->calls[] = 'all:' . $reason;
+        }
+    };
+    $rule = new class extends Mage_CatalogRule_Model_Rule {
+        public function getMatchingProductIds(): array
+        {
+            return array_fill_keys(range(1, 31), []);
+        }
+    };
+
+    $invalidator->invalidateCatalogRule($rule);
+
+    expect($invalidator->calls)->toBe(['all:catalog_rule_mass']);
 });
 
 it('queues the affected urls for warmup when enabled', function () {

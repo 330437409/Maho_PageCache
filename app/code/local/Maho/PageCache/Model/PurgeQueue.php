@@ -314,6 +314,68 @@ class Maho_PageCache_Model_PurgeQueue
         ];
     }
 
+    /**
+     * @return list<string>
+     */
+    public function getTargets(): array
+    {
+        try {
+            $read = $this->read();
+            $targets = $read->fetchCol(
+                $read->select()
+                    ->distinct()
+                    ->from($this->table(), ['target'])
+                    ->order('target ASC'),
+            );
+        } catch (\Throwable $e) {
+            Mage::logException($e);
+            return [];
+        }
+
+        return array_values(array_filter(
+            array_map(strval(...), $targets),
+            static fn(string $target): bool => $target !== '',
+        ));
+    }
+
+    /**
+     * @return array{pending: int, processing: int, delivered: int, failed: int, oldest_pending: int|null, targets: array<string, array{pending: int, processing: int, delivered: int, failed: int, oldest_pending: int|null}>}
+     */
+    public function getAggregateStatus(): array
+    {
+        $aggregate = [
+            'pending' => 0,
+            'processing' => 0,
+            'delivered' => 0,
+            'failed' => 0,
+            'oldest_pending' => null,
+            'targets' => [],
+        ];
+
+        foreach ($this->getTargets() as $target) {
+            $status = $this->getStatus($target);
+            $aggregate['targets'][$target] = [
+                'pending' => (int) $status['pending'],
+                'processing' => (int) $status['processing'],
+                'delivered' => (int) $status['delivered'],
+                'failed' => (int) $status['failed'],
+                'oldest_pending' => $status['oldest_pending'],
+            ];
+            $aggregate['pending'] += (int) $status['pending'];
+            $aggregate['processing'] += (int) $status['processing'];
+            $aggregate['delivered'] += (int) $status['delivered'];
+            $aggregate['failed'] += (int) $status['failed'];
+            $oldest = $status['oldest_pending'];
+            if (is_int($oldest) && $oldest > 0
+                && ($aggregate['oldest_pending'] === null || $oldest < $aggregate['oldest_pending'])
+            ) {
+                $aggregate['oldest_pending'] = $oldest;
+            }
+        }
+
+        return $aggregate;
+    }
+
     public function cleanup(int $retentionDays = 7): int
     {
         $cutoff = gmdate('Y-m-d H:i:s', time() - max(1, $retentionDays) * 86400);

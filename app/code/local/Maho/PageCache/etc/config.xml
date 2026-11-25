@@ -2,7 +2,7 @@
 <config>
     <modules>
         <Maho_PageCache>
-            <version>0.9.0</version>
+            <version>0.9.1</version>
         </Maho_PageCache>
     </modules>
     <global>

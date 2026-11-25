@@ -830,7 +830,7 @@ docs/
     └── page-cache-07-warmup-security.md
 ```
 
-ARCH-01 的 ADR 已在 0.6.1 审计修复中覆盖，可补 `0022-context-level-url-index.md` 作为正式记录。
+ARCH-01 的 ADR 已在 0.6.1 审计修复中覆盖，正式记录见 `docs/adr/0022-context-level-url-index.md`。
 
 ## 16. 配置兼容性
 

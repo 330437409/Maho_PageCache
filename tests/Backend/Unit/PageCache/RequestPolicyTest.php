@@ -107,6 +107,29 @@ it('allows known query parameters', function () {
     ])))->toBeNull();
 });
 
+it('bypasses allowed parameters whose value is an array', function () {
+    $service = new Maho_PageCache_Service_Request();
+
+    expect($service->evaluate(pageCacheRequestInput([
+        'params' => ['limit' => ['12', '24']],
+    ])))->toBe('parameter');
+});
+
+it('treats legacy session cookies as session cookies', function () {
+    $request = new Mage_Core_Controller_Request_Http(
+        Symfony\Component\HttpFoundation\Request::create('/', 'GET', [], ['frontend' => 'legacy-session']),
+    );
+    $action = new class ($request, new Mage_Core_Controller_Response_Http()) extends Mage_Core_Controller_Varien_Action {};
+
+    try {
+        $input = (new Maho_PageCache_Service_Request())->getInput($action);
+    } finally {
+        Mage::app()->getFrontController()->setAction(null);
+    }
+
+    expect($input['session_cookie'])->toBeTrue();
+});
+
 it('skips session only on configured session routes', function () {
     $service = new Maho_PageCache_Service_Request();
 

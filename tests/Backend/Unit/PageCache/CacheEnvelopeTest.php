@@ -104,6 +104,16 @@ it('returns null when gzip decoding fails', function () {
     expect(Maho_PageCache_Model_CacheEnvelope::decode($entry))->toBeNull();
 });
 
+it('rejects a gzip entry larger than the configured html limit', function () {
+    Mage::app()->getStore()->setConfig('page_cache/general/html_max_size', '1024');
+    $html = str_repeat('a', 4096);
+    $entry = cacheEnvelopeEntry(cacheEnvelopeContext());
+    $entry['html'] = (string) gzencode($html);
+    $entry['html_encoding'] = 'gzip';
+
+    expect(Maho_PageCache_Model_CacheEnvelope::decode($entry))->toBeNull();
+});
+
 it('keeps the lock name stable when versions change', function () {
     $context = cacheEnvelopeContext();
     $cache = new Maho_PageCache_Model_HtmlCache();

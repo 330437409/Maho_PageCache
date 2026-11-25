@@ -87,7 +87,7 @@ class Maho_PageCache_Model_Backend_Local extends Maho_PageCache_Model_Backend_Ab
             $this->getMode(),
             $urlVersion,
         );
-        $version->storeEtag($context->getUrlHash(), $etag, $lastModified, $tags);
+        $version->storeEtag($context->getUrlHash(), $etag, $lastModified, $tags, $ttl);
 
         $response = $this->response();
         $response->setHeader('ETag', $etag, true);

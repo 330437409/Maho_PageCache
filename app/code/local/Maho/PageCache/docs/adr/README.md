@@ -25,6 +25,7 @@
 | 0019 | session cookie 命中策略保持保守 | 已接受，FR-20 暂停 |
 | 0020 | 请求级代理模型只缓存实例，不缓存模型数据 | 已接受，FR-15（0.6.0） |
 | 0021 | Local Cache 使用稳定 Envelope 和 Entry 内版本 | 已接受，0.7.0 Phase 1 |
+| 0022 | URL 索引按 context 保存变体 | 已接受，0.6.1 / 0.7.0 |
 | 0023 | Stats 使用请求级采样，系统事件不采样 | 已接受，0.7.0 Phase 4 |
 | 0024 | Purge 使用 DB outbox 和 per-target ack | 已接受，FR-22（0.8.0） |
 

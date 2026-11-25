@@ -27,7 +27,7 @@ class PageCacheMonitor extends BaseMahoCommand
         OutputInterface $output,
         #[Option(description: 'Output format: prometheus, json or text', name: 'format')]
         string $format = 'prometheus',
-        #[Option(description: 'Exit non-zero when stock pending exceeded the warning age')]
+        #[Option(description: 'Exit non-zero on stale stock pending, stale purge rows or failed purge rows')]
         bool $check = false,
     ): int {
         if (!$this->isModuleActive('Maho_PageCache')) {

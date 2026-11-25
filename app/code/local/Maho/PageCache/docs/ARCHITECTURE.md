@@ -1,6 +1,6 @@
 # 架构文档：Maho 页面缓存
 
-> 状态：0.9.0 已发布@v0.9.0（dist）：FR-24 预热滑动窗口、活跃商品/分类 URL 源、后台 warmup 进度和锁状态。0.8.0 已发布@v0.8.0（dist）：FR-22 purge DB outbox、per-target ack/重试、`page-cache:purge:status` 和 stale 告警；FR-23 失效审计表、后台 Invalidations tab、导出和 retention；Static Export 生产配置和 nginx/Caddy benchmark 已完成。0.7.0 已发布@v0.7.0（dist）：RFC-007 Phase 1 CacheEnvelope 和 PERF-02 压缩配置、Phase 2 Context Index 迁移和旧表清理、Phase 3 Warmup 安全补强、Phase 4 Stats 采样、Dynamic 边界与 Proxy Models 验证、PERF-04 Cookie 规范化文档已实现；0.6.1 FR-21 和审计 P1 修复已实现；Phase 5 完成，dist 三库 CI 通过；G9 原 Local HIT 目标由 Static Export 替代并达成。0.5.5 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付；0.5.1 cache integrity 修复、0.5.2 tag 索引重构、0.5.3 P1 加固与性能优化、0.5.4 stock pending 监控和 0.5.5 监控指标导出与后台报表已交付。
+> 状态：0.9.1 已发布@v0.9.1（dist）：监控指标补强、全量预热 runbook，以及统计 rollup、活跃 URL、purge 指标、legacy session cookie、catalog rule、Warm Now 异步和 gzip/动态块加固。 0.9.0 已发布@v0.9.0（dist）：FR-24 预热滑动窗口、活跃商品/分类 URL 源、后台 warmup 进度和锁状态。0.8.0 已发布@v0.8.0（dist）：FR-22 purge DB outbox、per-target ack/重试、`page-cache:purge:status` 和 stale 告警；FR-23 失效审计表、后台 Invalidations tab、导出和 retention；Static Export 生产配置和 nginx/Caddy benchmark 已完成。0.7.0 已发布@v0.7.0（dist）：RFC-007 Phase 1 CacheEnvelope 和 PERF-02 压缩配置、Phase 2 Context Index 迁移和旧表清理、Phase 3 Warmup 安全补强、Phase 4 Stats 采样、Dynamic 边界与 Proxy Models 验证、PERF-04 Cookie 规范化文档已实现；0.6.1 FR-21 和审计 P1 修复已实现；Phase 5 完成，dist 三库 CI 通过；G9 原 Local HIT 目标由 Static Export 替代并达成。0.5.5 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付；0.5.1 cache integrity 修复、0.5.2 tag 索引重构、0.5.3 P1 加固与性能优化、0.5.4 stock pending 监控和 0.5.5 监控指标导出与后台报表已交付。
 > 模块：`Maho_PageCache`
 > 关联 PRD：`docs/PRD.md`
 > 关联 spec：`docs/specs/page-cache.md`
@@ -183,7 +183,7 @@ tag 失效时：
 6. 渲染完成后，`controller_front_send_response_before` 检查版本没有变化，写入 v2 envelope、meta、原生实体 tag 和 URL 索引；版本在渲染期间变化时不保存，返回 `version_changed` bypass。
 7. 旧 `PC_HTML_<hash>` entry 只在 v2 envelope 不存在时 fallback 读取，升级后建议 flush 一次。
 8. HTML 超过 `page_cache/general/html_max_size` 时不缓存，返回 `html_too_large` bypass。
-9. 大于 `page_cache/local/compression_min_bytes`（默认 4096）的 HTML 在缓存中 gzip 存储；`compression_enabled=0` 时存 plain，`compression_level` 默认 6，命中时按 `html_encoding` 解压后再输出。
+9. 大于 `page_cache/local/compression_min_bytes`（默认 4096）的 HTML 在缓存中 gzip 存储；`compression_enabled=0` 时存 plain，`compression_level` 默认 6，命中时按 `html_encoding` 解压后再输出。解压后的长度超过 `html_max_size` 时按 miss 处理。
 
 `local` 响应是 `private`，浏览器每次回源重新验证，命中发生在 Maho 内部。
 
@@ -200,7 +200,7 @@ block 在 layout 里显式设置 `page_cache_dynamic=1`。渲染时：
 7. 动态响应 `Cache-Control: private, no-store`、`X-Maho-Cache: DYNAMIC`，代理不得缓存。
 8. block 显式标记 `page_cache_dynamic_cacheable=1` 且 `page_cache/dynamic/ttl>0` 时，动态响应按 block 集合写入 `PC_DYNAMIC_<hash>`；key 包含 block 列表、URL、context、customer group、store 和版本。命中时在 layout 前直接返回，form key/SID 仍从当前 session 生成。
 
-占位符 token 是 base64url JSON 加 HMAC，绑定 block、页面 URL、store、context 和过期时间。注释里用 hex 编码 token 和 block name，避免 HTML 注释中的 `--` 和属性转义。缓存页面里的 form key/SID 换成 `{{PAGE_CACHE_FORM_KEY}}` / `{{PAGE_CACHE_SID}}`，由注入的脚本用动态请求结果替换。
+占位符 token 是 base64url JSON 加 HMAC，绑定 block、页面 URL、store、context 和过期时间。注释里用 hex 编码 token 和 block name，避免 HTML 注释中的 `--` 和属性转义。缓存页面里的 form key/SID 换成 `{{PAGE_CACHE_FORM_KEY}}` / `{{PAGE_CACHE_SID}}`，由注入的脚本用动态请求结果替换。服务器端重建前再次校验定义里的 block type 在 `server_types` 中，并拒绝包含 `..` 的 template 路径。
 
 local 服务器端占位符：
 
@@ -271,8 +271,8 @@ local 服务器端占位符：
 - `page_cache/stats/mode` 支持 `off`、`full`、`sampled`。`enabled=0` 时永远关闭；`enabled=1` 且 mode 缺失或非法时按 `full`。`sampled` 在请求级决定一次，同一请求的 HIT/MISS/BYPASS/REVALIDATED/DYNAMIC 共用该决策；`purge`、`flush`、`warmup` 系统事件始终完整记录。
 - 面板显示当前模式和采样率；sampled 时标明计数为估算，不是精确总量。
 - admin 前台请求不记录，避免 admin secret key 进入统计；flush/purge/warmup 系统事件不带 admin 路径。
-- `page_cache_stats_rollup` 每小时聚合，`page_cache_stats_cleanup` 每天清理。
-- 一级菜单 `Page Cache` 使用五个报表 tab：Overview、Trend、Top Missed URLs、Recent Events、Invalidations；每个 tab 是标准 `Mage_Adminhtml_Block_Widget_Grid`，读取原始表、rollup 表或审计表。`Warm Now` 处理一个预热队列批次。
+- `page_cache_stats_rollup` 每小时聚合，只处理比已聚合最新 bucket 更新的数据；原始事件保留到 `raw_retention_days`，由 `page_cache_stats_cleanup` 每天清理。
+- 一级菜单 `Page Cache` 使用五个报表 tab：Overview、Trend、Top Missed URLs、Recent Events、Invalidations；每个 tab 是标准 `Mage_Adminhtml_Block_Widget_Grid`，读取原始表、rollup 表或审计表。`Warm Now` 投递一个预热队列批次任务，不在 admin 请求内执行网络请求。
 - 静态、代理和 CDN 命中不经过 PHP，不计入。
 - `Invalidations` tab 记录 tag 和全量失效的来源、类型、reason、tag 样本、影响 URL 数和 purge/warm 入队；审计开关独立于请求统计，默认关闭。
 
@@ -346,7 +346,7 @@ catalog rule：
 
 - 实体使用原生 cache tag `PAGE_CACHE_TAG_<tag>`，HTML、meta 和 ETag 都打 tag；`clean($tags)` 由缓存适配器原子执行。
 - Local HIT 只读 global version、URL version、v2 envelope；meta 继续供 revalidating、dynamic 和旧 entry fallback 使用。
-- URL 索引在 DB，不会因为缓存淘汰而丢失；DB 查询失败时全量失效。
+- URL 索引在 DB，不会因为缓存淘汰而丢失；DB 查询失败时全量失效，写入失败时页面按 bypass 处理并触发全量 purge。
 - URL 行只保存资源级信息；每个 context 在 `page_cache_url_context` 单独保存 store、public path、URL 和 tag，避免同一 URL 的多个变体互相覆盖。
 - Warmup、子 sitemap 和队列入队只接受 store base URL 的 scheme+host+port；Basic Auth 不会发往非 store origin。
 - `page_cache_url` 按 `ttl + 3600` 清理，和 meta TTL 对齐。
@@ -445,7 +445,7 @@ ETag = W/"<version>"
 | `page_cache/warmup/enabled` | 调度预热开关 | 0 |
 | `page_cache/warmup/concurrency` | 预热默认并发 | 4 |
 | `page_cache/warmup/batch_size` | 单次 cron 最大 URL 数 | 50 |
-| `page_cache/warmup/delay_ms` | 批次间隔毫秒 | 500 |
+| `page_cache/warmup/delay_ms` | 请求启动间隔毫秒；Symfony 回退按批次间隔 | 500 |
 | `page_cache/warmup/max_attempts` | 最大失败次数 | 3 |
 | `page_cache/warmup/retry_delay` | 重试基础间隔秒 | 300 |
 | `page_cache/warmup/queue_limit` | 预热队列上限 | 10000 |

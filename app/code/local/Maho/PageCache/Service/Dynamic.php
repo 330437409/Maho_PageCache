@@ -217,8 +217,18 @@ class Maho_PageCache_Service_Dynamic
 
                 try {
                     $definition = $blocks[$id];
+                    $type = (string) ($definition['type'] ?? '');
+                    $template = (string) ($definition['template'] ?? '');
+                    if (!in_array($type, $this->helper()->getDynamicServerTypes(), true)
+                        || ($template !== ''
+                            && (str_contains($template, '..')
+                                || preg_match('#^[A-Za-z0-9_./-]+$#', $template) !== 1))
+                    ) {
+                        $failed++;
+                        return $anonymous;
+                    }
                     $block = Mage::app()->getLayout()->createBlock(
-                        (string) ($definition['type'] ?? ''),
+                        $type,
                         (string) ($definition['name'] ?? ''),
                         is_array($definition['data'] ?? null) ? $definition['data'] : [],
                     );
@@ -226,7 +236,6 @@ class Maho_PageCache_Service_Dynamic
                         $failed++;
                         return $anonymous;
                     }
-                    $template = (string) ($definition['template'] ?? '');
                     if ($template !== '') {
                         $block->setTemplate($template);
                     }

@@ -132,30 +132,17 @@ class Maho_PageCache_Adminhtml_PageCacheController extends Mage_Adminhtml_Contro
                     $helper->__('Scheduled warmup is disabled. Enable it before warming the queue.'),
                 );
             } else {
-                $summary = Mage::getService('page_cache/warm')->consumeQueue($helper->getWarmupBatchSize());
-                if ($summary['processed'] === 0) {
-                    $message = $summary['remaining'] > 0
-                        ? $helper->__('No URLs are due now. %d URL(s) remain in the warmup queue.', $summary['remaining'])
-                        : $helper->__('The warmup queue is empty.');
-                    Mage::getSingleton('adminhtml/session')->addNotice($message);
-                } else {
-                    Mage::getSingleton('adminhtml/session')->addSuccess(
-                        $helper->__(
-                            'Processed %d URL(s): warmed=%d skipped=%d failed=%d dropped=%d remaining=%d.',
-                            $summary['processed'],
-                            $summary['warmed'],
-                            $summary['skipped'],
-                            $summary['failed'],
-                            $summary['dropped'],
-                            $summary['remaining'],
-                        ),
-                    );
-                }
+                \Maho\Queue\QueueManager::dispatch(
+                    new Maho_PageCache_Model_WarmMessage($helper->getWarmupBatchSize()),
+                );
+                Mage::getSingleton('adminhtml/session')->addSuccess(
+                    $helper->__('Warmup queued. The queue worker will process one batch.'),
+                );
             }
         } catch (\Throwable $e) {
             Mage::logException($e);
             Mage::getSingleton('adminhtml/session')->addError(
-                $helper->__('Warmup failed. Check the logs and try again.'),
+                $helper->__('Warmup could not be queued. Check the logs and try again.'),
             );
         }
 

@@ -348,6 +348,34 @@ it('tags local html and meta with the entity cache tag', function () {
         ->and(Mage::app()->getCache()->load($metaKey))->toBeFalse();
 });
 
+it('does not keep a local entry when the url index write fails', function () {
+    $cache = new class extends Maho_PageCache_Model_HtmlCache {
+        protected function urlIndex(): Maho_PageCache_Model_UrlIndex
+        {
+            return new class extends Maho_PageCache_Model_UrlIndex {
+                #[\Override]
+                public function add(Maho_PageCache_Model_Context $context, array $tags, int $version): bool
+                {
+                    return false;
+                }
+            };
+        }
+    };
+    $context = localCacheContext();
+
+    $entry = $cache->save(
+        $context,
+        '<html>index failure</html>',
+        ['catalog_product_1'],
+        60,
+        [],
+        $cache->getVersions($context),
+    );
+
+    expect($entry)->toBeNull()
+        ->and($cache->load($context))->toBeNull();
+});
+
 it('serves a local hit before dispatch', function () {
     $context = new Maho_PageCache_Model_Context();
     $cache = new Maho_PageCache_Model_HtmlCache();

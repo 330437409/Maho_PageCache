@@ -187,3 +187,20 @@ it('filters by tag before applying the limit', function () {
     expect($rows)->toHaveCount(1)
         ->and(array_values($rows)[0]['urls'])->toBe(['https://example.com/b']);
 });
+
+it('aggregates status across targets', function () {
+    Mage::app()->getStore()->setConfig('page_cache/purge/max_attempts', '1');
+    $queue = new Maho_PageCache_Model_PurgeQueue();
+    $proxy = $queue->enqueue(['https://example.com/a'], ['tag_a'], 'proxy', 'proxy');
+    $queue->enqueue(['https://example.com/b'], ['tag_b'], 'proxy', 'cdn');
+    $queue->claim('proxy', 10);
+    $queue->fail($proxy, 'proxy down');
+
+    $aggregate = $queue->getAggregateStatus();
+
+    expect($queue->getTargets())->toBe(['cdn', 'proxy'])
+        ->and($aggregate['pending'])->toBe(1)
+        ->and($aggregate['failed'])->toBe(1)
+        ->and($aggregate['targets']['proxy']['failed'])->toBe(1)
+        ->and($aggregate['targets']['cdn']['pending'])->toBe(1);
+});

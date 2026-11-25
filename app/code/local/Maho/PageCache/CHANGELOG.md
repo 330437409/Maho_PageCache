@@ -2,6 +2,27 @@
 
 All notable changes to `Maho_PageCache` are recorded here.
 
+## 0.9.1 (2026-11-25)
+
+### Added
+
+- `page-cache:monitor` now reports purge pending, processing, failed, oldest and stale state across all outbox targets, per-target purge series, warmup pending, due, oldest and lock state, and the invalidation audit count for the last 24 hours. `--check` also fails on stale purge rows or failed purge rows.
+- Prometheus alert examples for failed or stale purges, warmup backlog, a stuck warmup lock and an invalidation spike.
+- An operations runbook for a full `--active` warmup, including the `--limit` cap, concurrency and delay tuning, overlap with the cron queue and post-run checks.
+
+### Fixed
+
+- Statistics rollup no longer deletes raw events after each hourly aggregation. Raw rows stay until `raw_retention_days`, so 1/7/30-day summaries, trends, Top Missed URLs and the `hit_today` counters keep the completed hours.
+- The page cache dashboard no longer runs warmup HTTP requests inside the admin request; `Warm Now` queues one warmup batch for a queue worker.
+- `--active` warmup now builds URLs from the store link base, so store-code URLs and secure frontend URLs are correct, and it pages through active IDs instead of loading the whole catalog. A failed active URL collection now fails the command instead of returning an empty success.
+- Allowed array query parameters now bypass the cache instead of being dropped from the cache key.
+- Legacy `frontend` and `om_frontend` session cookies now bypass the cache like `maho_session`.
+- A failed URL index write now prevents the page from being stored as a cacheable entry and falls back to a full purge for proxy pages.
+- Catalog rules that match more than 30 product or category tags now fall back to a full invalidation.
+- Gzip cache entries are rejected when the decompressed HTML exceeds `html_max_size`.
+- Server-side dynamic blocks now re-check the cached block type and template path before rendering.
+- ETag cache entries now expire with the page TTL.
+
 ## 0.9.0 (2026-11-25)
 
 ### Added
@@ -26,6 +47,8 @@ All notable changes to `Maho_PageCache` are recorded here.
 - `page-cache:purge` claims outbox rows and acks after the event or purge file hand-off. Failed rows retry with exponential backoff and remain visible after the maximum attempts.
 
 ## 0.7.0 (2026-11-25)
+
+This release also contains the 0.6.1 work (FR-21 tag budget and the audit P1 fixes). 0.6.1 was not tagged separately.
 
 ### Known issue
 

@@ -82,6 +82,11 @@ class Maho_PageCache_Service_Request
             if ($unknown !== []) {
                 return 'parameter';
             }
+            foreach ($params as $value) {
+                if (!is_scalar($value)) {
+                    return 'parameter';
+                }
+            }
         }
 
         if (!$dynamic && !empty($input['respect_no_cache']) && !empty($input['no_cache'])) {
@@ -201,6 +206,15 @@ class Maho_PageCache_Service_Request
         $request = $controller->getRequest();
         $helper = Mage::helper('page_cache');
         $sessionName = Mage_Core_Controller_Front_Action::SESSION_NAMESPACE;
+        $sessionNames = array_merge(
+            [$sessionName],
+            Mage_Core_Controller_Front_Action::SESSION_LEGACY_NAMESPACES,
+        );
+        $hasSessionCookie = array_any(
+            $sessionNames,
+            static fn(string $name): bool => (bool) $request->getCookie($name)
+                || (bool) $request->getCookie($name . '_cid'),
+        );
         $query = $request->getQuery();
         $query = is_array($query) ? $query : [];
         unset($query[Maho_PageCache_Service_Dynamic::PARAM_ESI]);
@@ -218,8 +232,7 @@ class Maho_PageCache_Service_Request
             'max_filter_depth' => $helper->getMaxFilterDepth(),
             'max_path_segments' => $helper->getMaxPathSegments(),
             'session_skip_routes' => $helper->getSessionSkipRoutes(),
-            'session_cookie' => (bool) $request->getCookie($sessionName)
-                || (bool) $request->getCookie($sessionName . '_cid'),
+            'session_cookie' => $hasSessionCookie,
             'params' => $query,
             'allowed_params' => $helper->getAllowedParams(),
             'respect_no_cache' => $helper->respectNoCache(),

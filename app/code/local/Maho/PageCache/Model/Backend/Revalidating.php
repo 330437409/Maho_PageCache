@@ -36,7 +36,7 @@ class Maho_PageCache_Model_Backend_Revalidating extends Maho_PageCache_Model_Bac
         $urlHash = $context->getUrlHash();
         $etag = $version->getEtag($urlHash, $context->getHash(), $ttl, $this->getMode(), $urlVersion);
         $lastModified = time();
-        $version->storeEtag($urlHash, $etag, $lastModified, $tags);
+        $version->storeEtag($urlHash, $etag, $lastModified, $tags, $ttl);
 
         $response = $this->response();
         $response->setHeader('ETag', $etag, true);
