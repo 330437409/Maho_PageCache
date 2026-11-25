@@ -956,7 +956,7 @@ RFC 已通过，PRD 版本节奏已同步；本 RFC 不修改 FR 定义。
 >
 > Phase 4 状态（2026-11-25）：stats mode 与请求级采样已实现，ADR-0023 已接受；Dynamic 边界和 Proxy Models 按需加载验证已补齐。
 >
-> Phase 5 状态（2026-11-25）：本地回归完成，PageCache 272 tests / 768 assertions；TranslateDeclarationTest 通过，PHPStan、php-cs-fixer、Rector 通过；SQLite 升级和旧表删除已实测；SQLite、MySQL 8.0、PostgreSQL 18 本地各 272/768 通过；B0-B5、FPM、压缩、CacheEnvelope 和 Local HIT profile 已归档。开放项：官方三库 CI（需推送批准）、G9 P95 ≥15%（实测 P95 -1.42%；Profile 显示页面缓存逻辑仅占 0.66 ms / 3%，当前架构下不可达）、正式发布和回滚演练。
+> Phase 5 状态（2026-11-25）：本地回归完成，PageCache 272 tests / 768 assertions；TranslateDeclarationTest 通过，PHPStan、php-cs-fixer、Rector 通过；SQLite 升级和旧表删除已实测；SQLite、MySQL 8.0、PostgreSQL 18 本地各 272/768 通过；B0-B5、FPM、压缩、CacheEnvelope 和 Local HIT profile 已归档。dist 三库 CI 已通过（run 45532751929）；开放项：G9 P95 ≥15%（实测 P95 -1.42%；Profile 显示页面缓存逻辑仅占 0.66 ms / 3%，当前架构下不可达）、回滚演练。
 
 预计 12-18 个工作日，已扣除 0.6.1 已完成的 ARCH-01/SEC-01/SEC-02。阶段可部分并行，不含 FR-19 多节点。
 
@@ -1108,7 +1108,7 @@ Phase 2 的索引正确性是上线门槛，不能因为 Phase 1 性能好就跳
 - [x] G5 Stats off/full/sampled 正常。
 - [x] G6 Dynamic 回归完成。
 - [x] G7 Static 回归完成，Nginx 实机通过。
-- [x] G8 SQLite/MySQL/PostgreSQL 通过。PageCache 套件在本地 SQLite、MySQL 8.0、PostgreSQL 18 各 272/768 通过；官方 CI 仍需推送后执行。
+- [x] G8 SQLite/MySQL/PostgreSQL 通过。PageCache 套件在本地 SQLite、MySQL 8.0、PostgreSQL 18 各 272/768 通过；dist CI run 45532751929 通过。
 - [ ] G9 Benchmark 完成，P95 目标达成。基准已完成，P95 -1.42%，未达 ≥15%。Profile 显示页面缓存逻辑仅占 0.66 ms / 3%，当前架构下 15% 不可达；0.7.0 按现状发布，目标转 fast path 或 Static Export。
 - [x] G10 文档、升级、回滚、配置说明完整。
 

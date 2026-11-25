@@ -1,6 +1,6 @@
 # 架构文档：Maho 页面缓存
 
-> 状态：0.7.0 发布准备中：RFC-007 Phase 1 CacheEnvelope 和 PERF-02 压缩配置、Phase 2 Context Index 迁移和旧表清理、Phase 3 Warmup 安全补强、Phase 4 Stats 采样、Dynamic 边界与 Proxy Models 验证、PERF-04 Cookie 规范化文档已实现；0.6.1 FR-21 和审计 P1 修复已实现；Phase 5 本地验证完成，本地三库通过；官方 CI 和 G9 仍开放。0.5.5 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付；0.5.1 cache integrity 修复、0.5.2 tag 索引重构、0.5.3 P1 加固与性能优化、0.5.4 stock pending 监控和 0.5.5 监控指标导出与后台报表已交付。
+> 状态：0.7.0 已发布@v0.7.0（dist）：RFC-007 Phase 1 CacheEnvelope 和 PERF-02 压缩配置、Phase 2 Context Index 迁移和旧表清理、Phase 3 Warmup 安全补强、Phase 4 Stats 采样、Dynamic 边界与 Proxy Models 验证、PERF-04 Cookie 规范化文档已实现；0.6.1 FR-21 和审计 P1 修复已实现；Phase 5 完成，dist 三库 CI 通过；G9 保留 Known issue。0.5.5 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付；0.5.1 cache integrity 修复、0.5.2 tag 索引重构、0.5.3 P1 加固与性能优化、0.5.4 stock pending 监控和 0.5.5 监控指标导出与后台报表已交付。
 > 模块：`Maho_PageCache`
 > 关联 PRD：`docs/PRD.md`
 > 关联 spec：`docs/specs/page-cache.md`
