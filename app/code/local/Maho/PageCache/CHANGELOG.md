@@ -2,6 +2,12 @@
 
 All notable changes to `Maho_PageCache` are recorded here.
 
+## 0.10.0 (2026-11-25)
+
+### Added
+
+- `page_cache/proxy/swr` adds `stale-while-revalidate` to the proxy `Cache-Control` header. The default is 0, which omits the directive; values are integers from 1 to 86400. local and revalidating headers do not change, and purge remains a hard delete.
+
 ## 0.9.2 (2026-11-25)
 
 ### Changed

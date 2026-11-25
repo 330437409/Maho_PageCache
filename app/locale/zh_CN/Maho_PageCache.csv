@@ -116,3 +116,6 @@
 "Invalidation Log","失效日志"
 "Open page cache settings","打开页面缓存设置"
 "Historical data","历史数据"
+"Proxy","代理"
+"Stale While Revalidate (seconds)","Stale While Revalidate（秒）"
+"Adds stale-while-revalidate to the proxy Cache-Control header. 0 disables it. The proxy must support the directive and background refresh.","在代理的 Cache-Control 响应头中加入 stale-while-revalidate。设为 0 关闭。代理必须支持该指令并执行后台刷新。"

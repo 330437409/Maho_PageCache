@@ -21,7 +21,9 @@ class Maho_PageCache_Model_Backend_Proxy extends Maho_PageCache_Model_Backend_Ab
     #[\Override]
     public function getCacheControl(int $ttl): string
     {
-        return 'public, s-maxage=' . max(1, $ttl) . ', max-age=0';
+        $cacheControl = 'public, s-maxage=' . max(1, $ttl) . ', max-age=0';
+        $swr = Mage::helper('page_cache')->getProxySwr();
+        return $swr > 0 ? $cacheControl . ', stale-while-revalidate=' . $swr : $cacheControl;
     }
 
     #[\Override]

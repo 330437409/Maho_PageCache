@@ -1,6 +1,6 @@
 # 产品需求文档（PRD）：Maho 页面缓存
 
-> 状态：0.9.2 已发布@v0.9.2（dist）：页面缓存菜单移到 System，后台改为顶部状态卡、tab 栏右侧范围和商店筛选、Invalidation Log，并删除重复的摘要 grid 与导出。 0.9.1 已发布@v0.9.1（dist）：监控指标补强、全量预热 runbook，以及统计 rollup、活跃 URL、purge 指标、legacy session cookie、catalog rule、Warm Now 异步和 gzip/动态块加固。 0.9.0 已发布@v0.9.0（dist）：FR-24 预热滑动窗口、活跃商品/分类 URL 源、后台 warmup 进度和锁状态。0.8.0 已发布@v0.8.0（dist）：FR-22 purge DB outbox、per-target ack/重试、`page-cache:purge:status` 和 stale 告警；FR-23 失效审计表、后台 Invalidations tab、导出和 retention；Static Export 生产配置和 nginx/Caddy benchmark 已完成。0.7.0 已发布@v0.7.0（dist）：RFC-007 Phase 1 CacheEnvelope 和 PERF-02 压缩配置、Phase 2 Context Index 迁移和旧表清理、Phase 3 Warmup 安全补强、Phase 4 Stats 采样、Dynamic 边界与 Proxy Models 验证、PERF-04 Cookie 规范化文档已实现；0.6.1 FR-21 和审计 P1 修复已实现；Phase 5 完成，dist 三库 CI 通过；G9 原 Local HIT 目标由 Static Export 替代并达成。0.5.5 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付；0.5.1 cache integrity 修复、0.5.2 tag 索引重构、0.5.3 P1 加固与性能优化、0.5.4 stock pending 监控和 0.5.5 监控指标导出与后台面板已交付。
+> 状态：0.10.0 已发布@v0.10.0（dist）：FR-25 proxy stale-while-revalidate，配置 0 到 86400 秒，默认 0；local/revalidating 不变，purge 仍为硬删除。 0.9.2 已发布@v0.9.2（dist）：页面缓存菜单移到 System，后台改为顶部状态卡、tab 栏右侧范围和商店筛选、Invalidation Log，并删除重复的摘要 grid 与导出。 0.9.1 已发布@v0.9.1（dist）：监控指标补强、全量预热 runbook，以及统计 rollup、活跃 URL、purge 指标、legacy session cookie、catalog rule、Warm Now 异步和 gzip/动态块加固。 0.9.0 已发布@v0.9.0（dist）：FR-24 预热滑动窗口、活跃商品/分类 URL 源、后台 warmup 进度和锁状态。0.8.0 已发布@v0.8.0（dist）：FR-22 purge DB outbox、per-target ack/重试、`page-cache:purge:status` 和 stale 告警；FR-23 失效审计表、后台 Invalidations tab、导出和 retention；Static Export 生产配置和 nginx/Caddy benchmark 已完成。0.7.0 已发布@v0.7.0（dist）：RFC-007 Phase 1 CacheEnvelope 和 PERF-02 压缩配置、Phase 2 Context Index 迁移和旧表清理、Phase 3 Warmup 安全补强、Phase 4 Stats 采样、Dynamic 边界与 Proxy Models 验证、PERF-04 Cookie 规范化文档已实现；0.6.1 FR-21 和审计 P1 修复已实现；Phase 5 完成，dist 三库 CI 通过；G9 原 Local HIT 目标由 Static Export 替代并达成。0.5.5 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付；0.5.1 cache integrity 修复、0.5.2 tag 索引重构、0.5.3 P1 加固与性能优化、0.5.4 stock pending 监控和 0.5.5 监控指标导出与后台面板已交付。
 > 模块：`Maho_PageCache`
 > 代码路径：`app/code/local/Maho/PageCache`
 > 关联 spec：`docs/specs/page-cache.md`
@@ -90,11 +90,11 @@ Maho 目前有 Symfony Cache 对象缓存（file/redis），但没有内置的 H
 | FR-22 | Purge 持久化投递：DB outbox、per-target ack/重试/退避、`page-cache:purge:status` 和 stale 告警 | P3 | 已交付@v0.8.0 |
 | FR-23 | 失效审计日志：记录 area/cron、失效类型、reason、tag 总数与样本、影响 URL 数、purge/warm 入队；后台筛选/导出/retention | P3 | 已交付@v0.8.0 |
 | FR-24 | 预热调度升级：滑动窗口并发、活跃产品/分类 URL 源、后台进度、cache flush 后仍有效的锁 | P3 | 已交付@v0.9.0（0.9.1 修复活跃 URL 与分块） |
-| FR-25 | Proxy SWR/grace：proxy 模式 `stale-while-revalidate` 和 grace 配置，降低 TTL 到期回源峰值 | P3 | 计划 |
+| FR-25 | Proxy SWR/grace：proxy 模式 `stale-while-revalidate` 和 grace 配置，降低 TTL 到期回源峰值 | P3 | 已交付@v0.10.0 |
 
-> 状态取值：计划 / 开发中 / 已交付@vX.Y.Z / 暂停 / 暂缓。第一期和第二期已交付 0.2.0；第三期静态导出和统计面板已交付 0.3.0；定时预热已交付 0.4.0；服务器端动态块占位符已交付 0.5.0；请求级代理模型和 Tag 预算已交付 0.7.0；FR-22/FR-23 已交付 0.8.0；FR-24 已交付 0.9.0；0.9.1 为 0.9.0 后的补丁，包含监控指标、runbook 和 16 个审计修复，不新增 FR。0.9.2 为 0.9.1 后的后台 UI 补丁，不新增 FR。0.6.1 的 FR-21 和审计 P1 修复（Context 级 URL 索引、Warm URL allowlist）已并入 0.7.0，未单独打 tag。0.7.0 由 RFC-007 接管（性能与架构优化，不新增 FR）；Phase 1-5 和 G1-G10 已完成，G9 原 Local HIT 目标由 Static Export 替代目标满足，RFC-007 状态为 Completed。FR-19 暂缓（当前单节点），FR-20 暂停（无官方 session 只读 API；不实现，见 ADR-0025），FR-25 计划。FR-26 作为独立开发工具候选，暂不登记。静态文件导出、统计面板和定时预热分别见 ADR-0012、ADR-0013、ADR-0014，代理模型见 ADR-0020。第三期拆解见 `.tmp/brainstorm-phase3-2026-11-23.md`，线路图见 `.tmp/page-cache-roadmap-2026-11-24.md`。
+> 状态取值：计划 / 开发中 / 已交付@vX.Y.Z / 暂停 / 暂缓。第一期和第二期已交付 0.2.0；第三期静态导出和统计面板已交付 0.3.0；定时预热已交付 0.4.0；服务器端动态块占位符已交付 0.5.0；请求级代理模型和 Tag 预算已交付 0.7.0；FR-22/FR-23 已交付 0.8.0；FR-24 已交付 0.9.0；0.9.1 为 0.9.0 后的补丁，包含监控指标、runbook 和 16 个审计修复，不新增 FR。0.9.2 为 0.9.1 后的后台 UI 补丁，不新增 FR。0.10.0 交付 FR-25 Proxy SWR。0.6.1 的 FR-21 和审计 P1 修复（Context 级 URL 索引、Warm URL allowlist）已并入 0.7.0，未单独打 tag。0.7.0 由 RFC-007 接管（性能与架构优化，不新增 FR）；Phase 1-5 和 G1-G10 已完成，G9 原 Local HIT 目标由 Static Export 替代目标满足，RFC-007 状态为 Completed。FR-19 暂缓（当前单节点），FR-20 暂停（无官方 session 只读 API；不实现，见 ADR-0025），FR-25 已交付@v0.10.0。FR-26 作为独立开发工具候选，暂不登记。静态文件导出、统计面板和定时预热分别见 ADR-0012、ADR-0013、ADR-0014，代理模型见 ADR-0020。第三期拆解见 `.tmp/brainstorm-phase3-2026-11-23.md`，线路图见 `.tmp/page-cache-roadmap-2026-11-24.md`。
 
-> 版本节奏（2026-11-24 起）：0.6.1 FR-21 + 审计 P1（并入 0.7.0，未单独发版）；0.7.0 RFC-007 性能与架构（已发布@v0.7.0）；0.8.0 FR-22/FR-23（已交付@v0.8.0）；0.9.0 FR-24（单节点，已交付@v0.9.0）；0.9.1 审计修复（已发布@v0.9.1）；0.9.2 后台 UI（已发布@v0.9.2）；0.10.0 FR-25；FR-19 暂缓（多节点时再启动）；1.0.0 FR-26（可选）。
+> 版本节奏（2026-11-24 起）：0.6.1 FR-21 + 审计 P1（并入 0.7.0，未单独发版）；0.7.0 RFC-007 性能与架构（已发布@v0.7.0）；0.8.0 FR-22/FR-23（已交付@v0.8.0）；0.9.0 FR-24（单节点，已交付@v0.9.0）；0.9.1 审计修复（已发布@v0.9.1）；0.9.2 后台 UI（已发布@v0.9.2）；0.10.0 FR-25（已发布@v0.10.0）；FR-19 暂缓（多节点时再启动）；1.0.0 FR-26（可选）。
 
 ## 5. 非功能需求（NFR）
 
@@ -304,10 +304,11 @@ Maho 目前有 Symfony Cache 对象缓存（file/redis），但没有内置的 H
 
 #### AC-22 Proxy SWR/grace（FR-25）
 
-- proxy 响应按配置输出 `stale-while-revalidate`；0 时不输出。
+- `page_cache/proxy/swr` 单位为秒，默认 0，最大 86400；proxy 响应在大于 0 时输出 `stale-while-revalidate=<seconds>`，0 时不输出。
+- 负值、空值、小数和含非数字字符的值按 0 处理；超过 86400 时按 86400。
 - local 和 revalidating 响应头不变。
 - purge 仍为硬删除；SWR 只在 TTL 过期后生效。
-- 单元测试覆盖响应头；实机用代理验证 TTL 过期后返回旧页并后台刷新。
+- 单元测试覆盖 0、正数、非法值和三种模式；实机用 nginx 验证 TTL 过期后返回旧页并后台刷新。
 
 ## 7. 风险与待定
 

@@ -1,6 +1,6 @@
 # nginx Cache Key 配置
 
-> 状态：0.7.0 PERF-04，已在 nginx 1.31 上验证
+> 状态：0.7.0 PERF-04，已在 nginx 1.31 上验证；0.10.0 增加 stale-while-revalidate 配置
 > 关联：[代理缓存 Cookie 规范化](README.md)、[RFC-007](../rfc/RFC-007-performance-architecture.md) PERF-04
 
 nginx 不使用 `Vary` 生成 `proxy_cache` 的 key，而是使用 `proxy_cache_key`。下面把模块的 `Vary: Accept-Encoding, Cookie` 语义显式写进 key，并只放行真正影响页面的 Cookie。
@@ -47,6 +47,7 @@ server {
         proxy_cache_bypass $maho_page_cache_bypass $maho_page_cache_unknown_cookie;
         proxy_no_cache $maho_page_cache_bypass $maho_page_cache_unknown_cookie $maho_page_cache_uncacheable;
         proxy_cache_valid 200 5m;
+        proxy_cache_background_update on;
         add_header X-Maho-Proxy-Cache $upstream_cache_status always;
     }
 }
@@ -60,6 +61,10 @@ server {
 - `$maho_page_cache_uncacheable` 是第二道防线：即使其他配置让 nginx 考虑缓存，`private`、`no-store`、`no-cache` 的响应也不会落盘。
 - nginx 默认不缓存带 `Set-Cookie` 的响应，因此不要配置 `proxy_ignore_headers Set-Cookie`。
 - `proxy_cache_valid 200 5m` 是兜底；模块正常发送 `Cache-Control: max-age=0, public, s-maxage=3600`，nginx 会按共享缓存 TTL 使用它。若站点 TTL 更短，把这里的值调低。
+- `proxy_cache_background_update on` 让 nginx 在 TTL 过期后先返回旧页，同时后台刷新。是否允许返回旧页由 `page_cache/proxy/swr` 输出的 `stale-while-revalidate` 秒数决定。
+- 不要同时配置 `proxy_cache_use_stale updating`。nginx 的 `updating` 参数会覆盖响应头的时间窗口，后台刷新一直未完成时可以无限返回旧页。实测：TTL=5、SWR=2、上游 10 秒时，只开 `proxy_cache_background_update` 会在 3.5 秒后返回 `EXPIRED` 并重新回源；加上 `updating` 后同一时刻仍返回 `UPDATING` 和旧页。
+- purge 仍是硬删除，SWR 不会保留被 purge 的对象。
+- 后台刷新失败时不启用 `stale-if-error`：SWR 窗口内仍可返回旧页，超过窗口后按正常回源处理；不要添加 `proxy_cache_use_stale error timeout http_500`。
 
 ## 验证
 

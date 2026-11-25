@@ -1,6 +1,6 @@
 # 架构文档：Maho 页面缓存
 
-> 状态：0.9.2 已发布@v0.9.2（dist）：页面缓存菜单移到 System，后台改为顶部状态卡、tab 栏右侧范围和商店筛选、Invalidation Log，并删除重复的摘要 grid 与导出。 0.9.1 已发布@v0.9.1（dist）：监控指标补强、全量预热 runbook，以及统计 rollup、活跃 URL、purge 指标、legacy session cookie、catalog rule、Warm Now 异步和 gzip/动态块加固。 0.9.0 已发布@v0.9.0（dist）：FR-24 预热滑动窗口、活跃商品/分类 URL 源、后台 warmup 进度和锁状态。0.8.0 已发布@v0.8.0（dist）：FR-22 purge DB outbox、per-target ack/重试、`page-cache:purge:status` 和 stale 告警；FR-23 失效审计表、后台 Invalidations tab、导出和 retention；Static Export 生产配置和 nginx/Caddy benchmark 已完成。0.7.0 已发布@v0.7.0（dist）：RFC-007 Phase 1 CacheEnvelope 和 PERF-02 压缩配置、Phase 2 Context Index 迁移和旧表清理、Phase 3 Warmup 安全补强、Phase 4 Stats 采样、Dynamic 边界与 Proxy Models 验证、PERF-04 Cookie 规范化文档已实现；0.6.1 FR-21 和审计 P1 修复已实现；Phase 5 完成，dist 三库 CI 通过；G9 原 Local HIT 目标由 Static Export 替代并达成。0.5.5 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付；0.5.1 cache integrity 修复、0.5.2 tag 索引重构、0.5.3 P1 加固与性能优化、0.5.4 stock pending 监控和 0.5.5 监控指标导出与后台面板已交付。
+> 状态：0.10.0 已发布@v0.10.0（dist）：FR-25 proxy stale-while-revalidate，配置 0 到 86400 秒，默认 0；local/revalidating 不变，purge 仍为硬删除。 0.9.2 已发布@v0.9.2（dist）：页面缓存菜单移到 System，后台改为顶部状态卡、tab 栏右侧范围和商店筛选、Invalidation Log，并删除重复的摘要 grid 与导出。 0.9.1 已发布@v0.9.1（dist）：监控指标补强、全量预热 runbook，以及统计 rollup、活跃 URL、purge 指标、legacy session cookie、catalog rule、Warm Now 异步和 gzip/动态块加固。 0.9.0 已发布@v0.9.0（dist）：FR-24 预热滑动窗口、活跃商品/分类 URL 源、后台 warmup 进度和锁状态。0.8.0 已发布@v0.8.0（dist）：FR-22 purge DB outbox、per-target ack/重试、`page-cache:purge:status` 和 stale 告警；FR-23 失效审计表、后台 Invalidations tab、导出和 retention；Static Export 生产配置和 nginx/Caddy benchmark 已完成。0.7.0 已发布@v0.7.0（dist）：RFC-007 Phase 1 CacheEnvelope 和 PERF-02 压缩配置、Phase 2 Context Index 迁移和旧表清理、Phase 3 Warmup 安全补强、Phase 4 Stats 采样、Dynamic 边界与 Proxy Models 验证、PERF-04 Cookie 规范化文档已实现；0.6.1 FR-21 和审计 P1 修复已实现；Phase 5 完成，dist 三库 CI 通过；G9 原 Local HIT 目标由 Static Export 替代并达成。0.5.5 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付；0.5.1 cache integrity 修复、0.5.2 tag 索引重构、0.5.3 P1 加固与性能优化、0.5.4 stock pending 监控和 0.5.5 监控指标导出与后台面板已交付。
 > 模块：`Maho_PageCache`
 > 关联 PRD：`docs/PRD.md`
 > 关联 spec：`docs/specs/page-cache.md`
@@ -150,13 +150,19 @@ tests/Backend/Unit/PageCache/*
 响应头：
 
 ```text
+# swr = 0
 Cache-Control: public, s-maxage=<ttl>, max-age=0
+
+# swr > 0
+Cache-Control: public, s-maxage=<ttl>, max-age=0, stale-while-revalidate=<swr>
 Vary: Accept-Encoding, Cookie
 X-Maho-Cache: MISS
 X-Maho-Cache-Mode: proxy
 X-Maho-Cache-Context: <hash>
 X-Cache-Tags: <tag1>,<tag2>
 ```
+
+`page_cache/proxy/swr` 默认 0，最大 86400。大于 0 时，TTL 过期后代理可以在宽限期内返回旧页并后台刷新；purge 仍是硬删除，SWR 不延长被 purge 的对象。代理不支持该指令时忽略，行为与当前版本一致。nginx 部署只开 `proxy_cache_background_update`，不要加 `proxy_cache_use_stale updating`，否则会绕过响应头的宽限期。
 
 代理命中时 PHP 不参与，因此 PHP 侧只统计 miss/bypass。代理命中率由代理或 CDN 自己的监控提供。
 
@@ -380,6 +386,7 @@ Vary: Accept-Encoding, Cookie
 
 - 代理必须按 URL 和 `Cookie` 缓存，并遵守 `Vary: Accept-Encoding, Cookie`。部署侧的 Cookie 规范化和 session bypass 示例见 `docs/deployment/README.md`。
 - `page_cache/proxy/context_mode` 默认 `cookie`；代理只按 URL 缓存时设为 `default`，此时只缓存默认 store 或 URL 带 store code 的请求，带 `___store` cookie 的切换请求 bypass。
+- `page_cache/proxy/swr` 默认 0；大于 0 时 proxy 响应增加 `stale-while-revalidate=<seconds>`，只影响 TTL 过期后的代理行为。
 - 移动主题、A-B、geo-IP 等模块必须把当前变体写入 `page_cache_context_variant` registry；proxy/revalidating 遇到非空 variant 直接 bypass，local 用 variant 区分 HTML key。
 - 第一期不缓存登录用户、购物车、checkout、customer account，因此客户组固定为 guest。
 - 无 session 时可缓存请求的货币取 store 默认货币；切换货币会写入 session，从而带 session cookie 并 bypass。
@@ -434,6 +441,7 @@ ETag = W/"<version>"
 | `page_cache/general/enabled` | 总开关 | 0 |
 | `page_cache/general/mode` | `proxy`、`revalidating` 或 `local` | `revalidating` |
 | `page_cache/general/ttl` | TTL 秒 | 3600 |
+| `page_cache/proxy/swr` | proxy `stale-while-revalidate` 秒数，0 到 86400；0 不输出 | 0 |
 | `page_cache/general/html_max_size` | local HTML 条目上限，字节 | 2097152 |
 | `page_cache/local/compression_enabled` | local HTML 压缩开关 | 1 |
 | `page_cache/local/compression_min_bytes` | 压缩最小字节数 | 4096 |

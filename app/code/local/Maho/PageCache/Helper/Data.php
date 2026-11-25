@@ -21,6 +21,7 @@ class Maho_PageCache_Helper_Data extends Mage_Core_Helper_Abstract
     public const XML_PATH_RESPECT_NO_CACHE = 'page_cache/general/respect_no_cache';
     public const XML_PATH_DEBUG_HEADERS = 'page_cache/general/debug_headers';
     public const XML_PATH_PROXY_CONTEXT_MODE = 'page_cache/proxy/context_mode';
+    public const XML_PATH_PROXY_SWR = 'page_cache/proxy/swr';
     public const XML_PATH_STOCK_PENDING_WARN_AGE = 'page_cache/general/stock_pending_warn_age';
     public const XML_PATH_HTML_MAX_SIZE = 'page_cache/general/html_max_size';
     public const XML_PATH_COMPRESSION_ENABLED = 'page_cache/local/compression_enabled';
@@ -133,6 +134,16 @@ class Maho_PageCache_Helper_Data extends Mage_Core_Helper_Abstract
     {
         $mode = (string) Mage::getStoreConfig(self::XML_PATH_PROXY_CONTEXT_MODE);
         return $mode === self::PROXY_CONTEXT_DEFAULT ? self::PROXY_CONTEXT_DEFAULT : self::PROXY_CONTEXT_COOKIE;
+    }
+
+    public function getProxySwr(): int
+    {
+        $value = trim((string) Mage::getStoreConfig(self::XML_PATH_PROXY_SWR));
+        if ($value === '' || !preg_match('/^\d+$/', $value)) {
+            return 0;
+        }
+
+        return min(86400, (int) $value);
     }
 
     public function getHtmlMaxSize(): int

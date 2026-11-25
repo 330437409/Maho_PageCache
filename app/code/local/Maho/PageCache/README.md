@@ -4,7 +4,7 @@ Maho 的 HTTP 页面缓存集成层。第一期支持 `proxy` 和 `revalidating`
 
 ## 状态
 
-0.9.2 已发布@v0.9.2（dist）：页面缓存菜单移到 System，后台改为顶部状态卡、tab 栏右侧范围和商店筛选、Invalidation Log，并删除重复的摘要 grid 与导出。 0.9.1 已发布@v0.9.1（dist）：监控指标补强、全量预热 runbook，以及统计 rollup、活跃 URL、purge 指标、legacy session cookie、catalog rule、Warm Now 异步和 gzip/动态块加固。 0.9.0 已发布@v0.9.0（dist）：FR-24 预热滑动窗口、活跃商品/分类 URL 源、后台 warmup 进度和锁状态，以及 Static Export 生产配置已完成。0.8.0 已发布@v0.8.0（dist）：FR-22 purge DB outbox、per-target ack/重试、`page-cache:purge:status` 和 stale 告警；FR-23 失效审计表、后台 Invalidations tab、导出和 retention；Static Export 生产配置和 nginx/Caddy benchmark 已完成。0.7.0 已发布@v0.7.0（dist）：RFC-007 Phase 1 CacheEnvelope 和 PERF-02 压缩配置、Phase 2 Context Index 迁移和旧表清理、Phase 3 Warmup 安全补强、Phase 4 Stats 采样、Dynamic 边界与 Proxy Models 验证、PERF-04 Cookie 规范化文档已实现；0.6.1 FR-21 和审计 P1 修复已实现；Phase 5 完成，dist 三库 CI 通过；G9 原 Local HIT 目标由 Static Export 替代并达成。0.5.5 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付；0.5.1 cache integrity 修复、0.5.2 tag 索引重构、0.5.3 P1 加固与性能优化、0.5.4 stock pending 监控和 0.5.5 监控指标导出与后台面板已交付，累计包含第一期的 HTTP 集成层、proxy/revalidating 两种模式、session skip、tag 失效、purge 队列、配置和 CLI，第二期的 `local` 模式、Ajax/ESI 动态块和 `page-cache:warm`，第三期的静态文件导出、统计面板、定时预热、服务器端动态块占位符和请求级代理模型，以及 0.5.1 的 cache integrity 修复、0.5.2 的 tag 索引重构、0.5.3 的 P1 加固与性能优化、0.5.4 的 stock pending 监控和 0.5.5 的监控指标导出与 Page Cache 后台面板。
+0.10.0 已发布@v0.10.0（dist）：FR-25 proxy stale-while-revalidate，配置 0 到 86400 秒，默认 0；local/revalidating 不变，purge 仍为硬删除。 0.9.2 已发布@v0.9.2（dist）：页面缓存菜单移到 System，后台改为顶部状态卡、tab 栏右侧范围和商店筛选、Invalidation Log，并删除重复的摘要 grid 与导出。 0.9.1 已发布@v0.9.1（dist）：监控指标补强、全量预热 runbook，以及统计 rollup、活跃 URL、purge 指标、legacy session cookie、catalog rule、Warm Now 异步和 gzip/动态块加固。 0.9.0 已发布@v0.9.0（dist）：FR-24 预热滑动窗口、活跃商品/分类 URL 源、后台 warmup 进度和锁状态，以及 Static Export 生产配置已完成。0.8.0 已发布@v0.8.0（dist）：FR-22 purge DB outbox、per-target ack/重试、`page-cache:purge:status` 和 stale 告警；FR-23 失效审计表、后台 Invalidations tab、导出和 retention；Static Export 生产配置和 nginx/Caddy benchmark 已完成。0.7.0 已发布@v0.7.0（dist）：RFC-007 Phase 1 CacheEnvelope 和 PERF-02 压缩配置、Phase 2 Context Index 迁移和旧表清理、Phase 3 Warmup 安全补强、Phase 4 Stats 采样、Dynamic 边界与 Proxy Models 验证、PERF-04 Cookie 规范化文档已实现；0.6.1 FR-21 和审计 P1 修复已实现；Phase 5 完成，dist 三库 CI 通过；G9 原 Local HIT 目标由 Static Export 替代并达成。0.5.5 已交付，第一期和第二期完成；第三期静态导出、统计面板、定时预热和服务器端占位符已交付；0.5.1 cache integrity 修复、0.5.2 tag 索引重构、0.5.3 P1 加固与性能优化、0.5.4 stock pending 监控和 0.5.5 监控指标导出与后台面板已交付，累计包含第一期的 HTTP 集成层、proxy/revalidating 两种模式、session skip、tag 失效、purge 队列、配置和 CLI，第二期的 `local` 模式、Ajax/ESI 动态块和 `page-cache:warm`，第三期的静态文件导出、统计面板、定时预热、服务器端动态块占位符和请求级代理模型，以及 0.5.1 的 cache integrity 修复、0.5.2 的 tag 索引重构、0.5.3 的 P1 加固与性能优化、0.5.4 的 stock pending 监控和 0.5.5 的监控指标导出与 Page Cache 后台面板。
 
 - 第一期：HTTP 集成层，`proxy` + `revalidating`。0.2.0 已交付。
 - 第二期：`local` 模式、整页 HTML 缓存、Ajax/ESI 动态块、缓存预热。0.2.0 已交付。
@@ -51,6 +51,7 @@ Maho 的 HTTP 页面缓存集成层。第一期支持 `proxy` 和 `revalidating`
 - `docs/specs/page-cache-08-invalidation-audit.md`：0.8.0 失效审计规格。
 - `docs/specs/page-cache-08-static-export-production.md`：0.8.x Static Export 生产化规格。
 - `docs/specs/page-cache-09-warmup-scheduling.md`：0.9.0 预热调度升级规格。
+- `docs/specs/page-cache-10-proxy-swr.md`：0.10.0 proxy `stale-while-revalidate` 规格。
 - `docs/deployment/static-export.md`：Static Export 的 nginx/Caddy 生产配置。
 - `docs/benchmark/0.8.0-static-export.md`：0.8.x Static Export 基准。
 - `docs/adr/0024-purge-outbox.md`：Purge DB outbox 决策。
@@ -88,7 +89,7 @@ Maho 的 HTTP 页面缓存集成层。第一期支持 `proxy` 和 `revalidating`
 System > Configuration > Page Cache
 ```
 
-主要字段：开关、模式（`proxy`、`revalidating`、`local`）、TTL、local HTML 大小上限、可缓存路由、允许的 query 参数、路径段数上限、分层导航标记和深度、是否遵守 no-cache、调试头、session skip 路由、proxy context 模式、stock pending 告警阈值、purge outbox 最大尝试/退避/stale/retention/lease、失效审计开关/保留期/tag 样本数、动态块注入方式、动态块 TTL、动态请求限流和窗口、服务器端动态块开关和类型白名单、预热开关/批次/并发/间隔/重试/队列上限/basic auth/允许的别名 origin、静态文件导出、统计开关和保留期。
+主要字段：开关、模式（`proxy`、`revalidating`、`local`）、TTL、local HTML 大小上限、可缓存路由、允许的 query 参数、路径段数上限、分层导航标记和深度、是否遵守 no-cache、调试头、session skip 路由、proxy context 模式、proxy `stale-while-revalidate` 秒数、stock pending 告警阈值、purge outbox 最大尝试/退避/stale/retention/lease、失效审计开关/保留期/tag 样本数、动态块注入方式、动态块 TTL、动态请求限流和窗口、服务器端动态块开关和类型白名单、预热开关/批次/并发/间隔/重试/队列上限/basic auth/允许的别名 origin、静态文件导出、统计开关和保留期。
 
 ## 静态文件导出
 

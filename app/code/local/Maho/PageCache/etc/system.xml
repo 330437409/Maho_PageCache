@@ -190,7 +190,7 @@
                     </fields>
                 </local>
                 <proxy translate="label">
-                    <label>Proxy Context</label>
+                    <label>Proxy</label>
                     <frontend_type>text</frontend_type>
                     <sort_order>15</sort_order>
                     <show_in_default>1</show_in_default>
@@ -207,6 +207,16 @@
                             <show_in_website>1</show_in_website>
                             <show_in_store>1</show_in_store>
                         </context_mode>
+                        <swr translate="label comment">
+                            <label>Stale While Revalidate (seconds)</label>
+                            <comment>Adds stale-while-revalidate to the proxy Cache-Control header. 0 disables it. The proxy must support the directive and background refresh.</comment>
+                            <frontend_type>text</frontend_type>
+                            <validate>validate-number</validate>
+                            <sort_order>20</sort_order>
+                            <show_in_default>1</show_in_default>
+                            <show_in_website>1</show_in_website>
+                            <show_in_store>1</show_in_store>
+                        </swr>
                     </fields>
                 </proxy>
                 <purge translate="label">
